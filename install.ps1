@@ -139,14 +139,14 @@ if (Test-Path $webPackageJson) {
     Set-Location $scriptPath
     Write-Host "ℹ️ Używam istniejącego folderu: $scriptPath" -ForegroundColor Blue
 } else {
-    if (Test-Path "timetracker") {
+    if (Test-Path "ai-timetracker") {
         Write-Host "ℹ️ Folder timetracker już istnieje, aktualizuję..." -ForegroundColor Blue
-        Set-Location timetracker
+        Set-Location ai-timetracker
         git pull
     } else {
         Write-Host "ℹ️ Klonuję repozytorium..." -ForegroundColor Blue
-        git clone https://github.com/gacabartosz/timetracker.git
-        Set-Location timetracker
+        git clone https://github.com/shopconnector/ai-timetracker.git
+        Set-Location ai-timetracker
     }
 }
 
@@ -215,7 +215,7 @@ Write-Host "                   🎉 Instalacja zakończona!                     
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  ActivityWatch:  http://localhost:5600" -ForegroundColor White
-Write-Host "  TimeTracker:    http://localhost:5666" -ForegroundColor White
+Write-Host "  TimeTracker:    http://localhost:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -230,7 +230,7 @@ if ($runNow -notmatch "^[Nn]$") {
 } else {
     Write-Host ""
     Write-Host "ℹ️ Aby uruchomić później:" -ForegroundColor Blue
-    Write-Host "  cd timetracker" -ForegroundColor White
+    Write-Host "  cd ai-timetracker" -ForegroundColor White
     Write-Host "  pnpm dev" -ForegroundColor White
     Write-Host ""
 }

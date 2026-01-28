@@ -158,14 +158,14 @@ if [ -f "$SCRIPT_DIR/apps/web/package.json" ]; then
     log_info "Używam istniejącego folderu: $SCRIPT_DIR"
 else
     # Sklonuj z GitHub
-    if [ -d "timetracker" ]; then
+    if [ -d "ai-timetracker" ]; then
         log_info "Folder timetracker już istnieje, aktualizuję..."
-        cd timetracker
+        cd ai-timetracker
         git pull
     else
         log_info "Klonuję repozytorium..."
-        git clone https://github.com/gacabartosz/timetracker.git
-        cd timetracker
+        git clone https://github.com/shopconnector/ai-timetracker.git
+        cd ai-timetracker
     fi
 fi
 
@@ -234,7 +234,7 @@ echo "║                   🎉 Instalacja zakończona!                  ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║                                                              ║"
 echo "║  ActivityWatch:  http://localhost:5600                       ║"
-echo "║  TimeTracker:    http://localhost:5666                       ║"
+echo "║  TimeTracker:    http://localhost:3000                       ║"
 echo "║                                                              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
@@ -249,7 +249,7 @@ if [[ ! "$RUN_NOW" =~ ^[Nn]$ ]]; then
 else
     echo ""
     log_info "Aby uruchomić później, wejdź do folderu i uruchom:"
-    echo "  cd timetracker"
+    echo "  cd ai-timetracker"
     echo "  pnpm dev"
     echo ""
 fi

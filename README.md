@@ -87,47 +87,121 @@ curl -sSL https://raw.githubusercontent.com/gacabartosz/ai-timetracker/main/inst
 
 ## Instalacja na Windows
 
-### Krok 1: Zainstaluj Node.js
+### Krok 1: Zainstaluj Git
 
-1. Pobierz instalator z https://nodejs.org/ (wersja LTS)
-2. Uruchom instalator i postępuj zgodnie z instrukcjami
-3. Zaznacz opcję "Automatically install necessary tools"
+Otwórz **PowerShell** i wykonaj:
 
-### Krok 2: Zainstaluj pnpm
+```powershell
+winget install --id Git.Git -e
+```
 
-Otwórz **PowerShell jako Administrator** i wykonaj:
+**WAŻNE:** Po instalacji zamknij PowerShell i otwórz nowe okno!
+
+Sprawdź instalację:
+```powershell
+git --version
+```
+
+Jeśli `git` nie jest rozpoznawany, odśwież PATH ręcznie:
+```powershell
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+```
+
+### Krok 2: Zainstaluj Node.js
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+```
+
+**WAŻNE:** Po instalacji zamknij PowerShell i otwórz nowe okno!
+
+Sprawdź instalację:
+```powershell
+node --version
+npm --version
+```
+
+### Krok 3: Zainstaluj pnpm
 
 ```powershell
 iwr https://get.pnpm.io/install.ps1 -useb | iex
 ```
 
-Zamknij i otwórz ponownie PowerShell.
+**WAŻNE:** Po instalacji zamknij PowerShell i otwórz nowe okno!
 
-### Krok 3: Zainstaluj ActivityWatch
+Sprawdź instalację:
+```powershell
+pnpm --version
+```
+
+### Krok 4: Zainstaluj ActivityWatch
 
 1. Pobierz instalator z https://activitywatch.net/downloads/
 2. Wybierz wersję dla Windows (.exe)
 3. Uruchom instalator
-4. ActivityWatch uruchomi się automatycznie
+4. ActivityWatch uruchomi się automatycznie (ikona w zasobniku systemowym)
 
-### Krok 4: Sklonuj i uruchom TimeTracker
+### Krok 5: Sklonuj i uruchom TimeTracker
 
-Otwórz **PowerShell** lub **Git Bash**:
+Otwórz **PowerShell** (zwykłe okno, nie jako Administrator):
 
 ```powershell
+# Przejdź do folderu Dokumenty
+cd ~\Documents
+
+# Sklonuj repozytorium
 git clone https://github.com/shopconnector/ai-timetracker.git
+
+# Wejdź do folderu projektu
 cd ai-timetracker
+
+# Zainstaluj zależności
 pnpm install
-copy .env.example apps\web\.env.local
-# Edytuj apps\web\.env.local (patrz sekcja "Konfiguracja API")
+
+# Skopiuj plik konfiguracyjny (UWAGA: użyj Copy-Item, nie copy!)
+Copy-Item .env.example -Destination apps\web\.env.local
+
+# Otwórz plik konfiguracyjny w Notatniku
+notepad apps\web\.env.local
+```
+
+Wypełnij plik `.env.local` zgodnie z sekcją "Konfiguracja API", zapisz i zamknij Notatnik.
+
+```powershell
+# Uruchom aplikację
 pnpm dev
 ```
 
-### Szybka instalacja (Windows PowerShell jako Administrator)
+Otwórz przeglądarkę: http://localhost:3000
+
+### Rozwiązywanie problemów na Windows
+
+**Problem: `git` lub `pnpm` nie jest rozpoznawany**
+
+Zamknij PowerShell i otwórz nowe okno. Jeśli nadal nie działa:
+```powershell
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+```
+
+**Problem: `corepack enable` zwraca błąd EPERM**
+
+Uruchom PowerShell jako Administrator (kliknij prawym przyciskiem → "Uruchom jako administrator"):
+```powershell
+corepack enable
+```
+
+**Problem: Błąd przy kopiowaniu pliku**
+
+Użyj `Copy-Item` zamiast `copy`:
+```powershell
+Copy-Item .env.example -Destination apps\web\.env.local
+```
+
+### Szybka instalacja (Windows - PowerShell jako Administrator)
 
 ```powershell
 Set-ExecutionPolicy Bypass -Scope Process -Force
-irm https://raw.githubusercontent.com/gacabartosz/ai-timetracker/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/shopconnector/ai-timetracker/main/install.ps1 | iex
 ```
 
 ---
