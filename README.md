@@ -11,27 +11,50 @@ ActivityWatch  ───▶  TimeTracker  ───▶  Tempo/Jira
 
 ---
 
-# INSTALACJA NA WINDOWS (krok po kroku)
+# JAK TO DZIAŁA
 
-## ZANIM ZACZNIESZ - PRZECZYTAJ!
+```
+┌─────────────────────┐        HTTP API         ┌─────────────────────┐
+│   ActivityWatch     │ ◄──────────────────────►│    TimeTracker      │
+│  (localhost:5600)   │   GET /api/0/buckets/   │  (localhost:5666)   │
+│                     │   GET /api/0/events     │                     │
+│  Zbiera dane o      │                         │  Wyświetla dane     │
+│  aktywnościach      │                         │  i loguje do Jira   │
+│  (działa w tle)     │                         │  (strona www)       │
+└─────────────────────┘                         └─────────────────────┘
+         │                                               │
+         │  Zapisuje do lokalnej bazy SQLite             │
+         │  (dane NIE giną po restarcie!)                │
+         └───────────────────────────────────────────────┘
+```
 
-**JAK TO DZIAŁA:**
-1. **ActivityWatch** - program który działa w tle i zapisuje co robisz na komputerze
-2. **TimeTracker** - strona internetowa która CZYTA dane z ActivityWatch i pozwala je zalogować do Jira
-
-**BEZ ActivityWatch TimeTracker NIE BĘDZIE DZIAŁAĆ!**
-
-TimeTracker łączy się z ActivityWatch przez adres `http://localhost:5600`.
-Jeśli ActivityWatch nie działa, TimeTracker nie będzie miał żadnych danych.
+**WAŻNE:**
+- **ActivityWatch** = program który działa w tle i zapisuje co robisz
+- **TimeTracker** = strona www która CZYTA dane z ActivityWatch przez API
+- **BEZ ActivityWatch TimeTracker NIE BĘDZIE DZIAŁAĆ!**
+- TimeTracker łączy się z ActivityWatch przez `http://localhost:5600`
 
 ---
+
+# GDZIE ACTIVITYWATCH PRZECHOWUJE DANE
+
+| System | Lokalizacja bazy danych |
+|--------|------------------------|
+| **Windows** | `C:\Users\NAZWA\AppData\Local\activitywatch\aw-server\peewee-sqlite.v2.db` |
+| **macOS** | `~/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db` |
+| **Linux** | `~/.local/share/activitywatch/aw-server/peewee-sqlite.v2.db` |
+
+**Dane NIE giną po restarcie!** ActivityWatch przechowuje całą historię.
+
+---
+
+# INSTALACJA NA WINDOWS
 
 ## ETAP 1: INSTALACJA NARZĘDZI
 
 ### WAŻNE ZASADY:
 - Wykonuj komendy **POJEDYNCZO** - nie kopiuj wielu naraz!
 - Po każdej instalacji **ZAMKNIJ PowerShell** i **OTWÓRZ NOWE OKNO**!
-- Bez tego system nie zobaczy nowych programów!
 
 ---
 
@@ -43,15 +66,9 @@ Otwórz PowerShell i wpisz:
 winget install Git.Git
 ```
 
-Poczekaj na zakończenie.
+**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
 
-**ZAMKNIJ PowerShell. Otwórz NOWE okno PowerShell.**
-
-Sprawdź czy działa:
-```powershell
-git --version
-```
-Powinno pokazać: `git version 2.xx.x`
+Sprawdź: `git --version` → powinno pokazać `git version 2.xx.x`
 
 ---
 
@@ -61,15 +78,9 @@ Powinno pokazać: `git version 2.xx.x`
 winget install OpenJS.NodeJS.LTS
 ```
 
-Poczekaj na zakończenie.
+**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
 
-**ZAMKNIJ PowerShell. Otwórz NOWE okno PowerShell.**
-
-Sprawdź czy działa:
-```powershell
-node --version
-```
-Powinno pokazać: `v20.xx.x` lub wyżej
+Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
 
 ---
 
@@ -79,257 +90,449 @@ Powinno pokazać: `v20.xx.x` lub wyżej
 iwr https://get.pnpm.io/install.ps1 -useb | iex
 ```
 
-**ZAMKNIJ PowerShell. Otwórz NOWE okno PowerShell.**
+**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
 
-Sprawdź czy działa:
-```powershell
-pnpm --version
-```
-Powinno pokazać: `10.xx.x` lub wyżej
+Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
 
 ---
 
 ### Krok 1.4: Zainstaluj ActivityWatch
 
-**TO JEST NAJWAŻNIEJSZY KROK!**
-
-1. Otwórz przeglądarkę: https://activitywatch.net/downloads/
-2. Kliknij przycisk **Download for Windows**
+1. Otwórz: https://activitywatch.net/downloads/
+2. Kliknij **Download for Windows**
 3. Uruchom pobrany plik `.exe`
-4. Klikaj **Dalej** do końca instalacji
-5. Po instalacji ActivityWatch **URUCHOMI SIĘ AUTOMATYCZNIE**
-6. Ikona ActivityWatch pojawi się przy zegarku (w zasobniku systemowym)
+4. Po instalacji ActivityWatch uruchomi się automatycznie
+5. Ikona pojawi się przy zegarku (zasobnik systemowy)
 
-**SPRAWDŹ CZY DZIAŁA:**
-
-Otwórz przeglądarkę i wejdź na: **http://localhost:5600**
-
-Powinieneś zobaczyć dashboard ActivityWatch z listą aktywności.
-
-**JEŚLI STRONA SIĘ NIE OTWIERA:**
-- Kliknij ikonę ActivityWatch przy zegarku
-- Wybierz "Open Dashboard"
-- Jeśli ikony nie ma, uruchom ActivityWatch z menu Start
+**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
 
 ---
 
 ## ETAP 2: POBIERANIE TIMETRACKER
 
-### Krok 2.1: Przejdź do folderu Dokumenty
-
 ```powershell
 cd ~\Documents
-```
-
-### Krok 2.2: Pobierz TimeTracker
-
-```powershell
 git clone https://github.com/shopconnector/ai-timetracker.git
-```
-
-### Krok 2.3: Wejdź do folderu
-
-```powershell
 cd ai-timetracker
-```
-
-### Krok 2.4: Zainstaluj zależności
-
-```powershell
 pnpm install
 ```
-
-Poczekaj - to może potrwać kilka minut!
 
 ---
 
 ## ETAP 3: KONFIGURACJA
 
-### Krok 3.1: Skopiuj plik konfiguracyjny
-
 ```powershell
 Copy-Item .env.example -Destination apps\web\.env.local
-```
-
-### Krok 3.2: Otwórz plik w Notatniku
-
-```powershell
 notepad apps\web\.env.local
 ```
 
-### Krok 3.3: Uzupełnij dane
-
-Plik powinien wyglądać tak:
+Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
 
 ```
-# ACTIVITYWATCH - NIE ZMIENIAJ TEJ LINII!
 ACTIVITYWATCH_URL=http://localhost:5600
-
-# TEMPO API
-TEMPO_API_TOKEN=tutaj_wklej_token_tempo
-
-# JIRA API
+TEMPO_API_TOKEN=twoj_token
 JIRA_BASE_URL=https://twoja-firma.atlassian.net
 JIRA_SERVICE_EMAIL=twoj.email@firma.com
-JIRA_API_KEY=tutaj_wklej_token_jira
-
-# OPENROUTER (opcjonalne - dla AI)
-OPENROUTER_API_KEY=
+JIRA_API_KEY=twoj_token
 ```
-
-**WAŻNE:**
-- Linia `ACTIVITYWATCH_URL=http://localhost:5600` MUSI zostać bez zmian!
-- To mówi TimeTrackerowi gdzie szukać danych z ActivityWatch!
-
-Zapisz plik: **Ctrl+S** i zamknij Notatnik.
 
 ---
 
 ## ETAP 4: URUCHOMIENIE
 
-### PRZED URUCHOMIENIEM - SPRAWDŹ!
-
-1. Czy ActivityWatch działa? Sprawdź: **http://localhost:5600**
-2. Czy widzisz tam jakieś aktywności?
-
-**Jeśli localhost:5600 nie działa, TimeTracker też nie zadziała!**
-
----
-
-### Opcja A: Uruchomienie ręczne (najprostsze)
-
+### Opcja A: Ręcznie
 ```powershell
 pnpm dev
 ```
+Otwórz: http://localhost:5666
 
-Otwórz przeglądarkę: **http://localhost:5666**
+### Opcja B: Jednym kliknięciem
+Kliknij dwukrotnie `start-timetracker.bat`
 
-**UWAGA:** NIE ZAMYKAJ okna PowerShell! Zminimalizuj je.
-Zamknięcie = zatrzymanie aplikacji.
-
----
-
-### Opcja B: Uruchomienie jednym kliknięciem
-
-1. Otwórz folder: `C:\Users\TWOJA_NAZWA\Documents\ai-timetracker`
-2. Kliknij dwukrotnie na **`start-timetracker.bat`**
-
-Skrypt automatycznie:
-- Sprawdzi czy ActivityWatch działa
-- Uruchomi go jeśli nie działa
-- Uruchomi TimeTracker
-- Otworzy przeglądarkę
-
----
-
-### Opcja C: Uruchomienie jako usługa w tle (zalecane)
-
-Dzięki temu możesz zamknąć PowerShell a aplikacja będzie działać!
-
-**Krok 1:** Zainstaluj pm2
+### Opcja C: Jako usługa w tle (pm2)
 ```powershell
 npm install -g pm2
-```
-
-**Krok 2:** Wejdź do folderu (jeśli nie jesteś)
-```powershell
-cd ~\Documents\ai-timetracker
-```
-
-**Krok 3:** Uruchom jako usługę
-```powershell
 pm2 start "pnpm dev" --name timetracker
-```
-
-**Krok 4:** Zapisz konfigurację
-```powershell
 pm2 save
 ```
 
-Teraz możesz zamknąć PowerShell!
+---
 
-Otwórz: **http://localhost:5666**
+## ETAP 5: AUTOSTART
 
-**Zarządzanie usługą:**
-```powershell
-pm2 status              # sprawdź status
-pm2 logs timetracker    # zobacz logi
-pm2 stop timetracker    # zatrzymaj
-pm2 restart timetracker # restart
-pm2 delete timetracker  # usuń usługę
+1. `Win + R` → wpisz `shell:startup` → Enter
+2. Utwórz skrót do `start-timetracker.bat`
+
+---
+
+# INSTALACJA NA macOS (krok po kroku)
+
+## ETAP 1: INSTALACJA NARZĘDZI
+
+### Krok 1.1: Zainstaluj Homebrew (jeśli nie masz)
+
+Otwórz Terminal i wpisz:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Po instalacji **ZAMKNIJ Terminal i otwórz NOWY**.
+
+Sprawdź: `brew --version` → powinno pokazać `Homebrew x.x.x`
+
+---
+
+### Krok 1.2: Zainstaluj Node.js
+
+```bash
+brew install node
+```
+
+Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
+
+---
+
+### Krok 1.3: Zainstaluj pnpm
+
+```bash
+npm install -g pnpm
+```
+
+Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
+
+---
+
+### Krok 1.4: Zainstaluj ActivityWatch
+
+```bash
+brew install --cask activitywatch
+```
+
+**LUB** pobierz z: https://activitywatch.net/downloads/
+
+---
+
+### Krok 1.5: Skonfiguruj uprawnienia ActivityWatch
+
+**TO JEST BARDZO WAŻNE!** Bez tego ActivityWatch nie będzie zbierać danych!
+
+1. Otwórz **System Preferences** (Ustawienia systemowe)
+2. Przejdź do **Privacy & Security** → **Accessibility**
+3. Kliknij kłódkę, aby odblokować
+4. Dodaj **ActivityWatch** do listy i zaznacz checkbox
+5. Powtórz dla **Screen Recording** (opcjonalnie, dla tytułów okien)
+
+---
+
+### Krok 1.6: Uruchom ActivityWatch
+
+```bash
+open -a ActivityWatch
+```
+
+ActivityWatch pojawi się w pasku menu (góra ekranu).
+
+**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
+
+---
+
+## ETAP 2: POBIERANIE TIMETRACKER
+
+```bash
+cd ~/Documents
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+pnpm install
 ```
 
 ---
 
-## ETAP 5: AUTOSTART (opcjonalnie)
+## ETAP 3: KONFIGURACJA
 
-Aby TimeTracker uruchamiał się automatycznie po włączeniu komputera:
+```bash
+cp .env.example apps/web/.env.local
+nano apps/web/.env.local
+```
 
-1. Naciśnij **Win + R**
-2. Wpisz `shell:startup` i naciśnij Enter
-3. Kliknij prawym przyciskiem → **Nowy** → **Skrót**
-4. W polu lokalizacji wpisz:
-   ```
-   C:\Users\TWOJA_NAZWA\Documents\ai-timetracker\start-timetracker.bat
-   ```
-   (zamień TWOJA_NAZWA na swoją nazwę użytkownika Windows)
-5. Kliknij **Dalej**, nazwij skrót "AI TimeTracker", kliknij **Zakończ**
+Lub otwórz w edytorze tekstowym:
+```bash
+open -a TextEdit apps/web/.env.local
+```
+
+Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
+
+```
+ACTIVITYWATCH_URL=http://localhost:5600
+TEMPO_API_TOKEN=twoj_token
+JIRA_BASE_URL=https://twoja-firma.atlassian.net
+JIRA_SERVICE_EMAIL=twoj.email@firma.com
+JIRA_API_KEY=twoj_token
+```
 
 ---
 
-## SPRAWDZENIE CZY WSZYSTKO DZIAŁA
+## ETAP 4: URUCHOMIENIE
+
+### Opcja A: Ręcznie
+```bash
+pnpm dev
+```
+Otwórz: http://localhost:5666
+
+### Opcja B: Jako usługa w tle (pm2)
+```bash
+npm install -g pm2
+cd ~/Documents/ai-timetracker
+pm2 start "pnpm dev" --name timetracker
+pm2 save
+```
+
+---
+
+## ETAP 5: AUTOSTART
+
+### ActivityWatch
+ActivityWatch domyślnie dodaje się do autostartu podczas instalacji.
+Jeśli nie, otwórz ActivityWatch → Preferences → "Start on login"
+
+### TimeTracker (z pm2)
+```bash
+pm2 startup
+# Skopiuj i uruchom komendę którą wyświetli pm2
+pm2 save
+```
+
+---
+
+## ROZWIĄZYWANIE PROBLEMÓW (macOS)
+
+| Problem | Rozwiązanie |
+|---------|-------------|
+| ActivityWatch nie zbiera danych | Sprawdź uprawnienia w System Preferences → Privacy & Security → Accessibility |
+| `brew` nie znaleziony | Zamknij Terminal i otwórz nowy po instalacji Homebrew |
+| `pnpm` nie znaleziony | Uruchom `source ~/.zshrc` lub otwórz nowy Terminal |
+| Port 5666 zajęty | `lsof -i :5666` aby znaleźć proces |
+
+---
+
+# INSTALACJA NA LINUX (krok po kroku)
+
+## ETAP 1: INSTALACJA NARZĘDZI
+
+### Krok 1.1: Zainstaluj Node.js
+
+**Ubuntu/Debian:**
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+**Fedora:**
+```bash
+sudo dnf install nodejs
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S nodejs npm
+```
+
+Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
+
+---
+
+### Krok 1.2: Zainstaluj pnpm
+
+```bash
+npm install -g pnpm
+```
+
+Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
+
+---
+
+### Krok 1.3: Zainstaluj ActivityWatch
+
+**Metoda 1: Snap (Ubuntu/Debian)**
+```bash
+sudo snap install activitywatch
+```
+
+**Metoda 2: Pobranie ręczne**
+1. Pobierz z: https://activitywatch.net/downloads/
+2. Rozpakuj archiwum
+3. Uruchom `./aw-qt`
+
+**Metoda 3: AUR (Arch Linux)**
+```bash
+yay -S activitywatch-bin
+```
+
+---
+
+### Krok 1.4: Uruchom ActivityWatch
+
+```bash
+# Jeśli zainstalowane przez snap:
+activitywatch
+
+# Jeśli pobrane ręcznie:
+./aw-qt
+```
+
+ActivityWatch pojawi się w zasobniku systemowym.
+
+**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
+
+---
+
+## ETAP 2: POBIERANIE TIMETRACKER
+
+```bash
+cd ~/Documents
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+pnpm install
+```
+
+---
+
+## ETAP 3: KONFIGURACJA
+
+```bash
+cp .env.example apps/web/.env.local
+nano apps/web/.env.local
+```
+
+Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
+
+```
+ACTIVITYWATCH_URL=http://localhost:5600
+TEMPO_API_TOKEN=twoj_token
+JIRA_BASE_URL=https://twoja-firma.atlassian.net
+JIRA_SERVICE_EMAIL=twoj.email@firma.com
+JIRA_API_KEY=twoj_token
+```
+
+Zapisz: `Ctrl+O`, `Enter`, `Ctrl+X`
+
+---
+
+## ETAP 4: URUCHOMIENIE
+
+### Opcja A: Ręcznie
+```bash
+pnpm dev
+```
+Otwórz: http://localhost:5666
+
+### Opcja B: Jako usługa w tle (pm2)
+```bash
+npm install -g pm2
+cd ~/Documents/ai-timetracker
+pm2 start "pnpm dev" --name timetracker
+pm2 save
+```
+
+---
+
+## ETAP 5: AUTOSTART
+
+### ActivityWatch
+
+**Snap:**
+ActivityWatch automatycznie uruchamia się przy logowaniu.
+
+**Ręcznie:**
+Dodaj `aw-qt` do autostartu w ustawieniach środowiska graficznego.
+
+**Systemd (zaawansowane):**
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/activitywatch.service << EOF
+[Unit]
+Description=ActivityWatch
+After=graphical-session.target
+
+[Service]
+ExecStart=/path/to/aw-qt
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user enable activitywatch
+systemctl --user start activitywatch
+```
+
+### TimeTracker (z pm2)
+```bash
+pm2 startup
+# Skopiuj i uruchom komendę którą wyświetli pm2
+pm2 save
+```
+
+---
+
+## ROZWIĄZYWANIE PROBLEMÓW (Linux)
+
+| Problem | Rozwiązanie |
+|---------|-------------|
+| ActivityWatch nie zbiera danych | Upewnij się że masz zainstalowane xdotool i xprop |
+| `snap` nie znaleziony | `sudo apt install snapd` |
+| `pnpm` nie znaleziony | Dodaj `export PATH="$HOME/.local/share/pnpm:$PATH"` do `~/.bashrc` |
+| Port 5666 zajęty | `lsof -i :5666` lub `fuser 5666/tcp` |
+
+---
+
+# SZYBKA INSTALACJA (jeden skrypt)
+
+### macOS / Linux:
+```bash
+curl -sSL https://raw.githubusercontent.com/shopconnector/ai-timetracker/main/install.sh | bash
+```
+
+### Windows:
+Pobierz i uruchom `install.ps1` z repozytorium.
+
+---
+
+# SPRAWDZENIE CZY WSZYSTKO DZIAŁA
 
 ### Test 1: ActivityWatch
 - Otwórz: http://localhost:5600
 - Powinieneś widzieć dashboard z aktywnościami
+- Jeśli puste - poczekaj chwilę i odśwież
 
 ### Test 2: TimeTracker
 - Otwórz: http://localhost:5666
-- Powinieneś widzieć stronę TimeTracker
-- W zakładce "Timesheet" powinny być widoczne aktywności z ActivityWatch
+- W zakładce "Timesheet" powinny być widoczne aktywności
 
 ### Jeśli TimeTracker nie widzi aktywności:
-1. Czy ActivityWatch na pewno działa? (http://localhost:5600)
-2. Czy plik `apps\web\.env.local` zawiera linię `ACTIVITYWATCH_URL=http://localhost:5600`?
-3. Czy używasz tej samej przeglądarki co ActivityWatch?
+1. Czy ActivityWatch działa? (http://localhost:5600)
+2. Czy plik `.env.local` zawiera `ACTIVITYWATCH_URL=http://localhost:5600`?
+3. Czy ActivityWatch ma uprawnienia do zbierania danych?
 
 ---
 
-## ROZWIĄZYWANIE PROBLEMÓW
-
-| Problem | Rozwiązanie |
-|---------|-------------|
-| `git` / `pnpm` / `node` nie rozpoznane | Zamknij PowerShell i otwórz NOWE okno |
-| ActivityWatch nie zbiera danych | Uruchom go ręcznie z menu Start |
-| TimeTracker nie widzi aktywności | Sprawdź czy ActivityWatch działa (localhost:5600) |
-| Strona nie otwiera po zamknięciu PowerShell | Użyj pm2 (Opcja C powyżej) |
-| Port 5666 zajęty | Uruchom: `netstat -ano \| findstr :5666` |
-| Błąd przy kopiowaniu pliku | Użyj: `Copy-Item .env.example -Destination apps\web\.env.local` |
-
----
-
-## JAK POŁĄCZYĆ Z JIRA/TEMPO
+# JAK UZYSKAĆ TOKENY API
 
 ### Token Jira
-
 1. Wejdź: https://id.atlassian.com/manage-profile/security/api-tokens
-2. Kliknij **Create API token**
-3. Wpisz nazwę np. "TimeTracker"
-4. Skopiuj token (wyświetli się tylko raz!)
-5. Wklej do `apps\web\.env.local` w linii `JIRA_API_KEY=`
+2. **Create API token** → nazwij "TimeTracker"
+3. Skopiuj token → wklej do `JIRA_API_KEY=`
 
 ### Token Tempo
-
-1. Otwórz Jira → Apps → Tempo
-2. Ustawienia (koło zębate) → API Integration → API Tokens
-3. Kliknij **New Token**
-4. Nazwij np. "TimeTracker"
-5. Uprawnienia: Worklogs (View, Create, Edit)
-6. Skopiuj token i wklej do `TEMPO_API_TOKEN=`
+1. Jira → Apps → Tempo → Settings → API Integration
+2. **New Token** → nazwij "TimeTracker"
+3. Uprawnienia: Worklogs (View, Create, Edit)
+4. Skopiuj token → wklej do `TEMPO_API_TOKEN=`
 
 ---
 
-## ADRESY
+# ADRESY
 
 | Co | Adres |
 |----|-------|
@@ -338,58 +541,16 @@ Aby TimeTracker uruchamiał się automatycznie po włączeniu komputera:
 
 ---
 
-# INSTALACJA NA macOS
-
-```bash
-# 1. Zainstaluj Homebrew (jeśli nie masz)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# 2. Zainstaluj Node.js i pnpm
-brew install node
-npm install -g pnpm
-
-# 3. Zainstaluj ActivityWatch
-brew install --cask activitywatch
-
-# 4. Skonfiguruj uprawnienia
-# System Preferences → Privacy & Security → Accessibility → dodaj ActivityWatch
-
-# 5. Uruchom ActivityWatch
-open -a ActivityWatch
-
-# 6. Sklonuj i uruchom
-git clone https://github.com/shopconnector/ai-timetracker.git
-cd ai-timetracker
-pnpm install
-cp .env.example apps/web/.env.local
-# Edytuj apps/web/.env.local
-pnpm dev
-```
-
-Lub szybka instalacja:
-```bash
-curl -sSL https://raw.githubusercontent.com/shopconnector/ai-timetracker/main/install.sh | bash
-```
-
----
-
-## Struktura projektu
+# STRUKTURA PROJEKTU
 
 ```
 ai-timetracker/
-├── apps/
-│   └── web/                # Aplikacja Next.js
-│       ├── src/app/        # Strony i API
-│       ├── src/components/ # Komponenty UI
-│       ├── src/lib/        # Logika (w tym activitywatch.ts!)
-│       └── .env.local      # KONFIGURACJA - TUTAJ WPISZ TOKENY
-├── packages/
-│   ├── ai/                 # Logika AI/LLM
-│   └── shared/             # Współdzielony kod
-├── start-timetracker.bat   # Uruchamiacz Windows
-├── install-service.bat     # Instalator usługi PM2
-├── install.sh              # Instalator macOS/Linux
-└── .env.example            # Szablon konfiguracji
+├── apps/web/                    # Aplikacja Next.js
+│   ├── src/lib/activitywatch.ts # Integracja z ActivityWatch API
+│   └── .env.local               # KONFIGURACJA (tokeny)
+├── start-timetracker.bat        # Uruchamiacz Windows
+├── install.sh                   # Instalator macOS/Linux
+└── .env.example                 # Szablon konfiguracji
 ```
 
 ---
