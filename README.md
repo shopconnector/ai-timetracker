@@ -85,110 +85,251 @@ curl -sSL https://raw.githubusercontent.com/gacabartosz/ai-timetracker/main/inst
 
 ---
 
-## Instalacja na Windows
+## Instalacja na Windows (krok po kroku)
 
-### Wymagania
+> **WAŻNE:** Wykonuj komendy POJEDYNCZO, nie kopiuj wielu na raz!
+> Po każdej instalacji narzędzia ZAMKNIJ PowerShell i otwórz NOWE okno!
 
-Przed rozpoczęciem upewnij się, że masz zainstalowane:
-- **Git** - https://git-scm.com/download/win
-- **Node.js** (wersja 18+) - https://nodejs.org/
-- **pnpm** - menedżer pakietów
-- **ActivityWatch** - https://activitywatch.net/downloads/
+---
 
-### Metoda 1: Szybka instalacja (zalecana)
+### ETAP 1: Instalacja narzędzi
 
-**Krok 1:** Otwórz **PowerShell** i zainstaluj wymagane narzędzia:
+#### 1.1 Zainstaluj Git
+
+Otwórz **PowerShell** i wpisz:
 
 ```powershell
-# Zainstaluj Git (jeśli nie masz)
-winget install --id Git.Git -e
-
-# Zainstaluj Node.js (jeśli nie masz)
-winget install --id OpenJS.NodeJS.LTS -e
+winget install Git.Git
 ```
 
-**WAŻNE: Zamknij PowerShell i otwórz NOWE okno po każdej instalacji!**
+Poczekaj na zakończenie instalacji.
 
-**Krok 2:** Zainstaluj pnpm:
+**→ ZAMKNIJ PowerShell i otwórz NOWE okno PowerShell**
+
+Sprawdź czy działa:
+```powershell
+git --version
+```
+
+Powinno wyświetlić: `git version 2.xx.x`
+
+---
+
+#### 1.2 Zainstaluj Node.js
+
+```powershell
+winget install OpenJS.NodeJS.LTS
+```
+
+**→ ZAMKNIJ PowerShell i otwórz NOWE okno PowerShell**
+
+Sprawdź czy działa:
+```powershell
+node --version
+```
+
+Powinno wyświetlić: `v20.xx.x` lub wyżej
+
+---
+
+#### 1.3 Zainstaluj pnpm
 
 ```powershell
 iwr https://get.pnpm.io/install.ps1 -useb | iex
 ```
 
-**WAŻNE: Zamknij PowerShell i otwórz NOWE okno!**
+**→ ZAMKNIJ PowerShell i otwórz NOWE okno PowerShell**
 
-**Krok 3:** Sklonuj i uruchom:
+Sprawdź czy działa:
+```powershell
+pnpm --version
+```
+
+Powinno wyświetlić: `10.xx.x` lub wyżej
+
+---
+
+#### 1.4 Zainstaluj ActivityWatch
+
+1. Otwórz w przeglądarce: https://activitywatch.net/downloads/
+2. Pobierz wersję dla **Windows**
+3. Uruchom pobrany plik `.exe`
+4. Zainstaluj (klikaj "Dalej")
+5. Po instalacji ActivityWatch uruchomi się automatycznie
+6. Sprawdź czy ikona ActivityWatch pojawiła się w zasobniku systemowym (przy zegarze)
+
+Aby sprawdzić czy działa, otwórz: http://localhost:5600
+
+---
+
+### ETAP 2: Instalacja TimeTracker
+
+#### 2.1 Sklonuj repozytorium
 
 ```powershell
 cd ~\Documents
+```
+
+```powershell
 git clone https://github.com/shopconnector/ai-timetracker.git
+```
+
+```powershell
 cd ai-timetracker
+```
+
+---
+
+#### 2.2 Zainstaluj zależności
+
+```powershell
 pnpm install
+```
+
+Poczekaj aż się zakończy (może potrwać kilka minut).
+
+---
+
+#### 2.3 Skonfiguruj API
+
+Skopiuj plik konfiguracyjny:
+
+```powershell
 Copy-Item .env.example -Destination apps\web\.env.local
+```
+
+Otwórz plik w Notatniku:
+
+```powershell
 notepad apps\web\.env.local
 ```
 
-Wypełnij tokeny API (patrz sekcja "Konfiguracja API"), zapisz plik.
+Uzupełnij dane (patrz sekcja "Jak uzyskać tokeny API" poniżej):
 
-**Krok 4:** Uruchom aplikację:
+```
+ACTIVITYWATCH_URL=http://localhost:5600
+TEMPO_API_TOKEN=twój_token_tempo
+JIRA_BASE_URL=https://twoja-firma.atlassian.net
+JIRA_SERVICE_EMAIL=twoj.email@firma.com
+JIRA_API_KEY=twój_token_jira
+OPENROUTER_API_KEY=sk-or-xxx
+```
+
+**Zapisz plik (Ctrl+S) i zamknij Notatnik.**
+
+---
+
+### ETAP 3: Uruchamianie aplikacji
+
+#### Opcja A: Uruchom ręcznie (najprostsza)
 
 ```powershell
 pnpm dev
 ```
 
-Otwórz: http://localhost:5666
+Otwórz w przeglądarce: **http://localhost:5666**
+
+> ⚠️ **UWAGA:** NIE zamykaj okna PowerShell! Zminimalizuj je.
+> Zamknięcie PowerShell zatrzyma aplikację.
 
 ---
 
-### Metoda 2: Uruchamianie jednym kliknięciem
+#### Opcja B: Uruchom jako usługę w tle (zalecane)
 
-Po pierwszej instalacji możesz uruchamiać TimeTracker **jednym kliknięciem**:
+Dzięki temu możesz zamknąć PowerShell a aplikacja będzie nadal działać.
 
-1. Otwórz folder `ai-timetracker` w Eksploratorze plików
-2. Kliknij dwukrotnie na plik **`start-timetracker.bat`**
+**Krok 1:** Zainstaluj pm2:
 
-Skrypt automatycznie:
-- Uruchomi ActivityWatch (jeśli nie działa)
-- Uruchomi TimeTracker
-- Otworzy przeglądarkę na http://localhost:5666
-
----
-
-### Metoda 3: Autostart przy uruchamianiu Windows
-
-Aby TimeTracker uruchamiał się automatycznie przy starcie Windows:
-
-**Krok 1:** Otwórz folder Autostart:
 ```powershell
-# W PowerShell lub w oknie Uruchom (Win+R):
-shell:startup
+npm install -g pm2
 ```
 
-**Krok 2:** Utwórz skrót do `start-timetracker.bat`:
+**Krok 2:** Uruchom TimeTracker jako usługę:
 
-1. Kliknij prawym przyciskiem w folderze Autostart
-2. Wybierz **Nowy → Skrót**
-3. Wklej ścieżkę:
+```powershell
+cd ~\Documents\ai-timetracker
+```
+
+```powershell
+pm2 start "pnpm dev" --name timetracker
+```
+
+**Krok 3:** Zapisz konfigurację:
+
+```powershell
+pm2 save
+```
+
+Teraz możesz zamknąć PowerShell - aplikacja działa w tle!
+
+**Zarządzanie usługą:**
+
+```powershell
+pm2 status              # sprawdź status
+pm2 logs timetracker    # zobacz logi
+pm2 stop timetracker    # zatrzymaj
+pm2 restart timetracker # restart
+pm2 delete timetracker  # usuń usługę
+```
+
+---
+
+#### Opcja C: Uruchom jednym kliknięciem
+
+1. Otwórz folder `C:\Users\TWOJA_NAZWA\Documents\ai-timetracker`
+2. Kliknij dwukrotnie na **`start-timetracker.bat`**
+
+Skrypt automatycznie:
+- Sprawdzi i uruchomi ActivityWatch
+- Uruchomi TimeTracker
+- Otworzy przeglądarkę
+
+---
+
+### ETAP 4: Autostart przy uruchamianiu Windows
+
+Aby TimeTracker uruchamiał się automatycznie po włączeniu komputera:
+
+**Metoda 1: Autostart ze skryptem .bat**
+
+1. Naciśnij `Win + R`
+2. Wpisz `shell:startup` i naciśnij Enter
+3. Otworzył się folder Autostart
+4. Kliknij prawym przyciskiem → **Nowy** → **Skrót**
+5. W polu "lokalizacja" wpisz:
    ```
    C:\Users\TWOJA_NAZWA\Documents\ai-timetracker\start-timetracker.bat
    ```
-   (zamień `TWOJA_NAZWA` na nazwę użytkownika)
-4. Kliknij **Dalej** → nadaj nazwę "AI TimeTracker" → **Zakończ**
+   (zamień TWOJA_NAZWA na swoją nazwę użytkownika Windows)
+6. Kliknij **Dalej**
+7. Nazwij skrót: `AI TimeTracker`
+8. Kliknij **Zakończ**
 
-Od teraz TimeTracker uruchomi się automatycznie po zalogowaniu do Windows.
+**Metoda 2: Autostart z pm2 (zalecane dla zaawansowanych)**
+
+```powershell
+pm2 startup
+```
+
+Skopiuj i uruchom komendę którą wyświetli pm2, następnie:
+
+```powershell
+pm2 save
+```
 
 ---
 
-### Rozwiązywanie problemów na Windows
+### Rozwiązywanie problemów
 
 | Problem | Rozwiązanie |
 |---------|-------------|
-| `git` nie jest rozpoznawany | Zamknij i otwórz nowe okno PowerShell |
-| `pnpm` nie jest rozpoznawany | Zamknij i otwórz nowe okno PowerShell |
-| Nadal nie działa po zamknięciu | Uruchom: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")` |
+| `git` / `pnpm` / `node` nie rozpoznany | Zamknij PowerShell i otwórz NOWE okno |
+| Nadal nie działa | Uruchom: `$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")` |
 | `corepack enable` błąd EPERM | Uruchom PowerShell jako Administrator |
-| Błąd przy `copy` | Użyj `Copy-Item .env.example -Destination apps\web\.env.local` |
-| ActivityWatch nie działa | Pobierz i zainstaluj z https://activitywatch.net/downloads/ |
+| Błąd przy `copy` | Użyj: `Copy-Item .env.example -Destination apps\web\.env.local` |
+| ActivityWatch nie działa | Uruchom ręcznie z menu Start lub pobierz ponownie z https://activitywatch.net/downloads/ |
+| Strona nie otwiera się po zamknięciu PowerShell | Użyj pm2 (Opcja B powyżej) |
+| Port 5666 zajęty | Uruchom: `netstat -ano | findstr :5666` aby znaleźć proces, lub zmień port w `apps/web/package.json` |
 
 ---
 

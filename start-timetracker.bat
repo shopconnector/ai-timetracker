@@ -1,106 +1,158 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
 title AI TimeTracker
 color 0A
 
 echo.
-echo ╔════════════════════════════════════════════╗
-echo ║       AI TimeTracker - Uruchamianie        ║
-echo ╚════════════════════════════════════════════╝
+echo ╔════════════════════════════════════════════════════════════╗
+echo ║              AI TimeTracker - Uruchamianie                 ║
+echo ╚════════════════════════════════════════════════════════════╝
 echo.
 
-:: Przejdz do folderu skryptu
+:: Przejdz do folderu skryptu (wazne dla autostartu!)
 cd /d "%~dp0"
 
 :: ═══════════════════════════════════════════════════════════════
-:: KROK 1: Sprawdz ActivityWatch
+:: KROK 1: Sprawdz czy pnpm jest dostepny
 :: ═══════════════════════════════════════════════════════════════
-echo [1/4] Sprawdzanie ActivityWatch...
+echo [1/5] Sprawdzanie pnpm...
 
+where pnpm >nul 2>&1
+if %errorlevel% neq 0 (
+    echo       BLAD: pnpm nie jest zainstalowany!
+    echo.
+    echo       Zainstaluj pnpm:
+    echo       1. Otworz PowerShell
+    echo       2. Wpisz: iwr https://get.pnpm.io/install.ps1 -useb ^| iex
+    echo       3. Zamknij i otworz ponownie PowerShell
+    echo.
+    pause
+    exit /b 1
+)
+echo       OK - pnpm znaleziony
+
+:: ═══════════════════════════════════════════════════════════════
+:: KROK 2: Sprawdz ActivityWatch
+:: ═══════════════════════════════════════════════════════════════
+echo [2/5] Sprawdzanie ActivityWatch...
+
+:: Sprawdz czy ActivityWatch API odpowiada
 curl -s -o nul -w "" http://localhost:5600/api/0/info >nul 2>&1
 if %errorlevel% neq 0 (
-    echo       ActivityWatch nie dziala. Szukam i uruchamiam...
+    echo       ActivityWatch nie dziala. Szukam...
 
-    :: Szukaj ActivityWatch w roznych lokalizacjach
+    :: Lista mozliwych lokalizacji ActivityWatch
+    set "AW_FOUND="
+
     if exist "%LOCALAPPDATA%\activitywatch\aw-qt.exe" (
-        start "" "%LOCALAPPDATA%\activitywatch\aw-qt.exe"
-        echo       Uruchomiono z: %LOCALAPPDATA%\activitywatch
-    ) else if exist "%LOCALAPPDATA%\Programs\activitywatch\aw-qt.exe" (
-        start "" "%LOCALAPPDATA%\Programs\activitywatch\aw-qt.exe"
-        echo       Uruchomiono z: %LOCALAPPDATA%\Programs\activitywatch
-    ) else if exist "%ProgramFiles%\activitywatch\aw-qt.exe" (
-        start "" "%ProgramFiles%\activitywatch\aw-qt.exe"
-        echo       Uruchomiono z: %ProgramFiles%\activitywatch
-    ) else (
-        echo       UWAGA: Nie znaleziono ActivityWatch!
-        echo       Pobierz z: https://activitywatch.net/downloads/
+        set "AW_PATH=%LOCALAPPDATA%\activitywatch\aw-qt.exe"
+        set "AW_FOUND=1"
+    )
+    if exist "%LOCALAPPDATA%\Programs\activitywatch\aw-qt.exe" (
+        set "AW_PATH=%LOCALAPPDATA%\Programs\activitywatch\aw-qt.exe"
+        set "AW_FOUND=1"
+    )
+    if exist "%ProgramFiles%\ActivityWatch\aw-qt.exe" (
+        set "AW_PATH=%ProgramFiles%\ActivityWatch\aw-qt.exe"
+        set "AW_FOUND=1"
+    )
+    if exist "%ProgramFiles(x86)%\ActivityWatch\aw-qt.exe" (
+        set "AW_PATH=%ProgramFiles(x86)%\ActivityWatch\aw-qt.exe"
+        set "AW_FOUND=1"
     )
 
-    :: Czekaj az ActivityWatch sie uruchomi
-    echo       Czekam na uruchomienie ActivityWatch...
-    timeout /t 5 /nobreak >nul
+    if defined AW_FOUND (
+        echo       Uruchamiam ActivityWatch...
+        start "" "%AW_PATH%"
+        echo       Czekam 5 sekund na uruchomienie...
+        timeout /t 5 /nobreak >nul
+    ) else (
+        echo.
+        echo       UWAGA: Nie znaleziono ActivityWatch!
+        echo       Pobierz z: https://activitywatch.net/downloads/
+        echo       Kontynuuje bez ActivityWatch...
+        echo.
+        timeout /t 3 /nobreak >nul
+    )
 ) else (
     echo       OK - ActivityWatch dziala
 )
 
 :: ═══════════════════════════════════════════════════════════════
-:: KROK 2: Sprawdz zaleznosci
+:: KROK 3: Sprawdz zaleznosci projektu
 :: ═══════════════════════════════════════════════════════════════
-echo [2/4] Sprawdzanie zaleznosci...
+echo [3/5] Sprawdzanie zaleznosci projektu...
 
 if not exist "node_modules" (
     echo       Brak node_modules - instaluje zaleznosci...
+    echo       To moze potrwac kilka minut...
     call pnpm install
     if %errorlevel% neq 0 (
         echo       BLAD: Nie udalo sie zainstalowac zaleznosci!
-        echo       Upewnij sie ze masz zainstalowane: Node.js i pnpm
         pause
         exit /b 1
     )
-) else (
     echo       OK - zaleznosci zainstalowane
+) else (
+    echo       OK - zaleznosci istnieja
 )
 
 :: ═══════════════════════════════════════════════════════════════
-:: KROK 3: Sprawdz konfiguracje
+:: KROK 4: Sprawdz plik konfiguracyjny
 :: ═══════════════════════════════════════════════════════════════
-echo [3/4] Sprawdzanie konfiguracji...
+echo [4/5] Sprawdzanie konfiguracji...
 
 if not exist "apps\web\.env.local" (
     echo       Brak pliku konfiguracyjnego - tworze...
-    copy ".env.example" "apps\web\.env.local" >nul
-    echo       UWAGA: Otworz apps\web\.env.local i uzupelnij tokeny API!
-    notepad "apps\web\.env.local"
-    echo       Po zapisaniu pliku nacisnij dowolny klawisz...
-    pause >nul
+    copy ".env.example" "apps\web\.env.local" >nul 2>&1
+
+    if exist "apps\web\.env.local" (
+        echo.
+        echo       ╔════════════════════════════════════════════════════════╗
+        echo       ║  UWAGA: Musisz skonfigurowac tokeny API!               ║
+        echo       ║  Otwieram plik konfiguracyjny w Notatniku...           ║
+        echo       ║  Uzupelnij dane i zapisz plik (Ctrl+S)                 ║
+        echo       ╚════════════════════════════════════════════════════════╝
+        echo.
+        notepad "apps\web\.env.local"
+        echo       Po zapisaniu pliku nacisnij dowolny klawisz...
+        pause >nul
+    ) else (
+        echo       BLAD: Nie mozna utworzyc pliku konfiguracyjnego!
+    )
 ) else (
     echo       OK - konfiguracja istnieje
 )
 
 :: ═══════════════════════════════════════════════════════════════
-:: KROK 4: Uruchom TimeTracker
+:: KROK 5: Uruchom TimeTracker
 :: ═══════════════════════════════════════════════════════════════
-echo [4/4] Uruchamianie TimeTracker...
+echo [5/5] Uruchamianie TimeTracker...
 echo.
-echo ╔════════════════════════════════════════════╗
-echo ║  TimeTracker:    http://localhost:5666     ║
-echo ║  ActivityWatch:  http://localhost:5600     ║
-echo ╚════════════════════════════════════════════╝
-echo.
-
-:: Uruchom przegladarke po 8 sekundach (czas na start serwera)
-echo Otwieram przegladarke za 8 sekund...
-start "" /min cmd /c "timeout /t 8 /nobreak >nul && start http://localhost:5666"
-
-echo.
-echo Serwer uruchomiony. Nacisnij Ctrl+C aby zatrzymac.
-echo ─────────────────────────────────────────────
+echo ╔════════════════════════════════════════════════════════════╗
+echo ║                                                            ║
+echo ║   TimeTracker:    http://localhost:5666                    ║
+echo ║   ActivityWatch:  http://localhost:5600                    ║
+echo ║                                                            ║
+echo ║   Przegladarka otworzy sie automatycznie za 10 sekund.     ║
+echo ║                                                            ║
+echo ║   Aby zatrzymac: nacisnij Ctrl+C lub zamknij to okno.      ║
+echo ║                                                            ║
+echo ╚════════════════════════════════════════════════════════════╝
 echo.
 
-:: Uruchom dev server
+:: Uruchom przegladarke w tle po 10 sekundach
+start "" /min cmd /c "timeout /t 10 /nobreak >nul && start http://localhost:5666"
+
+:: Uruchom serwer deweloperski
+echo Uruchamiam serwer...
+echo ────────────────────────────────────────────────────────────────
+echo.
 call pnpm dev
 
 :: Jesli serwer sie zatrzymal
 echo.
-echo TimeTracker zatrzymany.
+echo ════════════════════════════════════════════════════════════════
+echo TimeTracker zostal zatrzymany.
+echo ════════════════════════════════════════════════════════════════
 pause
