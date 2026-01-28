@@ -1,0 +1,9 @@
+# ActivityWatch AFK Watcher Configuration
+# Wykrywanie nieaktywności użytkownika
+
+[aw-watcher-afk]
+# Czas bez aktywności przed oznaczeniem jako AFK (sekundy)
+timeout = 180
+
+# Czas między sprawdzeniami stanu (sekundy)
+poll_time = 5.0

@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "heartbeat_interval": 5,
+  "include_tabs": true,
+  "include_audible": true,
+  "include_url": true,
+  "include_title": true
+}

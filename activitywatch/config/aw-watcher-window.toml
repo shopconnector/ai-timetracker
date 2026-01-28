@@ -1,0 +1,9 @@
+# ActivityWatch Window Watcher Configuration
+# Śledzenie aktywnych okien i aplikacji
+
+[aw-watcher-window]
+# Czas między kolejnymi próbkami (sekundy)
+poll_time = 1.0
+
+# Wykluczenia - okna które nie będą śledzone
+exclude_title = []
