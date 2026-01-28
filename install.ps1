@@ -215,7 +215,7 @@ Write-Host "                   🎉 Instalacja zakończona!                     
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  ActivityWatch:  http://localhost:5600" -ForegroundColor White
-Write-Host "  TimeTracker:    http://localhost:3000" -ForegroundColor White
+Write-Host "  TimeTracker:    http://localhost:5666" -ForegroundColor White
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""

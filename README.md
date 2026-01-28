@@ -136,7 +136,7 @@ Wypełnij tokeny API (patrz sekcja "Konfiguracja API"), zapisz plik.
 pnpm dev
 ```
 
-Otwórz: http://localhost:3000
+Otwórz: http://localhost:5666
 
 ---
 
@@ -150,7 +150,7 @@ Po pierwszej instalacji możesz uruchamiać TimeTracker **jednym kliknięciem**:
 Skrypt automatycznie:
 - Uruchomi ActivityWatch (jeśli nie działa)
 - Uruchomi TimeTracker
-- Otworzy przeglądarkę na http://localhost:3000
+- Otworzy przeglądarkę na http://localhost:5666
 
 ---
 
@@ -309,7 +309,7 @@ OPENROUTER_API_KEY=sk-or-v1-xxx
 
 | Usługa | URL |
 |--------|-----|
-| **TimeTracker** | http://localhost:3000 |
+| **TimeTracker** | http://localhost:5666 |
 | ActivityWatch | http://localhost:5600 |
 
 ---
@@ -328,7 +328,7 @@ OPENROUTER_API_KEY=sk-or-v1-xxx
 
 ## Jak używać
 
-1. Otwórz http://localhost:3000/timesheet
+1. Otwórz http://localhost:5666/timesheet
 2. Wybierz datę
 3. Przejrzyj aktywności z ActivityWatch
 4. Wybierz task dla każdej aktywności
