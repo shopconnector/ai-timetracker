@@ -153,4 +153,4 @@ name: Build Windows Installer
             } finally {                                                                                                                               
               Get-Process -Name "node" -ErrorAction SilentlyContinue | Stop-Process -Force                                                            
               Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue                                                                       
-            }  
+            }              
