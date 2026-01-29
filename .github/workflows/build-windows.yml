@@ -1,196 +1,156 @@
-name: Build Windows Installer
-
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version (e.g., 0.1.0)'
-        required: false
-        default: '0.1.0'
-
-env:
-  NODE_VERSION: '20.11.1'
-
-jobs:
-  build:
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Next.js
-        run: pnpm build
-        env:
-          # Zmienne srodowiskowe dla buildu (dummy values)
-          ACTIVITYWATCH_URL: http://localhost:5600
-
-      - name: Prepare dist folder
-        shell: pwsh
-        run: |
-          $OUTPUT_DIR = "dist/windows"
-
-          # Utworz folder
-          New-Item -ItemType Directory -Path $OUTPUT_DIR -Force
-
-          # Kopiuj standalone
-          Copy-Item -Recurse "apps/web/.next/standalone/*" $OUTPUT_DIR
-
-          # Kopiuj public
-          if (Test-Path "apps/web/public") {
-            Copy-Item -Recurse "apps/web/public" "$OUTPUT_DIR/public"
-          }
-
-          # Kopiuj static
-          if (Test-Path "apps/web/.next/static") {
-            New-Item -ItemType Directory -Path "$OUTPUT_DIR/.next" -Force
-            Copy-Item -Recurse "apps/web/.next/static" "$OUTPUT_DIR/.next/static"
-          }
-
-          # Kopiuj launcher
-          Copy-Item "launcher/start.bat" $OUTPUT_DIR
-          Copy-Item "launcher/start-hidden.vbs" $OUTPUT_DIR
-
-          # Kopiuj .env.example
-          Copy-Item ".env.example" "$OUTPUT_DIR/.env.example"
-
-      - name: Download Node.js portable
-        shell: pwsh
-        run: |
-          $nodeUrl = "https://nodejs.org/dist/v${{ env.NODE_VERSION }}/node-v${{ env.NODE_VERSION }}-win-x64.zip"
-          $zipPath = "$env:TEMP\node.zip"
-          $extractPath = "$env:TEMP\node-extract"
-
-          Write-Host "Downloading Node.js from $nodeUrl"
-          Invoke-WebRequest -Uri $nodeUrl -OutFile $zipPath
-
-          Write-Host "Extracting..."
-          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-
-          # Znajdz i skopiuj node.exe
-          $nodeExe = Get-ChildItem -Path $extractPath -Recurse -Filter "node.exe" | Select-Object -First 1
-          Copy-Item $nodeExe.FullName "dist/windows/node.exe"
-
-          Write-Host "node.exe copied to dist/windows/"
-
-      - name: Create portable ZIP
-        shell: pwsh
-        run: |
-          Compress-Archive -Path "dist/windows/*" -DestinationPath "dist/TimeTracker-Portable-x64.zip"
-          Write-Host "Created TimeTracker-Portable-x64.zip"
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          choco install innosetup -y
-
-      - name: Build Installer
-        shell: pwsh
-        run: |
-          # Aktualizuj wersje w .iss jesli podano
-          $version = "${{ github.event.inputs.version }}"
-          if ([string]::IsNullOrEmpty($version)) {
-            $version = "${{ github.ref_name }}".TrimStart('v')
-          }
-          if ([string]::IsNullOrEmpty($version)) {
-            $version = "0.1.0"
-          }
-
-          Write-Host "Building installer version: $version"
-
-          # Uruchom Inno Setup
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$version" "installer\timetracker.iss"
-
-      - name: List artifacts
-        shell: pwsh
-        run: |
-          Write-Host "=== dist/ ==="
-          Get-ChildItem -Path dist -Recurse | Select-Object FullName, Length
-
-      - name: Upload Portable ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: TimeTracker-Portable-x64
-          path: dist/TimeTracker-Portable-x64.zip
-
-      - name: Upload Installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: TimeTracker-Setup-x64
-          path: dist/TimeTracker-Setup-x64.exe
-
-      # Release tylko na tagach
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            dist/TimeTracker-Setup-x64.exe
-            dist/TimeTracker-Portable-x64.zip
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Test czy aplikacja startuje
-  test:
-    needs: build
-    runs-on: windows-latest
-
-    steps:
-      - name: Download Portable ZIP
-        uses: actions/download-artifact@v4
-        with:
-          name: TimeTracker-Portable-x64
-
-      - name: Extract and test
-        shell: pwsh
-        run: |
-          # Rozpakuj
-          Expand-Archive -Path "TimeTracker-Portable-x64.zip" -DestinationPath "app"
-
-          # Utworz minimalny .env.local
-          @"
-          ACTIVITYWATCH_URL=http://localhost:5600
-          "@ | Out-File -FilePath "app/.env.local" -Encoding UTF8
-
-          # Uruchom serwer w tle
-          $process = Start-Process -FilePath "app/node.exe" -ArgumentList "app/server.js" -PassThru -NoNewWindow
-
-          # Czekaj na start
-          Write-Host "Waiting for server to start..."
-          Start-Sleep -Seconds 10
-
-          # Test czy odpowiada
-          try {
-            $response = Invoke-WebRequest -Uri "http://localhost:3000/timetracker" -TimeoutSec 10 -UseBasicParsing
-            Write-Host "Server responded with status: $($response.StatusCode)"
-
-            if ($response.StatusCode -eq 200) {
-              Write-Host "SUCCESS: Server is running!"
-            } else {
-              Write-Host "WARNING: Unexpected status code"
-            }
-          } catch {
-            Write-Host "ERROR: Server did not respond - $($_.Exception.Message)"
-            # Nie failuj - moze byc problem z portem w CI
-          } finally {
-            # Zatrzymaj serwer
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-          }
+name: Build Windows Installer                                                                                                                       
+                                                                                                                                                      
+  on:                                                                                                                                                 
+    push:                                                                                                                                             
+      tags:                                                                                                                                           
+        - 'v*'                                                                                                                                        
+    workflow_dispatch:                                                                                                                                
+      inputs:                                                                                                                                         
+        version:                                                                                                                                      
+          description: 'Version (e.g., 0.1.0)'                                                                                                        
+          required: false                                                                                                                             
+          default: '0.1.0'                                                                                                                            
+                                                                                                                                                      
+  env:                                                                                                                                                
+    NODE_VERSION: '20.11.1'                                                                                                                           
+                                                                                                                                                      
+  jobs:                                                                                                                                               
+    build:                                                                                                                                            
+      runs-on: windows-latest                                                                                                                         
+                                                                                                                                                      
+      steps:                                                                                                                                          
+        - name: Checkout                                                                                                                              
+          uses: actions/checkout@v4                                                                                                                   
+                                                                                                                                                      
+        - name: Setup pnpm                                                                                                                            
+          uses: pnpm/action-setup@v2                                                                                                                  
+          with:                                                                                                                                       
+            version: 9                                                                                                                                
+                                                                                                                                                      
+        - name: Setup Node.js                                                                                                                         
+          uses: actions/setup-node@v4                                                                                                                 
+          with:                                                                                                                                       
+            node-version: '20'                                                                                                                        
+            cache: 'pnpm'                                                                                                                             
+                                                                                                                                                      
+        - name: Install dependencies                                                                                                                  
+          run: pnpm install --frozen-lockfile                                                                                                         
+                                                                                                                                                      
+        - name: Build Next.js                                                                                                                         
+          run: pnpm build                                                                                                                             
+          env:                                                                                                                                        
+            ACTIVITYWATCH_URL: http://localhost:5600                                                                                                  
+                                                                                                                                                      
+        - name: Prepare bundle folder                                                                                                                 
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            $BUNDLE_DIR = "temp-bundle"                                                                                                               
+            New-Item -ItemType Directory -Path $BUNDLE_DIR -Force                                                                                     
+            Copy-Item -Recurse "apps/web/.next/standalone/*" $BUNDLE_DIR                                                                              
+            if (Test-Path "apps/web/public") {                                                                                                        
+              $destPublic = Join-Path $BUNDLE_DIR "apps/web/public"                                                                                   
+              New-Item -ItemType Directory -Path $destPublic -Force                                                                                   
+              Copy-Item -Recurse "apps/web/public/*" $destPublic                                                                                      
+            }                                                                                                                                         
+            if (Test-Path "apps/web/.next/static") {                                                                                                  
+              $destStatic = Join-Path $BUNDLE_DIR "apps/web/.next/static"                                                                             
+              New-Item -ItemType Directory -Path (Split-Path $destStatic) -Force                                                                      
+              Copy-Item -Recurse "apps/web/.next/static" $destStatic                                                                                  
+            }                                                                                                                                         
+            Copy-Item ".env.example" (Join-Path $BUNDLE_DIR "apps/web/.env.example")                                                                  
+                                                                                                                                                      
+        - name: Download Node.js portable                                                                                                             
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            $nodeUrl = "https://nodejs.org/dist/v${{ env.NODE_VERSION }}/node-v${{ env.NODE_VERSION }}-win-x64.zip"                                   
+            Invoke-WebRequest -Uri $nodeUrl -OutFile "$env:TEMP\node.zip"                                                                             
+            Expand-Archive -Path "$env:TEMP\node.zip" -DestinationPath "$env:TEMP\node-extract" -Force                                                
+            $nodeExe = Get-ChildItem -Path "$env:TEMP\node-extract" -Recurse -Filter "node.exe" | Select-Object -First 1                              
+            Copy-Item $nodeExe.FullName "temp-bundle/node.exe"                                                                                        
+                                                                                                                                                      
+        - name: Create app.zip for pkg                                                                                                                
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            New-Item -ItemType Directory -Path "pkg-launcher/assets" -Force                                                                           
+            Compress-Archive -Path "temp-bundle/*" -DestinationPath "pkg-launcher/assets/app.zip" -CompressionLevel Optimal                           
+                                                                                                                                                      
+        - name: Build TimeTracker.exe with pkg                                                                                                        
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            cd pkg-launcher                                                                                                                           
+            npm install                                                                                                                               
+            npx @yao-pkg/pkg . --target node20-win-x64 --output ../dist/TimeTracker.exe                                                               
+            cd ..                                                                                                                                     
+            if (-not (Test-Path "dist/TimeTracker.exe")) { throw "Failed to create TimeTracker.exe" }                                                 
+                                                                                                                                                      
+        - name: Create portable ZIP                                                                                                                   
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            Copy-Item "launcher/start.bat" "temp-bundle/"                                                                                             
+            Copy-Item "launcher/start-hidden.vbs" "temp-bundle/"                                                                                      
+            Compress-Archive -Path "temp-bundle/*" -DestinationPath "dist/TimeTracker-Portable-x64.zip"                                               
+                                                                                                                                                      
+        - name: Build Installer with Inno Setup                                                                                                       
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            choco install innosetup -y                                                                                                                
+            $version = "${{ github.event.inputs.version }}"                                                                                           
+            if ([string]::IsNullOrEmpty($version)) { $version = "${{ github.ref_name }}".TrimStart('v') }                                             
+            if ([string]::IsNullOrEmpty($version)) { $version = "0.1.0" }                                                                             
+            New-Item -ItemType Directory -Path "dist/windows" -Force                                                                                  
+            Copy-Item -Recurse "temp-bundle/*" "dist/windows/"                                                                                        
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="$version" "installer\timetracker.iss"                                    
+                                                                                                                                                      
+        - name: Upload TimeTracker.exe                                                                                                                
+          uses: actions/upload-artifact@v4                                                                                                            
+          with:                                                                                                                                       
+            name: TimeTracker-exe                                                                                                                     
+            path: dist/TimeTracker.exe                                                                                                                
+                                                                                                                                                      
+        - name: Upload Portable ZIP                                                                                                                   
+          uses: actions/upload-artifact@v4                                                                                                            
+          with:                                                                                                                                       
+            name: TimeTracker-Portable-x64                                                                                                            
+            path: dist/TimeTracker-Portable-x64.zip                                                                                                   
+                                                                                                                                                      
+        - name: Upload Installer                                                                                                                      
+          uses: actions/upload-artifact@v4                                                                                                            
+          with:                                                                                                                                       
+            name: TimeTracker-Setup-x64                                                                                                               
+            path: dist/TimeTracker-Setup-x64.exe                                                                                                      
+                                                                                                                                                      
+        - name: Create Release                                                                                                                        
+          if: startsWith(github.ref, 'refs/tags/v')                                                                                                   
+          uses: softprops/action-gh-release@v1                                                                                                        
+          with:                                                                                                                                       
+            files: |                                                                                                                                  
+              dist/TimeTracker.exe                                                                                                                    
+              dist/TimeTracker-Setup-x64.exe                                                                                                          
+              dist/TimeTracker-Portable-x64.zip                                                                                                       
+            generate_release_notes: true                                                                                                              
+          env:                                                                                                                                        
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}                                                                                                 
+                                                                                                                                                      
+    test:                                                                                                                                             
+      needs: build                                                                                                                                    
+      runs-on: windows-latest                                                                                                                         
+      steps:                                                                                                                                          
+        - name: Download TimeTracker.exe                                                                                                              
+          uses: actions/download-artifact@v4                                                                                                          
+          with:                                                                                                                                       
+            name: TimeTracker-exe                                                                                                                     
+                                                                                                                                                      
+        - name: Test TimeTracker.exe                                                                                                                  
+          shell: pwsh                                                                                                                                 
+          run: |                                                                                                                                      
+            $process = Start-Process -FilePath "TimeTracker.exe" -PassThru -WindowStyle Hidden                                                        
+            Start-Sleep -Seconds 20                                                                                                                   
+            try {                                                                                                                                     
+              $response = Invoke-WebRequest -Uri "http://localhost:5666/timetracker" -TimeoutSec 10 -UseBasicParsing                                  
+              Write-Host "SUCCESS: Server responded"                                                                                                  
+            } catch {                                                                                                                                 
+              Write-Host "WARNING: Server not responding"                                                                                             
+            } finally {                                                                                                                               
+              Get-Process -Name "node" -ErrorAction SilentlyContinue | Stop-Process -Force                                                            
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue                                                                       
+            }  
