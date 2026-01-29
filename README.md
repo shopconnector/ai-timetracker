@@ -50,7 +50,29 @@ ActivityWatch  ───▶  TimeTracker  ───▶  Tempo/Jira
 
 # INSTALACJA NA WINDOWS
 
-## ETAP 1: INSTALACJA NARZĘDZI
+## SZYBKA INSTALACJA (zalecane)
+
+### 1. Pobierz installer
+Przejdź do [Releases](https://github.com/shopconnector/ai-timetracker/releases) i pobierz:
+- **TimeTracker-Setup-x64.exe** - instalator (zalecane)
+- lub **TimeTracker-Portable-x64.zip** - wersja portable (wypakuj i uruchom)
+
+### 2. Zainstaluj ActivityWatch
+Pobierz z: https://activitywatch.net/downloads/
+
+### 3. Uruchom
+- Uruchom **ActivityWatch** (ikona w zasobniku)
+- Uruchom **AI TimeTracker** (skrót na pulpicie)
+- Skonfiguruj tokeny API w pliku `.env.local`
+
+**Gotowe!** Otwórz http://localhost:5666/timetracker
+
+---
+
+## INSTALACJA RĘCZNA (dla deweloperów)
+
+<details>
+<summary>Kliknij aby rozwinąć instrukcję ręcznej instalacji</summary>
 
 ### WAŻNE ZASADY:
 - Wykonuj komendy **POJEDYNCZO** - nie kopiuj wielu naraz!
@@ -162,6 +184,8 @@ pm2 save
 
 1. `Win + R` → wpisz `shell:startup` → Enter
 2. Utwórz skrót do `start-timetracker.bat`
+
+</details>
 
 ---
 
