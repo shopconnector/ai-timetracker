@@ -1,6 +1,6 @@
 {
   "name": "timetracker-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TimeTracker Desktop Application",
   "main": "main.js",
   "author": "TimeTracker Team",
