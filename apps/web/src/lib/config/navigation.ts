@@ -6,6 +6,8 @@ import {
   Settings,
   Plug,
   GitCompare,
+  ListTodo,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -35,6 +37,11 @@ export const navigation: NavSection[] = [
         icon: Clock,
       },
       {
+        title: 'Tasks',
+        href: '/tasks',
+        icon: ListTodo,
+      },
+      {
         title: 'Calendar',
         href: '/calendar',
         icon: Calendar,
@@ -58,6 +65,18 @@ export const navigation: NavSection[] = [
         title: 'Settings',
         href: '/settings',
         icon: Settings,
+        children: [
+          {
+            title: 'General',
+            href: '/settings',
+            icon: Settings,
+          },
+          {
+            title: 'Rules',
+            href: '/settings/rules',
+            icon: Zap,
+          },
+        ],
       },
       {
         title: 'Connections',

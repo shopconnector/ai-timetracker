@@ -20,6 +20,9 @@
     "prepare": "husky",
     "build:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/build-bundle.ps1",
     "test:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/test-bundle.ps1",
+    "build:electron": "cd electron && npm install && npm run build",
+    "build:electron:win": "cd electron && npm install && npm run build:win",
+    "build:electron:portable": "cd electron && npm install && npm run build:portable",
     "preinstall": "npx only-allow pnpm"
   },
   "devDependencies": {
