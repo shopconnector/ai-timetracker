@@ -1,6 +1,6 @@
 {
   "name": "timetracker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -10,14 +10,38 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
+    "lint:fix": "turbo lint -- --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "type-check": "turbo type-check",
-    "clean": "turbo clean && rm -rf node_modules",
+    "test": "turbo test",
+    "test:coverage": "turbo test -- --coverage",
+    "clean": "turbo clean && rm -rf node_modules .turbo",
+    "prepare": "husky",
     "build:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/build-bundle.ps1",
-    "test:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/test-bundle.ps1"
+    "test:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/test-bundle.ps1",
+    "preinstall": "npx only-allow pnpm"
   },
   "devDependencies": {
-    "turbo": "^2.3.0",
-    "typescript": "^5.7.0"
+    "@types/node": "^22.12.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "prettier-plugin-tailwindcss": "^0.6.10",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  },
+  "lint-staged": {
+    "apps/**/*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "packages/**/*.{ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "engines": {
     "node": ">=20"

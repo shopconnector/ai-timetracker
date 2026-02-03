@@ -11,6 +11,7 @@ export async function GET() {
     const activityWatchUrl = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
     const llmModel = process.env.LLM_MODEL || 'anthropic/claude-3.5-haiku';
+    const googleCalendarIcalUrl = process.env.GOOGLE_CALENDAR_ICAL_URL;
 
     return NextResponse.json({
       // API Config (masked)
@@ -22,11 +23,15 @@ export async function GET() {
       activityWatchUrl,
       openRouterApiKey: openRouterApiKey ? '••••••••' : null,
       llmModel,
+      googleCalendarIcalUrl: googleCalendarIcalUrl
+        ? googleCalendarIcalUrl.substring(0, 50) + '...'
+        : null,
 
       // Status flags
       hasTempoConfig: !!(tempoApiToken && tempoAccountId),
       hasJiraConfig: !!(jiraBaseUrl && jiraApiToken && jiraEmail),
       hasOpenRouterConfig: !!openRouterApiKey,
+      hasGoogleCalendarConfig: !!googleCalendarIcalUrl,
     });
   } catch (error) {
     console.error('Get settings error:', error);
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
         try {
           const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
             headers: {
-              'Authorization': `Bearer ${tempoApiToken}`,
+              Authorization: `Bearer ${tempoApiToken}`,
               'Content-Type': 'application/json',
             },
             signal: AbortSignal.timeout(5000),
@@ -79,8 +84,8 @@ export async function POST(request: Request) {
           const credentials = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64');
           const res = await fetch(`${jiraBaseUrl}/rest/api/3/myself`, {
             headers: {
-              'Authorization': `Basic ${credentials}`,
-              'Accept': 'application/json',
+              Authorization: `Basic ${credentials}`,
+              Accept: 'application/json',
             },
             signal: AbortSignal.timeout(5000),
           });
@@ -133,7 +138,7 @@ export async function POST(request: Request) {
         try {
           const res = await fetch('https://openrouter.ai/api/v1/models', {
             headers: {
-              'Authorization': `Bearer ${openRouterApiKey}`,
+              Authorization: `Bearer ${openRouterApiKey}`,
             },
             signal: AbortSignal.timeout(5000),
           });
@@ -146,6 +151,38 @@ export async function POST(request: Request) {
         }
       } else {
         results.openrouter = { success: false, message: 'Brak klucza API' };
+      }
+    }
+
+    // Test Google Calendar
+    if (testType === 'googlecalendar' || testType === 'all') {
+      const googleCalendarIcalUrl = process.env.GOOGLE_CALENDAR_ICAL_URL;
+
+      if (googleCalendarIcalUrl) {
+        try {
+          const res = await fetch(googleCalendarIcalUrl, {
+            headers: {
+              Accept: 'text/calendar, application/calendar+xml, text/plain',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (res.ok) {
+            const content = await res.text();
+            const hasEvents = content.includes('BEGIN:VEVENT');
+            results.googlecalendar = {
+              success: true,
+              message: hasEvents
+                ? 'Połączono z Google Calendar (znaleziono eventy)'
+                : 'Połączono z Google Calendar (pusty kalendarz)',
+            };
+          } else {
+            results.googlecalendar = { success: false, message: `Błąd: ${res.status}` };
+          }
+        } catch (e) {
+          results.googlecalendar = { success: false, message: `Błąd połączenia: ${e}` };
+        }
+      } else {
+        results.googlecalendar = { success: false, message: 'Brak konfiguracji Google Calendar' };
       }
     }
 

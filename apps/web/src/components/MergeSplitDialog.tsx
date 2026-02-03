@@ -13,14 +13,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+// Select removed - using TicketCombobox instead
 import { Plus, Trash2, GitMerge, Scissors } from 'lucide-react';
+import { TicketCombobox } from './TicketCombobox';
 import type { Activity, Ticket } from './ActivityCard';
 
 // Split part definition
@@ -59,20 +54,63 @@ export function MergeDialog({
   const totalSeconds = activities.reduce((sum, a) => sum + a.totalSeconds, 0);
   const totalFormatted = `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 
-  // Auto-generate description from activities
+  // Auto-generate smart description from activities (including meeting/communication info)
   const generateDescription = () => {
-    const apps = [...new Set(activities.map(a => a.app))];
     const projects = [...new Set(activities.map(a => a.project).filter(Boolean))];
 
-    let desc = activities
-      .map(a => a.title.substring(0, 30))
-      .join('; ');
+    // Collect special activity info
+    const meetings = activities.filter(a => a.isMeeting);
+    const communications = activities.filter(a => a.isCommunication);
+    const coding = activities.filter(a => a.isCodeEditor || a.isTerminal);
+    const other = activities.filter(
+      a => !a.isMeeting && !a.isCommunication && !a.isCodeEditor && !a.isTerminal
+    );
 
-    if (projects.length > 0) {
-      desc = `[${projects.join(', ')}] ${desc}`;
+    const parts: string[] = [];
+
+    // Add meeting info
+    if (meetings.length > 0) {
+      const meetingDescs = meetings.map(m => {
+        const platform = m.meetingPlatform || 'Spotkanie';
+        const title = m.title.replace(/^📹\s*/, '').substring(0, 30);
+        return `📹 ${platform}: ${title}`;
+      });
+      parts.push(...meetingDescs);
     }
 
-    return desc.substring(0, 200) + (desc.length > 200 ? '...' : '');
+    // Add communication info (Slack, Discord, etc.)
+    if (communications.length > 0) {
+      const commDescs = communications.map(c => {
+        const platform = c.meetingPlatform || c.app;
+        const channel = c.channel || 'general';
+        return `💬 ${platform}: ${channel}`;
+      });
+      parts.push(...commDescs);
+    }
+
+    // Add coding activities with project names
+    if (coding.length > 0 && projects.length > 0) {
+      parts.push(`💻 [${projects.join(', ')}]`);
+    }
+
+    // Add other activities (truncated)
+    if (other.length > 0 && parts.length === 0) {
+      const otherDescs = other.slice(0, 2).map(a => a.title.substring(0, 25));
+      parts.push(...otherDescs);
+    }
+
+    // Combine parts
+    let desc = parts.join('; ');
+
+    // Fallback to simple description
+    if (!desc) {
+      desc = activities
+        .slice(0, 3)
+        .map(a => a.title.substring(0, 25))
+        .join('; ');
+    }
+
+    return desc.substring(0, 200) + (desc.length > 200 ? '...' : '') + ' (via TimeTracker)';
   };
 
   // Initialize description
@@ -101,17 +139,15 @@ export function MergeDialog({
             <GitMerge className="h-5 w-5 text-blue-600" />
             Scal aktywności ({activities.length})
           </DialogTitle>
-          <DialogDescription>
-            Połącz wybrane aktywności w jeden worklog
-          </DialogDescription>
+          <DialogDescription>Połącz wybrane aktywności w jeden worklog</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Activities summary */}
-          <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-2 max-h-48 overflow-y-auto">
-            {activities.map((a) => (
+          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+            {activities.map(a => (
               <div key={a.id} className="flex items-center justify-between text-sm">
-                <span className="truncate flex-1" title={a.title}>
+                <span className="flex-1 truncate" title={a.title}>
                   {a.app}: {a.title.substring(0, 40)}...
                 </span>
                 <Badge variant="outline" className="ml-2 shrink-0">
@@ -122,28 +158,22 @@ export function MergeDialog({
           </div>
 
           {/* Total time */}
-          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
             <span className="font-medium">Łączny czas:</span>
-            <Badge className="bg-blue-600 text-white text-lg">
-              {totalFormatted}
-            </Badge>
+            <Badge className="bg-blue-600 text-lg text-white">{totalFormatted}</Badge>
           </div>
 
-          {/* Ticket selector */}
+          {/* Ticket selector with search and icons */}
           <div className="space-y-2">
             <Label>Ticket Jira</Label>
-            <Select value={selectedTicket} onValueChange={setSelectedTicket}>
-              <SelectTrigger>
-                <SelectValue placeholder="Wybierz ticket..." />
-              </SelectTrigger>
-              <SelectContent>
-                {tickets.map((ticket) => (
-                  <SelectItem key={ticket.key} value={ticket.key}>
-                    {ticket.key} - {ticket.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <TicketCombobox
+              tickets={tickets}
+              value={selectedTicket || null}
+              onValueChange={v => setSelectedTicket(v || '')}
+              placeholder="Wyszukaj ticket..."
+              size="lg"
+              enableApiSearch={true}
+            />
           </div>
 
           {/* Description */}
@@ -151,7 +181,7 @@ export function MergeDialog({
             <Label>Opis (opcjonalnie)</Label>
             <Input
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={e => setDescription(e.target.value)}
               placeholder="Opis worklogu..."
             />
             <Button
@@ -170,7 +200,7 @@ export function MergeDialog({
             Anuluj
           </Button>
           <Button onClick={handleMerge} disabled={!selectedTicket}>
-            <GitMerge className="h-4 w-4 mr-2" />
+            <GitMerge className="mr-2 h-4 w-4" />
             Scal i zaloguj
           </Button>
         </DialogFooter>
@@ -186,12 +216,14 @@ interface SplitDialogProps {
   activity: Activity;
   tickets: Ticket[];
   date: string;
-  onSplit: (parts: Array<{
-    ticketKey: string;
-    description: string;
-    seconds: number;
-    startTime: string;
-  }>) => void;
+  onSplit: (
+    parts: Array<{
+      ticketKey: string;
+      description: string;
+      seconds: number;
+      startTime: string;
+    }>
+  ) => void;
 }
 
 export function SplitDialog({
@@ -223,28 +255,33 @@ export function SplitDialog({
   const isValid = totalPercentage === 100 && parts.every(p => p.ticketKey);
 
   const updatePart = (id: string, updates: Partial<SplitPart>) => {
-    setParts(prev => prev.map(p => {
-      if (p.id !== id) return p;
-      const updated = { ...p, ...updates };
+    setParts(prev =>
+      prev.map(p => {
+        if (p.id !== id) return p;
+        const updated = { ...p, ...updates };
 
-      // If percentage changed, recalculate seconds
-      if ('percentage' in updates) {
-        updated.seconds = Math.floor((updates.percentage! / 100) * activity.totalSeconds);
-      }
+        // If percentage changed, recalculate seconds
+        if ('percentage' in updates) {
+          updated.seconds = Math.floor((updates.percentage! / 100) * activity.totalSeconds);
+        }
 
-      return updated;
-    }));
+        return updated;
+      })
+    );
   };
 
   const addPart = () => {
     const newId = String(Date.now());
-    setParts(prev => [...prev, {
-      id: newId,
-      ticketKey: '',
-      description: '',
-      percentage: 0,
-      seconds: 0,
-    }]);
+    setParts(prev => [
+      ...prev,
+      {
+        id: newId,
+        ticketKey: '',
+        description: '',
+        percentage: 0,
+        seconds: 0,
+      },
+    ]);
   };
 
   const removePart = (id: string) => {
@@ -254,13 +291,17 @@ export function SplitDialog({
 
   const distributeEvenly = () => {
     const percentage = Math.floor(100 / parts.length);
-    const remainder = 100 - (percentage * parts.length);
+    const remainder = 100 - percentage * parts.length;
 
-    setParts(prev => prev.map((p, i) => ({
-      ...p,
-      percentage: percentage + (i === 0 ? remainder : 0),
-      seconds: Math.floor(((percentage + (i === 0 ? remainder : 0)) / 100) * activity.totalSeconds),
-    })));
+    setParts(prev =>
+      prev.map((p, i) => ({
+        ...p,
+        percentage: percentage + (i === 0 ? remainder : 0),
+        seconds: Math.floor(
+          ((percentage + (i === 0 ? remainder : 0)) / 100) * activity.totalSeconds
+        ),
+      }))
+    );
   };
 
   const handleSplit = () => {
@@ -271,7 +312,9 @@ export function SplitDialog({
     let currentMinutes = parseInt(baseTime.split(':')[0]) * 60 + parseInt(baseTime.split(':')[1]);
 
     const splitParts = parts.map(p => {
-      const startTime = `${Math.floor(currentMinutes / 60).toString().padStart(2, '0')}:${(currentMinutes % 60).toString().padStart(2, '0')}`;
+      const startTime = `${Math.floor(currentMinutes / 60)
+        .toString()
+        .padStart(2, '0')}:${(currentMinutes % 60).toString().padStart(2, '0')}`;
       currentMinutes += Math.ceil(p.seconds / 60);
 
       return {
@@ -301,17 +344,15 @@ export function SplitDialog({
 
         <div className="space-y-4">
           {/* Original activity info */}
-          <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">{activity.app}</p>
-                <p className="text-sm text-gray-500 truncate" title={activity.title}>
+                <p className="truncate text-sm text-gray-500" title={activity.title}>
                   {activity.title.substring(0, 50)}...
                 </p>
               </div>
-              <Badge className="bg-blue-600 text-white">
-                {activity.formattedDuration}
-              </Badge>
+              <Badge className="bg-blue-600 text-white">{activity.formattedDuration}</Badge>
             </div>
           </div>
 
@@ -330,18 +371,22 @@ export function SplitDialog({
             </div>
 
             {parts.map((part, index) => (
-              <div key={part.id} className="p-3 border rounded-lg space-y-2">
+              <div key={part.id} className="space-y-2 rounded-lg border p-3">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="shrink-0">#{index + 1}</Badge>
+                  <Badge variant="outline" className="shrink-0">
+                    #{index + 1}
+                  </Badge>
 
                   {/* Percentage input */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex shrink-0 items-center gap-1">
                     <Input
                       type="number"
                       min="0"
                       max="100"
                       value={part.percentage}
-                      onChange={(e) => updatePart(part.id, { percentage: parseInt(e.target.value) || 0 })}
+                      onChange={e =>
+                        updatePart(part.id, { percentage: parseInt(e.target.value) || 0 })
+                      }
                       className="w-16 text-center"
                     />
                     <span className="text-sm text-gray-500">%</span>
@@ -351,22 +396,17 @@ export function SplitDialog({
                     {Math.floor(part.seconds / 60)}m
                   </Badge>
 
-                  {/* Ticket selector */}
-                  <Select
-                    value={part.ticketKey}
-                    onValueChange={(v) => updatePart(part.id, { ticketKey: v })}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Ticket..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tickets.map((ticket) => (
-                        <SelectItem key={ticket.key} value={ticket.key}>
-                          {ticket.key}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {/* Ticket selector with search */}
+                  <div className="flex-1">
+                    <TicketCombobox
+                      tickets={tickets}
+                      value={part.ticketKey || null}
+                      onValueChange={v => updatePart(part.id, { ticketKey: v || '' })}
+                      placeholder="Ticket..."
+                      size="sm"
+                      enableApiSearch={true}
+                    />
+                  </div>
 
                   {/* Remove button */}
                   {parts.length > 2 && (
@@ -384,7 +424,7 @@ export function SplitDialog({
                 {/* Description input */}
                 <Input
                   value={part.description}
-                  onChange={(e) => updatePart(part.id, { description: e.target.value })}
+                  onChange={e => updatePart(part.id, { description: e.target.value })}
                   placeholder="Opis (opcjonalnie)..."
                   className="text-sm"
                 />
@@ -393,7 +433,9 @@ export function SplitDialog({
           </div>
 
           {/* Validation */}
-          <div className={`p-2 rounded text-sm ${totalPercentage === 100 ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
+          <div
+            className={`rounded p-2 text-sm ${totalPercentage === 100 ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}
+          >
             Suma: {totalPercentage}% {totalPercentage !== 100 && '(musi być 100%)'}
           </div>
         </div>
@@ -403,7 +445,7 @@ export function SplitDialog({
             Anuluj
           </Button>
           <Button onClick={handleSplit} disabled={!isValid}>
-            <Scissors className="h-4 w-4 mr-2" />
+            <Scissors className="mr-2 h-4 w-4" />
             Podziel i zaloguj
           </Button>
         </DialogFooter>

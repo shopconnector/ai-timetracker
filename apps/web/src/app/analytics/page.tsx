@@ -22,7 +22,7 @@ import {
   Line,
   RadialBarChart,
   RadialBar,
-  Treemap
+  Treemap,
 } from 'recharts';
 
 interface AnalyticsData {
@@ -117,12 +117,20 @@ const REFRESH_INTERVALS = [
 const PRODUCTIVITY_COLORS = {
   productive: '#22c55e',
   neutral: '#eab308',
-  distracting: '#ef4444'
+  distracting: '#ef4444',
 };
 
 const APP_COLORS = [
-  '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#22c55e',
-  '#06b6d4', '#f59e0b', '#ef4444', '#84cc16', '#6366f1'
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
+  '#f97316',
+  '#22c55e',
+  '#06b6d4',
+  '#f59e0b',
+  '#ef4444',
+  '#84cc16',
+  '#6366f1',
 ];
 
 export default function AnalyticsPage() {
@@ -136,7 +144,7 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/analytics?period=${period}`);
+      const response = await fetch(`/timetracker/api/analytics?period=${period}`);
       const result = await response.json();
       setData(result);
       setLastRefresh(new Date());
@@ -190,7 +198,7 @@ export default function AnalyticsPage() {
     trend,
     icon,
     color = 'blue',
-    prevValue
+    prevValue,
   }: {
     title: string;
     value: string;
@@ -209,14 +217,16 @@ export default function AnalyticsPage() {
     };
 
     return (
-      <div className={`bg-gradient-to-br ${colorClasses[color]} border rounded-xl p-4 backdrop-blur`}>
+      <div
+        className={`bg-gradient-to-br ${colorClasses[color]} rounded-xl border p-4 backdrop-blur`}
+      >
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-sm text-slate-400 font-medium">{title}</div>
-            <div className="text-3xl font-bold text-white mt-1">{value}</div>
-            {subtitle && <div className="text-xs text-slate-500 mt-1">{subtitle}</div>}
+            <div className="text-sm font-medium text-slate-400">{title}</div>
+            <div className="mt-1 text-3xl font-bold text-white">{value}</div>
+            {subtitle && <div className="mt-1 text-xs text-slate-500">{subtitle}</div>}
             {prevValue && (
-              <div className="text-xs text-slate-500 mt-1">poprzednio: {prevValue}</div>
+              <div className="mt-1 text-xs text-slate-500">poprzednio: {prevValue}</div>
             )}
           </div>
           <div className="flex flex-col items-end">
@@ -234,7 +244,7 @@ export default function AnalyticsPage() {
     const alpha = 0.1 + intensity * 0.8;
     return (
       <div
-        className="w-6 h-6 rounded-sm border border-slate-700/50 flex items-center justify-center text-[10px] text-slate-300 font-mono"
+        className="flex h-6 w-6 items-center justify-center rounded-sm border border-slate-700/50 font-mono text-[10px] text-slate-300"
         style={{ backgroundColor: `rgba(139, 92, 246, ${alpha})` }}
         title={`${value}m`}
       >
@@ -245,18 +255,20 @@ export default function AnalyticsPage() {
 
   if (!data && loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Ładowanie danych analitycznych...</div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="text-xl text-white">Ładowanie danych analitycznych...</div>
       </div>
     );
   }
 
-  const maxHeatmapValue = data ? Math.max(...data.heatmapData.flatMap(d => d.hours.map(h => h.aw))) : 60;
+  const maxHeatmapValue = data
+    ? Math.max(...data.heatmapData.flatMap(d => d.hours.map(h => h.aw)))
+    : 60;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Analytics</h1>
           <p className="text-slate-500 dark:text-slate-400">
@@ -264,17 +276,17 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex flex-wrap items-center gap-4">
           {/* Period selector */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 rounded-lg p-1">
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/50">
             {PERIODS.map(p => (
               <button
                 key={p.value}
                 onClick={() => setPeriod(p.value)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-all ${
                   period === p.value
                     ? 'bg-blue-500 text-white'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'text-slate-500 hover:bg-slate-200 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white'
                 }`}
               >
                 {p.label}
@@ -286,26 +298,26 @@ export default function AnalyticsPage() {
           <div className="flex items-center gap-2">
             <select
               value={refreshInterval}
-              onChange={(e) => setRefreshInterval(Number(e.target.value))}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300"
+              onChange={e => setRefreshInterval(Number(e.target.value))}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
             >
               {REFRESH_INTERVALS.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
 
             {refreshInterval > 0 && (
-              <Badge variant="outline" className="text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 font-mono">
+              <Badge
+                variant="outline"
+                className="border-slate-300 font-mono text-slate-500 dark:border-slate-600 dark:text-slate-400"
+              >
                 {countdown}s
               </Badge>
             )}
 
-            <Button
-              onClick={fetchData}
-              disabled={loading}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={fetchData} disabled={loading} size="sm" variant="outline">
               {loading ? 'Loading...' : 'Refresh'}
             </Button>
           </div>
@@ -317,7 +329,7 @@ export default function AnalyticsPage() {
         {data && (
           <>
             {/* KPI Row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
               <KPICard
                 title="ActivityWatch"
                 value={data.kpis.totalAW.formatted}
@@ -361,17 +373,23 @@ export default function AnalyticsPage() {
                 title="Productivity"
                 value={`${data.kpis.productivityScore}%`}
                 icon="🚀"
-                color={data.kpis.productivityScore >= 70 ? 'green' : data.kpis.productivityScore >= 50 ? 'orange' : 'purple'}
+                color={
+                  data.kpis.productivityScore >= 70
+                    ? 'green'
+                    : data.kpis.productivityScore >= 50
+                      ? 'orange'
+                      : 'purple'
+                }
                 subtitle={`Peak: ${data.kpis.peakAWHour}`}
               />
             </div>
 
             {/* Charts Row 1 */}
-            <div className="grid lg:grid-cols-3 gap-6 mb-6">
+            <div className="mb-6 grid gap-6 lg:grid-cols-3">
               {/* Daily Comparison Chart */}
-              <Card className="lg:col-span-2 bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50 lg:col-span-2">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-base text-white">
                     📅 Porównanie dzienne (AW vs Tempo)
                   </CardTitle>
                 </CardHeader>
@@ -383,34 +401,58 @@ export default function AnalyticsPage() {
                         dataKey="dayName"
                         stroke="#64748b"
                         tick={{ fill: '#94a3b8', fontSize: 11 }}
-                        tickFormatter={(_, i) => `${data.dailyData[i]?.dayName} ${data.dailyData[i]?.date.slice(-2)}`}
+                        tickFormatter={(_, i) =>
+                          `${data.dailyData[i]?.dayName} ${data.dailyData[i]?.date.slice(-2)}`
+                        }
                       />
                       <YAxis
                         stroke="#64748b"
                         tick={{ fill: '#94a3b8', fontSize: 11 }}
-                        tickFormatter={(v) => `${Math.round(v / 3600)}h`}
+                        tickFormatter={v => `${Math.round(v / 3600)}h`}
                       />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+                        contentStyle={{
+                          backgroundColor: '#1e293b',
+                          border: '1px solid #475569',
+                          borderRadius: 8,
+                        }}
                         formatter={(value, name) => [
                           `${Math.floor(Number(value) / 3600)}h ${Math.floor((Number(value) % 3600) / 60)}m`,
-                          name === 'awSeconds' ? 'ActivityWatch' : 'Tempo'
+                          name === 'awSeconds' ? 'ActivityWatch' : 'Tempo',
                         ]}
-                        labelFormatter={(_, payload) => payload[0]?.payload?.date || ''}
+                        labelFormatter={label => label || ''}
                       />
                       <Legend />
-                      <Bar dataKey="awSeconds" name="ActivityWatch" fill="#8b5cf6" radius={[4, 4, 0, 0]} opacity={0.7} />
-                      <Bar dataKey="tempoSeconds" name="Tempo" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Line type="monotone" dataKey={() => 8 * 3600} name="Target 8h" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} />
+                      <Bar
+                        dataKey="awSeconds"
+                        name="ActivityWatch"
+                        fill="#8b5cf6"
+                        radius={[4, 4, 0, 0]}
+                        opacity={0.7}
+                      />
+                      <Bar
+                        dataKey="tempoSeconds"
+                        name="Tempo"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey={() => 8 * 3600}
+                        name="Target 8h"
+                        stroke="#22c55e"
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                      />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
               {/* Days Status */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">📊 Status dni</CardTitle>
+                  <CardTitle className="text-base text-white">📊 Status dni</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -419,9 +461,21 @@ export default function AnalyticsPage() {
                         <PieChart>
                           <Pie
                             data={[
-                              { name: 'OK (7h+)', value: data.daysSummary.onTarget, fill: '#22c55e' },
-                              { name: 'Warning (4-7h)', value: data.daysSummary.warning, fill: '#eab308' },
-                              { name: 'Missing (<4h)', value: data.daysSummary.missing, fill: '#ef4444' },
+                              {
+                                name: 'OK (7h+)',
+                                value: data.daysSummary.onTarget,
+                                fill: '#22c55e',
+                              },
+                              {
+                                name: 'Warning (4-7h)',
+                                value: data.daysSummary.warning,
+                                fill: '#eab308',
+                              },
+                              {
+                                name: 'Missing (<4h)',
+                                value: data.daysSummary.missing,
+                                fill: '#ef4444',
+                              },
                             ]}
                             cx="50%"
                             cy="50%"
@@ -429,30 +483,41 @@ export default function AnalyticsPage() {
                             outerRadius={70}
                             paddingAngle={2}
                             dataKey="value"
-                          >
-                          </Pie>
+                          ></Pie>
                           <Tooltip
-                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+                            contentStyle={{
+                              backgroundColor: '#1e293b',
+                              border: '1px solid #475569',
+                              borderRadius: 8,
+                            }}
                           />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="bg-green-500/20 rounded-lg p-2">
-                        <div className="text-2xl font-bold text-green-400">{data.daysSummary.onTarget}</div>
+                      <div className="rounded-lg bg-green-500/20 p-2">
+                        <div className="text-2xl font-bold text-green-400">
+                          {data.daysSummary.onTarget}
+                        </div>
                         <div className="text-xs text-green-300">OK</div>
                       </div>
-                      <div className="bg-yellow-500/20 rounded-lg p-2">
-                        <div className="text-2xl font-bold text-yellow-400">{data.daysSummary.warning}</div>
+                      <div className="rounded-lg bg-yellow-500/20 p-2">
+                        <div className="text-2xl font-bold text-yellow-400">
+                          {data.daysSummary.warning}
+                        </div>
                         <div className="text-xs text-yellow-300">Warning</div>
                       </div>
-                      <div className="bg-red-500/20 rounded-lg p-2">
-                        <div className="text-2xl font-bold text-red-400">{data.daysSummary.missing}</div>
+                      <div className="rounded-lg bg-red-500/20 p-2">
+                        <div className="text-2xl font-bold text-red-400">
+                          {data.daysSummary.missing}
+                        </div>
                         <div className="text-xs text-red-300">Missing</div>
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-3xl font-bold text-white">{data.daysSummary.onTargetPercent}%</div>
+                      <div className="text-3xl font-bold text-white">
+                        {data.daysSummary.onTargetPercent}%
+                      </div>
                       <div className="text-xs text-slate-400">dni na targecie</div>
                     </div>
                   </div>
@@ -461,34 +526,58 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Charts Row 2 */}
-            <div className="grid lg:grid-cols-3 gap-6 mb-6">
+            <div className="mb-6 grid gap-6 lg:grid-cols-3">
               {/* Hourly Distribution */}
-              <Card className="lg:col-span-2 bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50 lg:col-span-2">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🕐 Rozkład godzinowy</CardTitle>
+                  <CardTitle className="text-base text-white">🕐 Rozkład godzinowy</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={240}>
                     <AreaChart data={data.hourlyChartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="label" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                      <XAxis
+                        dataKey="label"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 10 }}
+                      />
                       <YAxis stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 10 }} unit="m" />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
-                        formatter={(value) => [`${value} min`, '']}
+                        contentStyle={{
+                          backgroundColor: '#1e293b',
+                          border: '1px solid #475569',
+                          borderRadius: 8,
+                        }}
+                        formatter={value => [`${value} min`, '']}
                       />
                       <Legend />
-                      <Area type="monotone" dataKey="awMinutes" name="ActivityWatch" fill="#8b5cf6" fillOpacity={0.3} stroke="#8b5cf6" strokeWidth={2} />
-                      <Area type="monotone" dataKey="tempoMinutes" name="Tempo" fill="#3b82f6" fillOpacity={0.3} stroke="#3b82f6" strokeWidth={2} />
+                      <Area
+                        type="monotone"
+                        dataKey="awMinutes"
+                        name="ActivityWatch"
+                        fill="#8b5cf6"
+                        fillOpacity={0.3}
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="tempoMinutes"
+                        name="Tempo"
+                        fill="#3b82f6"
+                        fillOpacity={0.3}
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
 
               {/* Productivity Breakdown */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🎯 Produktywność</CardTitle>
+                  <CardTitle className="text-base text-white">🎯 Produktywność</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -502,9 +591,23 @@ export default function AnalyticsPage() {
                           outerRadius="100%"
                           startAngle={180}
                           endAngle={0}
-                          data={[{ value: data.kpis.productivityScore, fill: data.kpis.productivityScore >= 70 ? '#22c55e' : data.kpis.productivityScore >= 50 ? '#eab308' : '#ef4444' }]}
+                          data={[
+                            {
+                              value: data.kpis.productivityScore,
+                              fill:
+                                data.kpis.productivityScore >= 70
+                                  ? '#22c55e'
+                                  : data.kpis.productivityScore >= 50
+                                    ? '#eab308'
+                                    : '#ef4444',
+                            },
+                          ]}
                         >
-                          <RadialBar dataKey="value" cornerRadius={10} background={{ fill: '#1e293b' }} />
+                          <RadialBar
+                            dataKey="value"
+                            cornerRadius={10}
+                            background={{ fill: '#1e293b' }}
+                          />
                         </RadialBarChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex items-end justify-center pb-2">
@@ -515,22 +618,34 @@ export default function AnalyticsPage() {
                     {/* Breakdown bars */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded bg-green-500" />
-                        <span className="text-sm text-slate-300 flex-1">Produktywne</span>
-                        <span className="text-sm font-mono text-slate-400">{data.productivity.productive.formatted}</span>
-                        <span className="text-sm font-bold text-green-400 w-12 text-right">{data.productivity.productive.percent}%</span>
+                        <div className="h-3 w-3 rounded bg-green-500" />
+                        <span className="flex-1 text-sm text-slate-300">Produktywne</span>
+                        <span className="font-mono text-sm text-slate-400">
+                          {data.productivity.productive.formatted}
+                        </span>
+                        <span className="w-12 text-right text-sm font-bold text-green-400">
+                          {data.productivity.productive.percent}%
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded bg-yellow-500" />
-                        <span className="text-sm text-slate-300 flex-1">Neutralne</span>
-                        <span className="text-sm font-mono text-slate-400">{data.productivity.neutral.formatted}</span>
-                        <span className="text-sm font-bold text-yellow-400 w-12 text-right">{data.productivity.neutral.percent}%</span>
+                        <div className="h-3 w-3 rounded bg-yellow-500" />
+                        <span className="flex-1 text-sm text-slate-300">Neutralne</span>
+                        <span className="font-mono text-sm text-slate-400">
+                          {data.productivity.neutral.formatted}
+                        </span>
+                        <span className="w-12 text-right text-sm font-bold text-yellow-400">
+                          {data.productivity.neutral.percent}%
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded bg-red-500" />
-                        <span className="text-sm text-slate-300 flex-1">Rozpraszające</span>
-                        <span className="text-sm font-mono text-slate-400">{data.productivity.distracting.formatted}</span>
-                        <span className="text-sm font-bold text-red-400 w-12 text-right">{data.productivity.distracting.percent}%</span>
+                        <div className="h-3 w-3 rounded bg-red-500" />
+                        <span className="flex-1 text-sm text-slate-300">Rozpraszające</span>
+                        <span className="font-mono text-sm text-slate-400">
+                          {data.productivity.distracting.formatted}
+                        </span>
+                        <span className="w-12 text-right text-sm font-bold text-red-400">
+                          {data.productivity.distracting.percent}%
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -539,17 +654,19 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Charts Row 3 */}
-            <div className="grid lg:grid-cols-2 gap-6 mb-6">
+            <div className="mb-6 grid gap-6 lg:grid-cols-2">
               {/* Heatmap */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🗓️ Heatmapa aktywności (AW)</CardTitle>
+                  <CardTitle className="text-base text-white">
+                    🗓️ Heatmapa aktywności (AW)
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <div className="min-w-[500px]">
                       {/* Hours header */}
-                      <div className="flex items-center gap-1 mb-2 ml-12">
+                      <div className="mb-2 ml-12 flex items-center gap-1">
                         {Array.from({ length: 16 }, (_, i) => (
                           <div key={i} className="w-6 text-center text-[10px] text-slate-500">
                             {i + 6}
@@ -558,8 +675,8 @@ export default function AnalyticsPage() {
                       </div>
                       {/* Days rows */}
                       {data.heatmapData.map((day, dayIdx) => (
-                        <div key={dayIdx} className="flex items-center gap-1 mb-1">
-                          <div className="w-12 text-xs text-slate-400 text-right pr-2">
+                        <div key={dayIdx} className="mb-1 flex items-center gap-1">
+                          <div className="w-12 pr-2 text-right text-xs text-slate-400">
                             {day.day} {day.date.slice(-2)}
                           </div>
                           {day.hours.map((h, hIdx) => (
@@ -568,12 +685,12 @@ export default function AnalyticsPage() {
                         </div>
                       ))}
                       {/* Legend */}
-                      <div className="flex items-center gap-2 mt-4 ml-12">
+                      <div className="ml-12 mt-4 flex items-center gap-2">
                         <span className="text-xs text-slate-500">Mniej</span>
                         {[0.1, 0.3, 0.5, 0.7, 0.9].map((a, i) => (
                           <div
                             key={i}
-                            className="w-4 h-4 rounded-sm"
+                            className="h-4 w-4 rounded-sm"
                             style={{ backgroundColor: `rgba(139, 92, 246, ${a})` }}
                           />
                         ))}
@@ -585,33 +702,63 @@ export default function AnalyticsPage() {
               </Card>
 
               {/* Gap Analysis */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🔍 Gap Analysis (niezalogowany czas)</CardTitle>
+                  <CardTitle className="text-base text-white">
+                    🔍 Gap Analysis (niezalogowany czas)
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={260}>
                     <ComposedChart data={data.dailyGaps} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis type="number" stroke="#64748b" tick={{ fill: '#94a3b8', fontSize: 10 }} unit="h" />
+                      <XAxis
+                        type="number"
+                        stroke="#64748b"
+                        tick={{ fill: '#94a3b8', fontSize: 10 }}
+                        unit="h"
+                      />
                       <YAxis
                         dataKey="day"
                         type="category"
                         stroke="#64748b"
                         tick={{ fill: '#94a3b8', fontSize: 10 }}
                         width={35}
-                        tickFormatter={(_, i) => `${data.dailyGaps[i]?.day} ${data.dailyGaps[i]?.date.slice(-2)}`}
+                        tickFormatter={(_, i) =>
+                          `${data.dailyGaps[i]?.day} ${data.dailyGaps[i]?.date.slice(-2)}`
+                        }
                       />
                       <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
+                        contentStyle={{
+                          backgroundColor: '#1e293b',
+                          border: '1px solid #475569',
+                          borderRadius: 8,
+                        }}
                         formatter={(value, name) => [
                           `${value}h`,
-                          name === 'gapHours' ? 'Gap' : name === 'tempoHours' ? 'Logged' : 'Tracked'
+                          name === 'gapHours'
+                            ? 'Gap'
+                            : name === 'tempoHours'
+                              ? 'Logged'
+                              : 'Tracked',
                         ]}
                       />
                       <Legend />
-                      <Bar dataKey="tempoHours" name="Zalogowane" fill="#3b82f6" stackId="a" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="gapHours" name="Niezalogowane" fill="#ef4444" stackId="a" radius={[0, 4, 4, 0]} opacity={0.7} />
+                      <Bar
+                        dataKey="tempoHours"
+                        name="Zalogowane"
+                        fill="#3b82f6"
+                        stackId="a"
+                        radius={[0, 0, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="gapHours"
+                        name="Niezalogowane"
+                        fill="#ef4444"
+                        stackId="a"
+                        radius={[0, 4, 4, 0]}
+                        opacity={0.7}
+                      />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -619,32 +766,35 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Bottom Row */}
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid gap-6 lg:grid-cols-2">
               {/* Top Apps */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🏆 Top Aplikacje</CardTitle>
+                  <CardTitle className="text-base text-white">🏆 Top Aplikacje</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                  <div className="max-h-[300px] space-y-2 overflow-y-auto pr-2">
                     {data.topApps.map((app, i) => (
-                      <div key={i} className="flex items-center gap-3 p-2 bg-slate-800/30 rounded-lg">
-                        <div className="text-lg font-bold text-slate-500 w-6">{i + 1}</div>
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 rounded-lg bg-slate-800/30 p-2"
+                      >
+                        <div className="w-6 text-lg font-bold text-slate-500">{i + 1}</div>
                         <div
-                          className="w-3 h-3 rounded"
+                          className="h-3 w-3 rounded"
                           style={{ backgroundColor: APP_COLORS[i % APP_COLORS.length] }}
                         />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-white truncate">{app.app}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm text-white">{app.app}</div>
                           <div className="flex items-center gap-2">
                             <Badge
                               variant="outline"
-                              className={`text-[10px] px-1 py-0 ${
+                              className={`px-1 py-0 text-[10px] ${
                                 app.category === 'productive'
-                                  ? 'text-green-400 border-green-400/30'
+                                  ? 'border-green-400/30 text-green-400'
                                   : app.category === 'distracting'
-                                  ? 'text-red-400 border-red-400/30'
-                                  : 'text-yellow-400 border-yellow-400/30'
+                                    ? 'border-red-400/30 text-red-400'
+                                    : 'border-yellow-400/30 text-yellow-400'
                               }`}
                             >
                               {app.category}
@@ -652,16 +802,18 @@ export default function AnalyticsPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-semibold text-slate-200">{app.formatted}</div>
+                          <div className="text-sm font-semibold text-slate-200">
+                            {app.formatted}
+                          </div>
                           <div className="text-xs text-slate-500">{app.percentage}%</div>
                         </div>
                         {/* Mini progress bar */}
-                        <div className="w-20 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-700">
                           <div
                             className="h-full rounded-full"
                             style={{
                               width: `${app.percentage}%`,
-                              backgroundColor: APP_COLORS[i % APP_COLORS.length]
+                              backgroundColor: APP_COLORS[i % APP_COLORS.length],
                             }}
                           />
                         </div>
@@ -672,45 +824,56 @@ export default function AnalyticsPage() {
               </Card>
 
               {/* Daily Details Table */}
-              <Card className="bg-slate-900/50 border-slate-800">
+              <Card className="border-slate-800 bg-slate-900/50">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">📋 Szczegóły dzienne</CardTitle>
+                  <CardTitle className="text-base text-white">📋 Szczegóły dzienne</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-slate-400 border-b border-slate-700">
-                          <th className="text-left py-2 font-medium">Dzień</th>
-                          <th className="text-right py-2 font-medium">AW</th>
-                          <th className="text-right py-2 font-medium">Tempo</th>
-                          <th className="text-right py-2 font-medium">Gap</th>
-                          <th className="text-right py-2 font-medium">Logs</th>
-                          <th className="text-center py-2 font-medium">Status</th>
+                        <tr className="border-b border-slate-700 text-slate-400">
+                          <th className="py-2 text-left font-medium">Dzień</th>
+                          <th className="py-2 text-right font-medium">AW</th>
+                          <th className="py-2 text-right font-medium">Tempo</th>
+                          <th className="py-2 text-right font-medium">Gap</th>
+                          <th className="py-2 text-right font-medium">Logs</th>
+                          <th className="py-2 text-center font-medium">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.dailyData.map((day, i) => {
                           const gap = data.dailyGaps[i];
                           return (
-                            <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                            <tr
+                              key={i}
+                              className="border-b border-slate-800/50 hover:bg-slate-800/30"
+                            >
                               <td className="py-2 text-slate-300">
                                 {day.dayName} {day.date.slice(-5)}
                               </td>
-                              <td className="py-2 text-right font-mono text-purple-400">{day.awFormatted}</td>
-                              <td className="py-2 text-right font-mono text-blue-400">{day.tempoFormatted}</td>
-                              <td className={`py-2 text-right font-mono ${gap?.gapHours > 2 ? 'text-red-400' : 'text-slate-500'}`}>
+                              <td className="py-2 text-right font-mono text-purple-400">
+                                {day.awFormatted}
+                              </td>
+                              <td className="py-2 text-right font-mono text-blue-400">
+                                {day.tempoFormatted}
+                              </td>
+                              <td
+                                className={`py-2 text-right font-mono ${gap?.gapHours > 2 ? 'text-red-400' : 'text-slate-500'}`}
+                              >
                                 {gap?.gapHours > 0 ? `${gap.gapHours}h` : '-'}
                               </td>
-                              <td className="py-2 text-right text-slate-400">{day.worklogsCount}</td>
+                              <td className="py-2 text-right text-slate-400">
+                                {day.worklogsCount}
+                              </td>
                               <td className="py-2 text-center">
                                 <Badge
                                   className={`text-xs ${
                                     day.status === 'ok'
                                       ? 'bg-green-500/20 text-green-400'
                                       : day.status === 'warning'
-                                      ? 'bg-yellow-500/20 text-yellow-400'
-                                      : 'bg-red-500/20 text-red-400'
+                                        ? 'bg-yellow-500/20 text-yellow-400'
+                                        : 'bg-red-500/20 text-red-400'
                                   }`}
                                 >
                                   {day.status === 'ok' ? '✓' : day.status === 'warning' ? '~' : '✗'}
@@ -725,7 +888,6 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
             </div>
-
           </>
         )}
       </div>

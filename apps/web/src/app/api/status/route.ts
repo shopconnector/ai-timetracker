@@ -15,14 +15,19 @@ async function checkActivityWatch(): Promise<ApiStatus> {
 
   try {
     const response = await fetch(`${url}/api/0/info`, {
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(5000),
     });
     if (response.ok) {
       return { name: 'ActivityWatch', configured: true, status: 'ok', message: url };
     }
     return { name: 'ActivityWatch', configured: true, status: 'error', message: 'Not responding' };
   } catch {
-    return { name: 'ActivityWatch', configured: true, status: 'error', message: 'Connection failed' };
+    return {
+      name: 'ActivityWatch',
+      configured: true,
+      status: 'error',
+      message: 'Connection failed',
+    };
   }
 }
 
@@ -34,8 +39,8 @@ async function checkTempo(): Promise<ApiStatus> {
 
   try {
     const response = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
-      headers: { 'Authorization': `Bearer ${token}` },
-      signal: AbortSignal.timeout(5000)
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5000),
     });
     if (response.ok) {
       return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected' };
@@ -59,14 +64,19 @@ async function checkJira(): Promise<ApiStatus> {
     const auth = Buffer.from(`${email}:${apiKey}`).toString('base64');
     const response = await fetch(`${baseUrl}/rest/api/3/myself`, {
       headers: {
-        'Authorization': `Basic ${auth}`,
-        'Accept': 'application/json'
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json',
       },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(5000),
     });
     if (response.ok) {
       const data = await response.json();
-      return { name: 'Jira', configured: true, status: 'ok', message: data.displayName || 'Connected' };
+      return {
+        name: 'Jira',
+        configured: true,
+        status: 'ok',
+        message: data.displayName || 'Connected',
+      };
     }
     return { name: 'Jira', configured: true, status: 'error', message: `HTTP ${response.status}` };
   } catch {
@@ -83,16 +93,47 @@ async function checkOpenRouter(): Promise<ApiStatus> {
   return { name: 'OpenRouter (LLM)', configured: true, status: 'ok', message: 'Configured' };
 }
 
+async function checkGoogleCalendar(): Promise<ApiStatus> {
+  const icalUrl = process.env.GOOGLE_CALENDAR_ICAL_URL;
+  if (!icalUrl) {
+    return { name: 'Google Calendar', configured: false, status: 'unconfigured' };
+  }
+
+  try {
+    const response = await fetch(icalUrl, {
+      headers: { Accept: 'text/calendar, application/calendar+xml, text/plain' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (response.ok) {
+      return { name: 'Google Calendar', configured: true, status: 'ok', message: 'Connected' };
+    }
+    return {
+      name: 'Google Calendar',
+      configured: true,
+      status: 'error',
+      message: `HTTP ${response.status}`,
+    };
+  } catch {
+    return {
+      name: 'Google Calendar',
+      configured: true,
+      status: 'error',
+      message: 'Connection failed',
+    };
+  }
+}
+
 export async function GET() {
-  const [activityWatch, tempo, jira, openRouter] = await Promise.all([
+  const [activityWatch, tempo, jira, openRouter, googleCalendar] = await Promise.all([
     checkActivityWatch(),
     checkTempo(),
     checkJira(),
-    checkOpenRouter()
+    checkOpenRouter(),
+    checkGoogleCalendar(),
   ]);
 
   return NextResponse.json({
-    apis: [activityWatch, tempo, jira, openRouter],
-    allOk: [activityWatch, tempo, jira].every(a => a.status === 'ok')
+    apis: [activityWatch, tempo, jira, openRouter, googleCalendar],
+    allOk: [activityWatch, tempo, jira].every(a => a.status === 'ok'),
   });
 }

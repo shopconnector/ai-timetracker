@@ -15,7 +15,15 @@ import { useState } from 'react';
 import { Settings2, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, Scissors } from 'lucide-react';
 import { recordSuggestionFeedback } from '@/lib/taskHistory';
 
-export type ActivityCategory = 'coding' | 'terminal' | 'meeting' | 'communication' | 'browser' | 'docs' | 'design' | 'other';
+export type ActivityCategory =
+  | 'coding'
+  | 'terminal'
+  | 'meeting'
+  | 'communication'
+  | 'browser'
+  | 'docs'
+  | 'design'
+  | 'other';
 
 // Raw event from ActivityWatch
 export interface RawEvent {
@@ -36,7 +44,7 @@ export interface Activity {
   totalSeconds: number;
   formattedDuration: string;
   events: number;
-  rawEvents?: RawEvent[];  // Surowe eventy do expand
+  rawEvents?: RawEvent[]; // Surowe eventy do expand
   suggestedTicket?: string;
   confidence?: number;
   // Pola czasowe
@@ -110,7 +118,20 @@ function calculateTimelineWidth(
 export interface Ticket {
   key: string;
   name: string;
-  id?: string;  // Jira issue ID (numeric) - required for Tempo API v4
+  id?: string; // Jira issue ID (numeric) - required for Tempo API v4
+  type?: string; // Issue type: Story, Task, Bug, Epic, Subtask, etc.
+  status?: string; // Issue status: In Progress, Backlog, Done, etc.
+  isSubtask?: boolean;
+  parentKey?: string;
+  // Extended fields (from API)
+  project?: string; // Project key (e.g., "BCI")
+  projectName?: string; // Project name (e.g., "BeeCommerce Internal")
+  priority?: string; // Priority name (e.g., "High", "Medium")
+  assignee?: string; // Assignee display name
+  updatedAt?: string; // ISO date of last update
+  parentSummary?: string; // Parent issue summary (for subtasks)
+  epicKey?: string; // Epic key if linked
+  epicName?: string; // Epic name if linked
 }
 
 interface ActivityCardProps {
@@ -144,9 +165,7 @@ export function ActivityCard({
   onSelectionChange,
 }: ActivityCardProps) {
   // Don't auto-select first ticket if no suggestion - force manual selection
-  const [selectedTicket, setSelectedTicket] = useState(
-    activity.suggestedTicket || ''
-  );
+  const [selectedTicket, setSelectedTicket] = useState(activity.suggestedTicket || '');
   const [isExpanded, setIsExpanded] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<'positive' | 'negative' | null>(null);
 
@@ -180,28 +199,44 @@ export function ActivityCard({
   };
 
   const getCategoryColor = (category: ActivityCategory) => {
-    switch(category) {
-      case 'coding': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'meeting': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-      case 'communication': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-      case 'terminal': return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
-      case 'browser': return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300';
-      case 'docs': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'design': return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300';
-      default: return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+    switch (category) {
+      case 'coding':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+      case 'meeting':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+      case 'communication':
+        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+      case 'terminal':
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+      case 'browser':
+        return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300';
+      case 'docs':
+        return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+      case 'design':
+        return 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300';
+      default:
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
     }
   };
 
   const getCategoryLabel = (category: ActivityCategory) => {
-    switch(category) {
-      case 'coding': return '💻 Programowanie';
-      case 'meeting': return '📹 Spotkanie';
-      case 'communication': return '💬 Komunikacja';
-      case 'terminal': return '⬛ Terminal';
-      case 'browser': return '🌐 Przeglądarka';
-      case 'docs': return '📝 Dokumenty';
-      case 'design': return '🎨 Design';
-      default: return '📄 Inne';
+    switch (category) {
+      case 'coding':
+        return '💻 Programowanie';
+      case 'meeting':
+        return '📹 Spotkanie';
+      case 'communication':
+        return '💬 Komunikacja';
+      case 'terminal':
+        return '⬛ Terminal';
+      case 'browser':
+        return '🌐 Przeglądarka';
+      case 'docs':
+        return '📝 Dokumenty';
+      case 'design':
+        return '🎨 Design';
+      default:
+        return '📄 Inne';
     }
   };
 
@@ -213,22 +248,50 @@ export function ActivityCard({
     if (activity.isTerminal) return '⬛';
 
     const appLower = app.toLowerCase();
-    if (appLower.includes('chrome') || appLower.includes('safari') || appLower.includes('firefox') || appLower.includes('edge')) return '🌐';
-    if (appLower.includes('terminal') || appLower.includes('iterm') || appLower.includes('warp')) return '⬛';
+    if (
+      appLower.includes('chrome') ||
+      appLower.includes('safari') ||
+      appLower.includes('firefox') ||
+      appLower.includes('edge')
+    )
+      return '🌐';
+    if (appLower.includes('terminal') || appLower.includes('iterm') || appLower.includes('warp'))
+      return '⬛';
     if (appLower.includes('comet') || appLower.includes('claude')) return '🤖';
     if (appLower.includes('slack')) return '💬';
     if (appLower.includes('discord')) return '💬';
     if (appLower.includes('teams')) return '💬';
-    if (appLower.includes('whatsapp') || appLower.includes('telegram') || appLower.includes('signal')) return '📱';
-    if (appLower.includes('cursor') || appLower.includes('code') || appLower.includes('webstorm') || appLower.includes('intellij')) return '💻';
-    if (appLower.includes('figma') || appLower.includes('sketch') || appLower.includes('photoshop')) return '🎨';
-    if (appLower.includes('notion') || appLower.includes('obsidian') || appLower.includes('word') || appLower.includes('docs')) return '📝';
-    if (appLower.includes('zoom') || appLower.includes('meet') || appLower.includes('webex')) return '📹';
+    if (
+      appLower.includes('whatsapp') ||
+      appLower.includes('telegram') ||
+      appLower.includes('signal')
+    )
+      return '📱';
+    if (
+      appLower.includes('cursor') ||
+      appLower.includes('code') ||
+      appLower.includes('webstorm') ||
+      appLower.includes('intellij')
+    )
+      return '💻';
+    if (appLower.includes('figma') || appLower.includes('sketch') || appLower.includes('photoshop'))
+      return '🎨';
+    if (
+      appLower.includes('notion') ||
+      appLower.includes('obsidian') ||
+      appLower.includes('word') ||
+      appLower.includes('docs')
+    )
+      return '📝';
+    if (appLower.includes('zoom') || appLower.includes('meet') || appLower.includes('webex'))
+      return '📹';
     return '📄';
   };
 
   return (
-    <Card className={`mb-3 ${isLogged ? 'opacity-50 bg-green-50 dark:bg-green-900/20' : ''} ${activity.isPrivate ? 'border-dashed border-gray-300 dark:border-gray-600' : ''} ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+    <Card
+      className={`mb-3 ${isLogged ? 'bg-green-50 opacity-50 dark:bg-green-900/20' : ''} ${activity.isPrivate ? 'border-dashed border-gray-300 dark:border-gray-600' : ''} ${isSelected ? 'bg-blue-50 ring-2 ring-blue-500 dark:bg-blue-900/20' : ''}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Selection checkbox (merge mode) */}
@@ -236,17 +299,19 @@ export function ActivityCard({
             <div className="pt-1">
               <Checkbox
                 checked={isSelected}
-                onCheckedChange={(checked) => onSelectionChange?.(activity.id, !!checked)}
+                onCheckedChange={checked => onSelectionChange?.(activity.id, !!checked)}
                 className="h-5 w-5"
               />
             </div>
           )}
 
           {/* Left: Activity info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
               <span className="text-lg">{getAppIcon(activity.app, activity)}</span>
-              <span className="font-medium text-sm text-gray-500 dark:text-gray-400">{activity.app}</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                {activity.app}
+              </span>
 
               {/* Category badge */}
               {activity.category && (
@@ -257,28 +322,28 @@ export function ActivityCard({
 
               {/* Private badge */}
               {activity.isPrivate && (
-                <Badge className="bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300 text-xs">
+                <Badge className="bg-gray-200 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                   🔒 PRIV
                 </Badge>
               )}
 
               {/* Meeting badge */}
               {activity.isMeeting && activity.meetingPlatform && (
-                <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 text-xs">
+                <Badge className="bg-red-100 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-300">
                   📹 {activity.meetingPlatform}
                 </Badge>
               )}
 
               {/* Communication badge */}
               {activity.isCommunication && !activity.isMeeting && (
-                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs">
+                <Badge className="bg-green-100 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300">
                   💬 {activity.channel ? activity.channel : 'Chat'}
                 </Badge>
               )}
 
               {/* Project badge */}
               {activity.project && !activity.isMeeting && !activity.isCommunication && (
-                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs">
+                <Badge className="bg-purple-100 text-xs text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
                   📁 {activity.project}
                 </Badge>
               )}
@@ -292,7 +357,7 @@ export function ActivityCard({
 
               {/* Git branch */}
               {activity.gitBranch && (
-                <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 text-xs">
+                <Badge className="bg-orange-100 text-xs text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                   🌿 {activity.gitBranch}
                 </Badge>
               )}
@@ -300,109 +365,137 @@ export function ActivityCard({
               {/* Events count - clickable to expand */}
               <Badge
                 variant="outline"
-                className="text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 select-none"
-                onClick={() => activity.rawEvents && activity.rawEvents.length > 0 && setIsExpanded(!isExpanded)}
+                className="cursor-pointer select-none text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() =>
+                  activity.rawEvents && activity.rawEvents.length > 0 && setIsExpanded(!isExpanded)
+                }
               >
                 {activity.rawEvents && activity.rawEvents.length > 0 ? (
-                  isExpanded ? <ChevronDown className="h-3 w-3 inline mr-1" /> : <ChevronRight className="h-3 w-3 inline mr-1" />
+                  isExpanded ? (
+                    <ChevronDown className="mr-1 inline h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="mr-1 inline h-3 w-3" />
+                  )
                 ) : null}
                 {activity.events} events
               </Badge>
             </div>
 
             {/* Main title */}
-            <p className="font-medium truncate" title={activity.title}>
+            <p className="truncate font-medium" title={activity.title}>
               {activity.isMeeting
                 ? activity.title
                 : activity.isCommunication
-                ? activity.channel || activity.title
-                : activity.isCodeEditor && activity.project
-                ? activity.fileName || activity.project
-                : activity.isTerminal && activity.project
-                ? activity.terminalCommand || activity.project
-                : activity.title}
+                  ? activity.channel || activity.title
+                  : activity.isCodeEditor && activity.project
+                    ? activity.fileName || activity.project
+                    : activity.isTerminal && activity.project
+                      ? activity.terminalCommand || activity.project
+                      : activity.title}
             </p>
 
             {/* Meeting ID */}
             {activity.isMeeting && activity.meetingId && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+              <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
                 Meeting ID: {activity.meetingId}
               </p>
             )}
 
             {/* Terminal working directory */}
             {activity.isTerminal && activity.workingDir && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={activity.workingDir}>
+              <p
+                className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400"
+                title={activity.workingDir}
+              >
                 📂 {activity.workingDir}
               </p>
             )}
 
             {/* Time range */}
             {activity.firstSeen && activity.lastSeen && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 ⏱️ {activity.firstSeen.substring(11, 16)} — {activity.lastSeen.substring(11, 16)}
               </p>
             )}
 
             {/* Expanded events view */}
-            {isExpanded && activity.rawEvents && activity.rawEvents.length > 0 && activity.firstSeen && activity.lastSeen && (
-              <div className="mt-3 space-y-2 border-t pt-2">
-                {/* Mini Timeline */}
-                <div className="relative">
-                  <div className="text-xs text-gray-400 mb-1 flex justify-between">
-                    <span>{formatEventTime(activity.firstSeen)}</span>
-                    <span className="text-gray-300">Timeline</span>
-                    <span>{formatEventTime(activity.lastSeen)}</span>
+            {isExpanded &&
+              activity.rawEvents &&
+              activity.rawEvents.length > 0 &&
+              activity.firstSeen &&
+              activity.lastSeen && (
+                <div className="mt-3 space-y-2 border-t pt-2">
+                  {/* Mini Timeline */}
+                  <div className="relative">
+                    <div className="mb-1 flex justify-between text-xs text-gray-400">
+                      <span>{formatEventTime(activity.firstSeen)}</span>
+                      <span className="text-gray-300">Timeline</span>
+                      <span>{formatEventTime(activity.lastSeen)}</span>
+                    </div>
+                    <div className="relative h-6 overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+                      {activity.rawEvents.map((event, i) => {
+                        const left = calculateTimelinePosition(
+                          event.timestamp,
+                          activity.firstSeen!,
+                          activity.lastSeen!
+                        );
+                        const width = calculateTimelineWidth(
+                          event.duration,
+                          activity.firstSeen!,
+                          activity.lastSeen!
+                        );
+                        return (
+                          <div
+                            key={i}
+                            className="absolute h-full cursor-pointer bg-blue-400 transition-colors hover:bg-blue-500 dark:bg-blue-600 dark:hover:bg-blue-500"
+                            style={{
+                              left: `${left}%`,
+                              width: `${Math.max(width, 0.5)}%`,
+                              minWidth: '2px',
+                            }}
+                            title={`${event.data.title || 'Unknown'}\n${formatEventTime(event.timestamp)} (${formatEventDuration(event.duration)})`}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="h-6 bg-slate-100 dark:bg-slate-800 rounded relative overflow-hidden">
-                    {activity.rawEvents.map((event, i) => {
-                      const left = calculateTimelinePosition(event.timestamp, activity.firstSeen!, activity.lastSeen!);
-                      const width = calculateTimelineWidth(event.duration, activity.firstSeen!, activity.lastSeen!);
-                      return (
+
+                  {/* Events List */}
+                  <div className="max-h-[200px] overflow-y-auto rounded border bg-slate-50 p-2 text-xs dark:bg-slate-900">
+                    {activity.rawEvents
+                      .sort(
+                        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                      )
+                      .map((event, i) => (
                         <div
                           key={i}
-                          className="absolute h-full bg-blue-400 dark:bg-blue-600 hover:bg-blue-500 dark:hover:bg-blue-500 cursor-pointer transition-colors"
-                          style={{
-                            left: `${left}%`,
-                            width: `${Math.max(width, 0.5)}%`,
-                            minWidth: '2px'
-                          }}
-                          title={`${event.data.title || 'Unknown'}\n${formatEventTime(event.timestamp)} (${formatEventDuration(event.duration)})`}
-                        />
-                      );
-                    })}
+                          className="flex justify-between rounded border-b px-1 py-1 last:border-0 hover:bg-white dark:hover:bg-slate-800"
+                        >
+                          <span
+                            className="flex-1 truncate text-gray-700 dark:text-gray-300"
+                            title={event.data.title}
+                          >
+                            {event.data.title || 'Unknown'}
+                          </span>
+                          <span className="ml-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                            {formatEventTime(event.timestamp)} (
+                            {formatEventDuration(event.duration)})
+                          </span>
+                        </div>
+                      ))}
                   </div>
                 </div>
+              )}
 
-                {/* Events List */}
-                <div className="max-h-[200px] overflow-y-auto border rounded p-2 text-xs bg-slate-50 dark:bg-slate-900">
-                  {activity.rawEvents
-                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                    .map((event, i) => (
-                      <div
-                        key={i}
-                        className="flex justify-between py-1 border-b last:border-0 hover:bg-white dark:hover:bg-slate-800 px-1 rounded"
-                      >
-                        <span className="truncate flex-1 text-gray-700 dark:text-gray-300" title={event.data.title}>
-                          {event.data.title || 'Unknown'}
-                        </span>
-                        <span className="text-gray-500 dark:text-gray-400 ml-2 whitespace-nowrap">
-                          {formatEventTime(event.timestamp)} ({formatEventDuration(event.duration)})
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                 {activity.formattedDuration}
               </Badge>
               {activity.suggestedTicket ? (
                 <>
                   <Badge className={getConfidenceColor(activity.confidence)}>
-                    Sugestia: {activity.suggestedTicket} ({Math.round((activity.confidence || 0) * 100)}%)
+                    Sugestia: {activity.suggestedTicket} (
+                    {Math.round((activity.confidence || 0) * 100)}%)
                   </Badge>
                   {/* Feedback buttons */}
                   {!feedbackGiven && !isLogged && (
@@ -428,7 +521,14 @@ export function ActivityCard({
                     </div>
                   )}
                   {feedbackGiven && (
-                    <Badge variant="outline" className={feedbackGiven === 'positive' ? 'text-green-600 border-green-300' : 'text-red-600 border-red-300'}>
+                    <Badge
+                      variant="outline"
+                      className={
+                        feedbackGiven === 'positive'
+                          ? 'border-green-300 text-green-600'
+                          : 'border-red-300 text-red-600'
+                      }
+                    >
                       {feedbackGiven === 'positive' ? '👍' : '👎'} Dzięki!
                     </Badge>
                   )}
@@ -442,17 +542,13 @@ export function ActivityCard({
           </div>
 
           {/* Right: Ticket selector + Log buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Select
-              value={selectedTicket}
-              onValueChange={setSelectedTicket}
-              disabled={isLogged}
-            >
+          <div className="flex shrink-0 items-center gap-2">
+            <Select value={selectedTicket} onValueChange={setSelectedTicket} disabled={isLogged}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Wybierz ticket ręcznie..." />
               </SelectTrigger>
               <SelectContent>
-                {tickets.map((ticket) => (
+                {tickets.map(ticket => (
                   <SelectItem key={ticket.key} value={ticket.key}>
                     {ticket.key} - {ticket.name}
                   </SelectItem>

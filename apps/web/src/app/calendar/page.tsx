@@ -41,7 +41,7 @@ function getWeekDates(date: Date): { start: string; end: string } {
 
   return {
     start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0]
+    end: sunday.toISOString().split('T')[0],
   };
 }
 
@@ -66,7 +66,7 @@ export default function CalendarPage() {
       endDate.setDate(endDate.getDate() + 6);
       const end = endDate.toISOString().split('T')[0];
 
-      const res = await fetch(`/api/calendar/week?start=${startDate}&end=${end}`);
+      const res = await fetch(`/timetracker/api/calendar/week?start=${startDate}&end=${end}`);
       if (!res.ok) {
         throw new Error('Failed to fetch week data');
       }
@@ -82,7 +82,7 @@ export default function CalendarPage() {
 
   const fetchTickets = useCallback(async () => {
     try {
-      const res = await fetch('/api/jira/my-issues');
+      const res = await fetch('/timetracker/api/jira/my-issues');
       if (res.ok) {
         const data = await res.json();
         setTickets(data.issues || []);
@@ -133,9 +133,7 @@ export default function CalendarPage() {
     }
 
     // Find the date for this activity
-    const day = weekData?.days.find(d =>
-      d.activities.some(a => a.id === block.id)
-    );
+    const day = weekData?.days.find(d => d.activities.some(a => a.id === block.id));
 
     if (day) {
       setSelectedBlock(block);
@@ -179,14 +177,17 @@ export default function CalendarPage() {
   }) => {
     try {
       // Convert attributes array to Record format for API
-      const attributesRecord = data.attributes.reduce((acc, attr) => {
-        if (attr.value) {
-          acc[attr.key] = attr.value;
-        }
-        return acc;
-      }, {} as Record<string, string>);
+      const attributesRecord = data.attributes.reduce(
+        (acc, attr) => {
+          if (attr.value) {
+            acc[attr.key] = attr.value;
+          }
+          return acc;
+        },
+        {} as Record<string, string>
+      );
 
-      const res = await fetch('/api/tempo/worklogs', {
+      const res = await fetch('/timetracker/api/tempo/worklogs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,8 +198,8 @@ export default function CalendarPage() {
           timeSpentSeconds: data.timeSpentSeconds,
           billable: data.isBillable,
           billableSeconds: data.billableSeconds,
-          attributes: attributesRecord
-        })
+          attributes: attributesRecord,
+        }),
       });
 
       if (!res.ok) {
@@ -216,7 +217,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <div className="flex h-[calc(100vh-64px)] flex-col">
       <WeekView
         weekData={weekData}
         isLoading={isLoading}
@@ -232,16 +233,20 @@ export default function CalendarPage() {
         <WorklogFormDialog
           open={showDialog}
           onOpenChange={setShowDialog}
-          activity={selectedBlock ? {
-            id: selectedBlock.id,
-            title: selectedBlock.title,
-            app: selectedBlock.app || '',
-            totalSeconds: selectedBlock.durationMinutes * 60,
-            formattedDuration: `${selectedBlock.durationMinutes}m`,
-            events: 1,
-            firstSeen: `${selectedDate}T${selectedBlock.startTime}:00`,
-            lastSeen: `${selectedDate}T${selectedBlock.endTime}:00`
-          } : undefined}
+          activity={
+            selectedBlock
+              ? {
+                  id: selectedBlock.id,
+                  title: selectedBlock.title,
+                  app: selectedBlock.app || '',
+                  totalSeconds: selectedBlock.durationMinutes * 60,
+                  formattedDuration: `${selectedBlock.durationMinutes}m`,
+                  events: 1,
+                  firstSeen: `${selectedDate}T${selectedBlock.startTime}:00`,
+                  lastSeen: `${selectedDate}T${selectedBlock.endTime}:00`,
+                }
+              : undefined
+          }
           tickets={tickets}
           date={selectedDate}
           onSubmit={handleDialogSubmit}

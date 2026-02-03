@@ -4,13 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  ExternalLink,
-} from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, AlertCircle, ExternalLink } from 'lucide-react';
 
 interface APIStatus {
   name: string;
@@ -19,10 +13,10 @@ interface APIStatus {
 }
 
 const API_LINKS: Record<string, string> = {
-  'Tempo': 'https://tempo.io',
-  'Jira': 'https://atlassian.net',
-  'ActivityWatch': 'http://localhost:5600',
-  'OpenRouter': 'https://openrouter.ai',
+  Tempo: 'https://tempo.io',
+  Jira: 'https://atlassian.net',
+  ActivityWatch: 'http://localhost:5600',
+  OpenRouter: 'https://openrouter.ai',
 };
 
 export default function ConnectionsPage() {
@@ -32,7 +26,7 @@ export default function ConnectionsPage() {
   const fetchStatus = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/status');
+      const response = await fetch('/timetracker/api/status');
       const data = await response.json();
       setApis(data.apis || []);
     } catch (error) {
@@ -82,7 +76,7 @@ export default function ConnectionsPage() {
           </p>
         </div>
         <Button onClick={fetchStatus} disabled={loading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Check All
         </Button>
       </div>
@@ -115,35 +109,29 @@ export default function ConnectionsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Service Status</CardTitle>
-          <CardDescription>
-            Current connection status for all external services
-          </CardDescription>
+          <CardDescription>Current connection status for all external services</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {loading && apis.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
+              <div className="py-8 text-center text-slate-500">
+                <RefreshCw className="mx-auto mb-2 h-8 w-8 animate-spin" />
                 Checking connections...
               </div>
             ) : apis.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">
-                No connection data available
-              </div>
+              <div className="py-8 text-center text-slate-500">No connection data available</div>
             ) : (
               apis.map((api, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg"
+                  className="flex items-center justify-between rounded-lg bg-slate-50 p-4 dark:bg-slate-800/50"
                 >
                   <div className="flex items-center gap-4">
                     {getStatusIcon(api.status)}
                     <div>
-                      <div className="font-medium text-slate-900 dark:text-white">
-                        {api.name}
-                      </div>
+                      <div className="font-medium text-slate-900 dark:text-white">{api.name}</div>
                       {api.message && (
-                        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md truncate">
+                        <p className="max-w-md truncate text-sm text-slate-500 dark:text-slate-400">
                           {api.message}
                         </p>
                       )}
@@ -174,7 +162,7 @@ export default function ConnectionsPage() {
         <CardHeader>
           <CardTitle>Need Help?</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-slate-500 dark:text-slate-400 space-y-2">
+        <CardContent className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
           <p>
             If a service shows as &quot;Not Configured&quot;, go to{' '}
             <a href="/settings" className="text-blue-500 hover:underline">
@@ -183,8 +171,8 @@ export default function ConnectionsPage() {
             to add your API keys.
           </p>
           <p>
-            If a service shows an error, check that your API keys are valid and the
-            service is accessible.
+            If a service shows an error, check that your API keys are valid and the service is
+            accessible.
           </p>
         </CardContent>
       </Card>

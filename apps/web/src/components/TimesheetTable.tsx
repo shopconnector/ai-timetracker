@@ -17,25 +17,51 @@ import { TicketCombobox } from './TicketCombobox';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EditableTimeInput, formatSecondsToTime } from './EditableTimeInput';
 import { Activity, Ticket } from './ActivityCard';
-import { Plus, Trash2, Loader2, CheckCircle, Send, Clock, Layers, ChevronDown, ChevronRight, Unlink, RefreshCw } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Loader2,
+  CheckCircle,
+  Send,
+  Clock,
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  Unlink,
+  RefreshCw,
+  Filter,
+  Lightbulb,
+  Video,
+  Pencil,
+} from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { findBestWorklogMatch, MeetingMatchContext, MatchResult } from '@/lib/worklogMatcher';
+import { getSuggestedTicketForMeeting, recordMeetingTicket } from '@/lib/meetingHistory';
 
 export interface TimesheetRow {
   id: string;
-  startTime: string;      // HH:MM
-  endTime: string;        // HH:MM
-  duration: number;       // seconds
-  activityTitle: string;  // from ActivityWatch
-  activityApp: string;    // app name
-  description: string;    // editable - for Tempo
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  duration: number; // seconds
+  activityTitle: string; // from ActivityWatch
+  activityApp: string; // app name
+  description: string; // editable - for Tempo
   selectedTicket: string | null;
   isLogged: boolean;
-  isManual: boolean;      // manually added row
+  isManual: boolean; // manually added row
   // Agregacja - zachowaj szczegóły
-  isAggregated?: boolean;           // czy to zagregowany wiersz
-  aggregatedFrom?: {                // źródłowe aktywności
-    originalId: string;             // oryginalny ID z ActivityWatch
+  isAggregated?: boolean; // czy to zagregowany wiersz
+  aggregatedFrom?: {
+    // źródłowe aktywności
+    originalId: string; // oryginalny ID z ActivityWatch
     startTime: string;
     endTime: string;
     title: string;
@@ -59,21 +85,30 @@ interface TimesheetTableProps {
   tickets: Ticket[];
   loggedIds: Set<string>;
   dateStr: string;
-  tempoWorklogs?: TempoWorklog[];  // Worklogi z Tempo dla danego dnia
+  tempoWorklogs?: TempoWorklog[]; // Worklogi z Tempo dla danego dnia
   onLog: (row: TimesheetRow) => Promise<void>;
   onLogAll: (rows: TimesheetRow[]) => Promise<void>;
-  onRefresh?: () => Promise<void>;  // Callback do odświeżenia danych
-  isRefreshing?: boolean;  // Czy trwa odświeżanie
+  onRefresh?: () => Promise<void>; // Callback do odświeżenia danych
+  isRefreshing?: boolean; // Czy trwa odświeżanie
+  onTicketChange?: (activityId: string, ticketKey: string) => void; // Callback przy zmianie ticketa
+  onEditWorklog?: (worklog: TempoWorklog, newTimeSeconds: number) => Promise<void>; // Edit worklog time
+  onDeleteWorklog?: (worklogId: number) => Promise<void>; // Delete worklog
 }
 
 // Convert Activity to TimesheetRow
 function activityToRow(activity: Activity): TimesheetRow {
   const startTime = activity.firstSeen
-    ? new Date(activity.firstSeen).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(activity.firstSeen).toLocaleTimeString('pl-PL', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : '00:00';
 
   const endTime = activity.lastSeen
-    ? new Date(activity.lastSeen).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(activity.lastSeen).toLocaleTimeString('pl-PL', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : startTime;
 
   // Build description from activity details
@@ -162,6 +197,87 @@ interface StatusInfo {
   overlapPercent: number; // 0-100
 }
 
+// Meeting detection - keywords that indicate a meeting
+const MEETING_APPS = ['google meet', 'zoom', 'microsoft teams', 'slack huddle', 'discord', 'webex'];
+const MEETING_KEYWORDS = [
+  'spotkanie',
+  'meeting',
+  'call',
+  'sync',
+  'standup',
+  'daily',
+  'retro',
+  'planning',
+  'review',
+  'demo',
+];
+
+function isMeetingActivity(app: string, title: string): boolean {
+  const appLower = app.toLowerCase();
+  const titleLower = title.toLowerCase();
+
+  // Check if app is a meeting platform
+  if (MEETING_APPS.some(m => appLower.includes(m))) return true;
+
+  // Check if title contains meeting keywords
+  if (MEETING_KEYWORDS.some(k => titleLower.includes(k))) return true;
+
+  return false;
+}
+
+// Enhanced meeting info with worklog matching
+interface MeetingMatchInfo {
+  isMeeting: boolean;
+  platform?: string;
+  matchResult: MatchResult | null;
+  historicalTicket?: { ticketKey: string; confidence: number };
+}
+
+// Get meeting match info for a row
+function getMeetingMatchInfo(row: TimesheetRow, worklogs: TempoWorklog[]): MeetingMatchInfo {
+  const isMeeting = isMeetingActivity(row.activityApp, row.activityTitle);
+
+  if (!isMeeting) {
+    return { isMeeting: false, matchResult: null };
+  }
+
+  // Detect platform
+  const appLower = row.activityApp.toLowerCase();
+  let platform: string | undefined;
+  if (appLower.includes('meet')) platform = 'Google Meet';
+  else if (appLower.includes('zoom')) platform = 'Zoom';
+  else if (appLower.includes('teams')) platform = 'Teams';
+  else if (appLower.includes('slack')) platform = 'Slack';
+
+  // Create meeting context
+  const meetingContext: MeetingMatchContext = {
+    meetingTitle: row.activityTitle,
+    meetingPlatform: platform,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    duration: row.duration,
+  };
+
+  // Check history for suggested ticket
+  const historicalSuggestion = getSuggestedTicketForMeeting(row.activityTitle, platform);
+
+  // Find best matching worklog
+  const matchResult = findBestWorklogMatch(
+    meetingContext,
+    worklogs,
+    historicalSuggestion?.ticketKey
+  );
+
+  return {
+    isMeeting: true,
+    platform,
+    matchResult,
+    historicalTicket: historicalSuggestion
+      ? { ticketKey: historicalSuggestion.ticketKey, confidence: historicalSuggestion.confidence }
+      : undefined,
+  };
+}
+
 // Określ status aktywności względem Tempo
 function getActivityStatus(
   startTime: string,
@@ -178,7 +294,7 @@ function getActivityStatus(
       status: 'new',
       label: 'Do zalogowania',
       overlappingWorklogs: [],
-      overlapPercent: 0
+      overlapPercent: 0,
     };
   }
 
@@ -192,7 +308,7 @@ function getActivityStatus(
       status: 'new',
       label: 'Do zalogowania',
       overlappingWorklogs: overlapping,
-      overlapPercent: 0
+      overlapPercent: 0,
     };
   }
 
@@ -218,7 +334,7 @@ function getActivityStatus(
       status: 'conflict',
       label: 'Konflikt',
       overlappingWorklogs: overlapping,
-      overlapPercent: Math.min(overlapPercent, 100)
+      overlapPercent: Math.min(overlapPercent, 100),
     };
   }
 
@@ -228,7 +344,7 @@ function getActivityStatus(
       status: 'logged',
       label: 'Zalogowane',
       overlappingWorklogs: overlapping,
-      overlapPercent
+      overlapPercent,
     };
   }
 
@@ -237,7 +353,7 @@ function getActivityStatus(
     status: 'partial',
     label: `Częściowo (${overlapPercent}%)`,
     overlappingWorklogs: overlapping,
-    overlapPercent
+    overlapPercent,
   };
 }
 
@@ -251,6 +367,9 @@ export function TimesheetTable({
   onLogAll,
   onRefresh,
   isRefreshing = false,
+  onTicketChange,
+  onEditWorklog,
+  onDeleteWorklog,
 }: TimesheetTableProps) {
   // Convert activities to rows, maintaining local state for edits
   const [rows, setRows] = useState<TimesheetRow[]>(() =>
@@ -270,6 +389,21 @@ export function TimesheetTable({
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   // Śledzenie które activityIds zostały zagregowane - nie pokazuj ich ponownie
   const [aggregatedActivityIds, setAggregatedActivityIds] = useState<Set<string>>(new Set());
+  // Filtry kolumnowe
+  const [filters, setFilters] = useState({
+    time: '', // filtr czasu (np. "09:", "10:30")
+    minDuration: 0, // min długość w sekundach
+    source: '', // filtr źródła/aplikacji
+    description: '', // filtr opisu
+    task: '', // filtr ticketa
+    status: 'all' as 'all' | 'new' | 'logged' | 'partial' | 'conflict', // filtr statusu
+    tempo: '', // filtr workloga w Tempo
+  });
+  // Edycja worklogów
+  const [editingWorklogId, setEditingWorklogId] = useState<number | null>(null);
+  const [editingWorklogTime, setEditingWorklogTime] = useState<number>(0);
+  const [savingWorklogId, setSavingWorklogId] = useState<number | null>(null);
+  const [deletingWorklogId, setDeletingWorklogId] = useState<number | null>(null);
 
   // Toggle expanded state for aggregated rows
   const toggleExpanded = useCallback((id: string) => {
@@ -305,28 +439,38 @@ export function TimesheetTable({
   }, [activities, aggregatedActivityIds]);
 
   // Update row field
-  const updateRow = useCallback((id: string, field: keyof TimesheetRow, value: unknown) => {
-    setRows(prev => prev.map(row => {
-      if (row.id !== id) return row;
+  const updateRow = useCallback(
+    (id: string, field: keyof TimesheetRow, value: unknown) => {
+      setRows(prev =>
+        prev.map(row => {
+          if (row.id !== id) return row;
 
-      const updated = { ...row, [field]: value };
+          const updated = { ...row, [field]: value };
 
-      // Recalculate end time when duration changes (for display purposes)
-      if (field === 'duration' && typeof value === 'number') {
-        updated.endTime = calculateEndTime(row.startTime, value);
+          // Recalculate end time when duration changes (for display purposes)
+          if (field === 'duration' && typeof value === 'number') {
+            updated.endTime = calculateEndTime(row.startTime, value);
+          }
+
+          // Recalculate end time when start time changes (keeps same duration)
+          if (field === 'startTime' && typeof value === 'string') {
+            updated.endTime = calculateEndTime(value, row.duration);
+          }
+
+          // Note: endTime is now read-only (calculated from startTime + duration)
+          // Users edit duration directly, not endTime
+
+          return updated;
+        })
+      );
+
+      // Notify parent when ticket changes (for persistence)
+      if (field === 'selectedTicket' && onTicketChange && typeof value === 'string') {
+        onTicketChange(id, value);
       }
-
-      // Recalculate end time when start time changes (keeps same duration)
-      if (field === 'startTime' && typeof value === 'string') {
-        updated.endTime = calculateEndTime(value, row.duration);
-      }
-
-      // Note: endTime is now read-only (calculated from startTime + duration)
-      // Users edit duration directly, not endTime
-
-      return updated;
-    }));
-  }, []);
+    },
+    [onTicketChange]
+  );
 
   // Add manual row
   const addRow = useCallback(() => {
@@ -355,7 +499,7 @@ export function TimesheetTable({
     const sortedRows = [...selectedRowsList].sort((a, b) => {
       const [aH, aM] = a.startTime.split(':').map(Number);
       const [bH, bM] = b.startTime.split(':').map(Number);
-      return (aH * 60 + aM) - (bH * 60 + bM);
+      return aH * 60 + aM - (bH * 60 + bM);
     });
 
     // Find earliest start and latest end
@@ -379,7 +523,8 @@ export function TimesheetTable({
     const chronologicalParts: string[] = [];
     sortedRows.forEach((r, idx) => {
       const timeRange = `${r.startTime}-${r.endTime}`;
-      const shortDesc = r.description?.slice(0, 50) || r.activityTitle?.slice(0, 50) || r.activityApp;
+      const shortDesc =
+        r.description?.slice(0, 50) || r.activityTitle?.slice(0, 50) || r.activityApp;
       chronologicalParts.push(`[${timeRange}] ${shortDesc}`);
     });
     const chronologicalDescription = chronologicalParts.join(' → ');
@@ -390,7 +535,10 @@ export function TimesheetTable({
     // Stwórz tytuł z chronologią: "App1 → App2 → App3"
     const uniqueAppsInOrder: string[] = [];
     sortedRows.forEach(r => {
-      if (uniqueAppsInOrder.length === 0 || uniqueAppsInOrder[uniqueAppsInOrder.length - 1] !== r.activityApp) {
+      if (
+        uniqueAppsInOrder.length === 0 ||
+        uniqueAppsInOrder[uniqueAppsInOrder.length - 1] !== r.activityApp
+      ) {
         uniqueAppsInOrder.push(r.activityApp);
       }
     });
@@ -436,59 +584,64 @@ export function TimesheetTable({
     });
 
     setSelectedRows(new Set());
-    toast.success(`Zagregowano ${sortedRows.length} wierszy → ${formatSecondsToTime(totalDuration)}`);
+    toast.success(
+      `Zagregowano ${sortedRows.length} wierszy → ${formatSecondsToTime(totalDuration)}`
+    );
   }, [rows, selectedRows]);
 
   // Rozdziel zagregowany wiersz na oryginalne
-  const disaggregateRow = useCallback((aggregatedRowId: string) => {
-    const aggregatedRow = rows.find(r => r.id === aggregatedRowId);
-    if (!aggregatedRow || !aggregatedRow.isAggregated || !aggregatedRow.aggregatedFrom) {
-      toast.error('Ten wiersz nie jest zagregowany');
-      return;
-    }
+  const disaggregateRow = useCallback(
+    (aggregatedRowId: string) => {
+      const aggregatedRow = rows.find(r => r.id === aggregatedRowId);
+      if (!aggregatedRow || !aggregatedRow.isAggregated || !aggregatedRow.aggregatedFrom) {
+        toast.error('Ten wiersz nie jest zagregowany');
+        return;
+      }
 
-    // Usuń oryginalne IDs z aggregatedActivityIds (pozwól im się pojawić ponownie z AW)
-    const originalIds = aggregatedRow.aggregatedFrom.map(item => item.originalId);
-    setAggregatedActivityIds(prev => {
-      const next = new Set(prev);
-      originalIds.forEach(id => next.delete(id));
-      return next;
-    });
+      // Usuń oryginalne IDs z aggregatedActivityIds (pozwól im się pojawić ponownie z AW)
+      const originalIds = aggregatedRow.aggregatedFrom.map(item => item.originalId);
+      setAggregatedActivityIds(prev => {
+        const next = new Set(prev);
+        originalIds.forEach(id => next.delete(id));
+        return next;
+      });
 
-    // Odtwórz oryginalne wiersze z aggregatedFrom (z oryginalnym ID!)
-    const restoredRows: TimesheetRow[] = aggregatedRow.aggregatedFrom.map((item) => ({
-      id: item.originalId, // Przywróć oryginalny ID!
-      startTime: item.startTime,
-      endTime: item.endTime,
-      duration: item.duration,
-      activityTitle: item.title,
-      activityApp: item.app,
-      description: item.title,
-      selectedTicket: aggregatedRow.selectedTicket,
-      isLogged: false,
-      isManual: false, // Przywróć jako NIE-manual (bo to oryginalne z AW)
-      isAggregated: false,
-    }));
+      // Odtwórz oryginalne wiersze z aggregatedFrom (z oryginalnym ID!)
+      const restoredRows: TimesheetRow[] = aggregatedRow.aggregatedFrom.map(item => ({
+        id: item.originalId, // Przywróć oryginalny ID!
+        startTime: item.startTime,
+        endTime: item.endTime,
+        duration: item.duration,
+        activityTitle: item.title,
+        activityApp: item.app,
+        description: item.title,
+        selectedTicket: aggregatedRow.selectedTicket,
+        isLogged: false,
+        isManual: false, // Przywróć jako NIE-manual (bo to oryginalne z AW)
+        isAggregated: false,
+      }));
 
-    // Zamień zagregowany wiersz na odtworzone
-    setRows(prev => {
-      const index = prev.findIndex(r => r.id === aggregatedRowId);
-      if (index === -1) return prev;
+      // Zamień zagregowany wiersz na odtworzone
+      setRows(prev => {
+        const index = prev.findIndex(r => r.id === aggregatedRowId);
+        if (index === -1) return prev;
 
-      const newRows = [...prev];
-      newRows.splice(index, 1, ...restoredRows);
-      return newRows;
-    });
+        const newRows = [...prev];
+        newRows.splice(index, 1, ...restoredRows);
+        return newRows;
+      });
 
-    // Usuń z rozwiniętych
-    setExpandedRows(prev => {
-      const next = new Set(prev);
-      next.delete(aggregatedRowId);
-      return next;
-    });
+      // Usuń z rozwiniętych
+      setExpandedRows(prev => {
+        const next = new Set(prev);
+        next.delete(aggregatedRowId);
+        return next;
+      });
 
-    toast.success(`Rozdzielono na ${restoredRows.length} wierszy`);
-  }, [rows]);
+      toast.success(`Rozdzielono na ${restoredRows.length} wierszy`);
+    },
+    [rows]
+  );
 
   // Toggle row selection
   const toggleRowSelection = useCallback((id: string) => {
@@ -538,52 +691,52 @@ export function TimesheetTable({
 
     if (groupsFound > 0) {
       setSelectedRows(new Set(firstGroupIds));
-      toast.info(`Znaleziono ${groupsFound} grup godzinowych. Zaznaczono pierwszą (${firstGroupIds.length} wierszy). Kliknij "Agreguj" aby połączyć.`);
+      toast.info(
+        `Znaleziono ${groupsFound} grup godzinowych. Zaznaczono pierwszą (${firstGroupIds.length} wierszy). Kliknij "Agreguj" aby połączyć.`
+      );
     } else {
       toast.info('Brak aktywności do automatycznej agregacji godzinowej');
     }
   }, [rows, loggedIds]);
 
   // Log single row
-  const handleLogRow = useCallback(async (row: TimesheetRow) => {
-    if (!row.selectedTicket) {
-      toast.error('Wybierz ticket przed zalogowaniem');
-      return;
-    }
+  const handleLogRow = useCallback(
+    async (row: TimesheetRow) => {
+      if (!row.selectedTicket) {
+        toast.error('Wybierz ticket przed zalogowaniem');
+        return;
+      }
 
-    setLoggingIds(prev => new Set(prev).add(row.id));
+      setLoggingIds(prev => new Set(prev).add(row.id));
 
-    try {
-      await onLog(row);
-      setRows(prev => prev.map(r =>
-        r.id === row.id ? { ...r, isLogged: true } : r
-      ));
-      toast.success(`Zalogowano ${formatSecondsToTime(row.duration)} do ${row.selectedTicket}`);
-    } catch (error) {
-      toast.error('Błąd logowania', {
-        description: error instanceof Error ? error.message : 'Spróbuj ponownie'
-      });
-    } finally {
-      setLoggingIds(prev => {
-        const next = new Set(prev);
-        next.delete(row.id);
-        return next;
-      });
-    }
-  }, [onLog]);
+      try {
+        await onLog(row);
+        setRows(prev => prev.map(r => (r.id === row.id ? { ...r, isLogged: true } : r)));
+        toast.success(`Zalogowano ${formatSecondsToTime(row.duration)} do ${row.selectedTicket}`);
+      } catch (error) {
+        toast.error('Błąd logowania', {
+          description: error instanceof Error ? error.message : 'Spróbuj ponownie',
+        });
+      } finally {
+        setLoggingIds(prev => {
+          const next = new Set(prev);
+          next.delete(row.id);
+          return next;
+        });
+      }
+    },
+    [onLog]
+  );
 
   // Log all selected rows
   const handleLogAll = useCallback(async () => {
-    const toLog = rows.filter(r =>
-      selectedRows.has(r.id) &&
-      !r.isLogged &&
-      !loggedIds.has(r.id) &&
-      r.selectedTicket
+    const toLog = rows.filter(
+      r => selectedRows.has(r.id) && !r.isLogged && !loggedIds.has(r.id) && r.selectedTicket
     );
 
     if (toLog.length === 0) {
       toast.error('Brak wierszy do zalogowania', {
-        description: 'Zaznacz wiersze z przypisanym ticketem'
+        description: 'Zaznacz wiersze z przypisanym ticketem',
       });
       return;
     }
@@ -592,55 +745,146 @@ export function TimesheetTable({
 
     try {
       await onLogAll(toLog);
-      setRows(prev => prev.map(r =>
-        toLog.some(t => t.id === r.id) ? { ...r, isLogged: true } : r
-      ));
+      setRows(prev =>
+        prev.map(r => (toLog.some(t => t.id === r.id) ? { ...r, isLogged: true } : r))
+      );
       setSelectedRows(new Set());
       toast.success(`Zalogowano ${toLog.length} wpisów`);
     } catch (error) {
       toast.error('Błąd logowania', {
-        description: error instanceof Error ? error.message : 'Część wpisów mogła się nie zapisać'
+        description: error instanceof Error ? error.message : 'Część wpisów mogła się nie zapisać',
       });
     } finally {
       setLogAllLoading(false);
     }
   }, [rows, selectedRows, loggedIds, onLogAll]);
 
-  // Calculate totals
-  const totalSeconds = rows.reduce((sum, r) => sum + r.duration, 0);
-  const loggedSecondsInTable = rows
+  // Helper to get status for a row
+  const getRowStatus = (row: TimesheetRow): ActivityStatus => {
+    const overlapping = findOverlappingWorklogs(tempoWorklogs, row.startTime, row.endTime);
+    return getActivityStatus(
+      row.startTime,
+      row.endTime,
+      row.duration,
+      tempoWorklogs,
+      overlapping.length > 0
+    ).status;
+  };
+
+  // Calculate totals with all filters applied
+  const filteredRows = rows.filter(row => {
+    // Duration filter
+    if (row.duration < filters.minDuration && !row.isManual) return false;
+
+    // Time filter (startTime contains)
+    if (filters.time && !row.startTime.includes(filters.time)) return false;
+
+    // Source/app filter
+    if (filters.source && !row.activityApp.toLowerCase().includes(filters.source.toLowerCase()))
+      return false;
+
+    // Description filter
+    if (
+      filters.description &&
+      !row.description.toLowerCase().includes(filters.description.toLowerCase()) &&
+      !row.activityTitle.toLowerCase().includes(filters.description.toLowerCase())
+    )
+      return false;
+
+    // Task filter
+    if (
+      filters.task &&
+      (!row.selectedTicket ||
+        !row.selectedTicket.toLowerCase().includes(filters.task.toLowerCase()))
+    )
+      return false;
+
+    // Status filter
+    if (filters.status !== 'all') {
+      const status = getRowStatus(row);
+      if (status !== filters.status) return false;
+    }
+
+    // Tempo worklog filter
+    if (filters.tempo) {
+      const overlapping = findOverlappingWorklogs(tempoWorklogs, row.startTime, row.endTime);
+      const hasMatchingTempo = overlapping.some(
+        w =>
+          w.issue.key.toLowerCase().includes(filters.tempo.toLowerCase()) ||
+          (w.description && w.description.toLowerCase().includes(filters.tempo.toLowerCase()))
+      );
+      if (!hasMatchingTempo) return false;
+    }
+
+    return true;
+  });
+
+  const totalSeconds = filteredRows.reduce((sum, r) => sum + r.duration, 0);
+  const loggedSecondsInTable = filteredRows
     .filter(r => r.isLogged || loggedIds.has(r.id))
     .reduce((sum, r) => sum + r.duration, 0);
-  const unloggedWithTicket = rows.filter(r =>
-    !r.isLogged && !loggedIds.has(r.id) && r.selectedTicket
+  const unloggedWithTicket = filteredRows.filter(
+    r => !r.isLogged && !loggedIds.has(r.id) && r.selectedTicket
   ).length;
+  const hiddenCount = rows.length - filteredRows.length;
 
   return (
     <div className="space-y-3">
       {/* Summary bar - responsive */}
-      <div className="flex flex-col gap-3 px-3 py-2 bg-muted rounded-lg lg:flex-row lg:items-center lg:justify-between">
+      <div className="bg-muted flex flex-col gap-3 rounded-lg px-3 py-2 lg:flex-row lg:items-center lg:justify-between">
         {/* Stats - wrap on mobile */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <span className="flex items-center gap-1">
-            <Clock className="w-4 h-4" />
+            <Clock className="h-4 w-4" />
             <strong>{formatSecondsToTime(totalSeconds)}</strong>
           </span>
           <span className="flex items-center gap-1 text-green-600">
-            <CheckCircle className="w-4 h-4" />
+            <CheckCircle className="h-4 w-4" />
             <strong>{formatSecondsToTime(loggedSecondsInTable)}</strong>
           </span>
           {selectedRows.size > 0 && (
-            <span className="text-blue-600 font-medium">
-              ✓ {selectedRows.size}
-            </span>
+            <span className="font-medium text-blue-600">✓ {selectedRows.size}</span>
           )}
-          <span className={`text-xs ${tempoWorklogs.length > 0 ? 'text-green-600' : 'text-orange-500'}`}>
+          <span
+            className={`text-xs ${tempoWorklogs.length > 0 ? 'text-green-600' : 'text-orange-500'}`}
+          >
             Tempo: {tempoWorklogs.length}
           </span>
+          {hiddenCount > 0 && (
+            <span className="text-muted-foreground text-xs">({hiddenCount} ukrytych)</span>
+          )}
         </div>
 
         {/* Actions - wrap on mobile */}
         <div className="flex flex-wrap gap-2">
+          {/* Clear all filters button */}
+          {(filters.time ||
+            filters.minDuration > 0 ||
+            filters.source ||
+            filters.description ||
+            filters.task ||
+            filters.status !== 'all' ||
+            filters.tempo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setFilters({
+                  time: '',
+                  minDuration: 0,
+                  source: '',
+                  description: '',
+                  task: '',
+                  status: 'all',
+                  tempo: '',
+                })
+              }
+              className="text-muted-foreground h-8 text-xs"
+            >
+              ✕ Wyczyść filtry
+            </Button>
+          )}
+
           {onRefresh && (
             <Button
               variant="outline"
@@ -650,13 +894,19 @@ export function TimesheetTable({
               title="Odśwież dane"
               className="h-8"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline ml-1">Odśwież</span>
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="ml-1 hidden sm:inline">Odśwież</span>
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={autoAggregateByHour} title="Auto-agreguj" className="h-8">
-            <Clock className="w-4 h-4" />
-            <span className="hidden sm:inline ml-1">Auto</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={autoAggregateByHour}
+            title="Auto-agreguj"
+            className="h-8"
+          >
+            <Clock className="h-4 w-4" />
+            <span className="ml-1 hidden sm:inline">Auto</span>
           </Button>
           <Button variant="outline" size="sm" onClick={selectAllUnlogged} className="h-8">
             <span className="hidden sm:inline">Zaznacz</span>
@@ -664,7 +914,7 @@ export function TimesheetTable({
           </Button>
           {selectedRows.size >= 2 && (
             <Button size="sm" variant="secondary" onClick={aggregateRows} className="h-8">
-              <Layers className="w-4 h-4" />
+              <Layers className="h-4 w-4" />
               <span className="ml-1">{selectedRows.size}</span>
             </Button>
           )}
@@ -675,9 +925,9 @@ export function TimesheetTable({
             className="h-8"
           >
             {logAllLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="h-4 w-4" />
             )}
             <span className="ml-1">{selectedRows.size}</span>
           </Button>
@@ -685,28 +935,122 @@ export function TimesheetTable({
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-x-auto">
-        <Table>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table className="w-full">
           <TableHeader>
             <TableRow className="bg-muted/50">
-              <TableHead className="w-8 px-2"></TableHead>
+              <TableHead className="w-12 px-2 text-center">✓</TableHead>
               <TableHead className="w-24 px-2">Czas</TableHead>
               <TableHead className="w-16 px-2">Długość</TableHead>
-              <TableHead className="hidden lg:table-cell w-32 px-2">Źródło</TableHead>
-              <TableHead className="min-w-[180px] px-2">Opis</TableHead>
-              <TableHead className="w-32 px-2">Task</TableHead>
+              <TableHead className="hidden w-32 px-2 lg:table-cell xl:w-40">Źródło</TableHead>
+              <TableHead className="min-w-[180px] px-2 lg:min-w-[300px] xl:min-w-[400px]">
+                Opis
+              </TableHead>
+              <TableHead className="w-32 px-2 lg:w-40 xl:w-48">Task</TableHead>
               <TableHead className="w-16 px-2">Status</TableHead>
-              <TableHead className="hidden md:table-cell min-w-[140px] px-2">W Tempo</TableHead>
+              <TableHead className="hidden min-w-[140px] px-2 md:table-cell lg:min-w-[180px] xl:min-w-[220px]">
+                W Tempo
+              </TableHead>
+            </TableRow>
+            {/* Filter row */}
+            <TableRow className="bg-muted/30 border-b">
+              <TableHead className="px-1 py-1">
+                <span className="text-muted-foreground text-[10px]">🔍</span>
+              </TableHead>
+              <TableHead className="px-1 py-1">
+                <Input
+                  placeholder="09:00"
+                  value={filters.time}
+                  onChange={e => setFilters(f => ({ ...f, time: e.target.value }))}
+                  className="h-6 px-1 text-[10px]"
+                />
+              </TableHead>
+              <TableHead className="px-1 py-1">
+                <Select
+                  value={filters.minDuration.toString()}
+                  onValueChange={v => setFilters(f => ({ ...f, minDuration: parseInt(v) }))}
+                >
+                  <SelectTrigger className="h-6 px-1 text-[10px]">
+                    <SelectValue placeholder="Min" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Wszystkie</SelectItem>
+                    <SelectItem value="60">≥1m</SelectItem>
+                    <SelectItem value="120">≥2m</SelectItem>
+                    <SelectItem value="300">≥5m</SelectItem>
+                    <SelectItem value="600">≥10m</SelectItem>
+                    <SelectItem value="1800">≥30m</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="hidden px-1 py-1 lg:table-cell">
+                <Input
+                  placeholder="App..."
+                  value={filters.source}
+                  onChange={e => setFilters(f => ({ ...f, source: e.target.value }))}
+                  className="h-6 px-1 text-[10px]"
+                />
+              </TableHead>
+              <TableHead className="px-1 py-1">
+                <Input
+                  placeholder="Szukaj w opisie..."
+                  value={filters.description}
+                  onChange={e => setFilters(f => ({ ...f, description: e.target.value }))}
+                  className="h-6 px-1 text-[10px]"
+                />
+              </TableHead>
+              <TableHead className="px-1 py-1">
+                <Input
+                  placeholder="Ticket..."
+                  value={filters.task}
+                  onChange={e => setFilters(f => ({ ...f, task: e.target.value }))}
+                  className="h-6 px-1 text-[10px]"
+                />
+              </TableHead>
+              <TableHead className="px-1 py-1">
+                <Select
+                  value={filters.status}
+                  onValueChange={v =>
+                    setFilters(f => ({ ...f, status: v as typeof filters.status }))
+                  }
+                >
+                  <SelectTrigger className="h-6 px-1 text-[10px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Wszystkie</SelectItem>
+                    <SelectItem value="new">● Nowe</SelectItem>
+                    <SelectItem value="logged">✓ Zalogowane</SelectItem>
+                    <SelectItem value="partial">◐ Częściowe</SelectItem>
+                    <SelectItem value="conflict">! Konflikt</SelectItem>
+                  </SelectContent>
+                </Select>
+              </TableHead>
+              <TableHead className="hidden px-1 py-1 md:table-cell">
+                <Input
+                  placeholder="W Tempo..."
+                  value={filters.tempo}
+                  onChange={e => setFilters(f => ({ ...f, tempo: e.target.value }))}
+                  className="h-6 px-1 text-[10px]"
+                />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map(row => {
+            {filteredRows.map(row => {
               // Sprawdź rzeczywisty status w Tempo (nie bazuj na localStorage)
-              const overlappingWorklogs = findOverlappingWorklogs(tempoWorklogs, row.startTime, row.endTime);
+              const overlappingWorklogs = findOverlappingWorklogs(
+                tempoWorklogs,
+                row.startTime,
+                row.endTime
+              );
               const isActuallyLogged = overlappingWorklogs.length > 0;
               const isLogging = loggingIds.has(row.id);
               const isSelected = selectedRows.has(row.id);
               const isExpanded = expandedRows.has(row.id);
+
+              // Get meeting match info
+              const meetingInfo = getMeetingMatchInfo(row, tempoWorklogs);
 
               const statusInfo = getActivityStatus(
                 row.startTime,
@@ -721,17 +1065,17 @@ export function TimesheetTable({
                   <TableRow
                     className={`transition-colors ${
                       isActuallyLogged
-                        ? 'bg-green-50/70 dark:bg-green-950/30 opacity-70'
+                        ? 'bg-green-50/70 opacity-70 dark:bg-green-950/30'
                         : isSelected
-                          ? 'bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-300'
+                          ? 'bg-blue-50 ring-1 ring-inset ring-blue-300 dark:bg-blue-950/20'
                           : row.isAggregated
-                            ? 'bg-gradient-to-r from-purple-50 to-white dark:from-purple-950/30 dark:to-transparent border-l-2 border-l-purple-500'
+                            ? 'border-l-2 border-l-purple-500 bg-gradient-to-r from-purple-50 to-white dark:from-purple-950/30 dark:to-transparent'
                             : 'hover:bg-gray-50 dark:hover:bg-gray-900'
                     }`}
                   >
                     {/* Checkbox + Expand */}
-                    <TableCell className="px-2">
-                      <div className="flex items-center gap-0.5">
+                    <TableCell className="w-12 px-2 text-center">
+                      <div className="flex items-center justify-center gap-1">
                         {row.isAggregated && (
                           <Button
                             variant="ghost"
@@ -739,14 +1083,19 @@ export function TimesheetTable({
                             className="h-5 w-5 p-0"
                             onClick={() => toggleExpanded(row.id)}
                           >
-                            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {isExpanded ? (
+                              <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3" />
+                            )}
                           </Button>
                         )}
-                        <Checkbox
+                        <input
+                          type="checkbox"
                           checked={isSelected}
-                          onCheckedChange={() => toggleRowSelection(row.id)}
+                          onChange={() => toggleRowSelection(row.id)}
                           disabled={isActuallyLogged}
-                          className="h-4 w-4"
+                          className="h-5 w-5 cursor-pointer accent-blue-600"
                         />
                       </div>
                     </TableCell>
@@ -756,14 +1105,14 @@ export function TimesheetTable({
                       <div className="flex items-center gap-1 font-mono text-xs">
                         <Input
                           value={row.startTime}
-                          onChange={(e) => updateRow(row.id, 'startTime', e.target.value)}
-                          className="w-14 h-7 px-1 text-center text-xs"
+                          onChange={e => updateRow(row.id, 'startTime', e.target.value)}
+                          className="h-7 w-14 px-1 text-center text-xs"
                           disabled={isActuallyLogged}
                           title="Czas rozpoczęcia (edytowalny)"
                         />
                         <span className="text-muted-foreground">→</span>
                         <span
-                          className="w-14 h-7 px-1 flex items-center justify-center text-xs text-muted-foreground bg-muted/50 rounded border"
+                          className="text-muted-foreground bg-muted/50 flex h-7 w-14 items-center justify-center rounded border px-1 text-xs"
                           title="Czas zakończenia (wyliczany automatycznie z Od + Długość)"
                         >
                           {calculateEndTime(row.startTime, row.duration)}
@@ -775,21 +1124,54 @@ export function TimesheetTable({
                     <TableCell className="px-2">
                       <EditableTimeInput
                         value={row.duration}
-                        onChange={(seconds) => updateRow(row.id, 'duration', seconds)}
+                        onChange={seconds => updateRow(row.id, 'duration', seconds)}
                         disabled={isActuallyLogged}
                       />
                     </TableCell>
 
                     {/* Source (hidden on mobile) */}
-                    <TableCell className="hidden lg:table-cell px-2">
-                      <div className="text-xs">
+                    <TableCell className="hidden px-2 lg:table-cell">
+                      <div className="space-y-1 text-xs">
                         {row.isAggregated && row.aggregatedFrom ? (
-                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-[10px]">
-                            <Layers className="w-3 h-3 mr-0.5" />
+                          <Badge
+                            variant="secondary"
+                            className="bg-purple-100 text-[10px] text-purple-800"
+                          >
+                            <Layers className="mr-0.5 h-3 w-3" />
                             {row.aggregatedFrom.length}x
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">{row.activityApp}</Badge>
+                          <>
+                            <Badge variant="outline" className="text-[10px]">
+                              {row.activityApp}
+                            </Badge>
+                            {/* Meeting indicator */}
+                            {meetingInfo.isMeeting && (
+                              <div className="flex items-center gap-1">
+                                <Video className="h-3 w-3 text-orange-500" />
+                                {meetingInfo.matchResult &&
+                                  meetingInfo.matchResult.matchType !== 'none' && (
+                                    <span
+                                      className={`rounded px-1 text-[9px] ${
+                                        meetingInfo.matchResult.matchType === 'exact'
+                                          ? 'bg-green-100 text-green-700'
+                                          : meetingInfo.matchResult.matchType === 'strong'
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : meetingInfo.matchResult.matchType === 'partial'
+                                              ? 'bg-yellow-100 text-yellow-700'
+                                              : 'bg-gray-100 text-gray-600'
+                                      }`}
+                                    >
+                                      {meetingInfo.matchResult.matchType === 'exact'
+                                        ? '✓'
+                                        : meetingInfo.matchResult.matchType === 'strong'
+                                          ? '≈'
+                                          : '?'}
+                                    </span>
+                                  )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -798,20 +1180,30 @@ export function TimesheetTable({
                     <TableCell className="px-2">
                       <div className="space-y-1">
                         {/* Show app badge on mobile only */}
-                        <div className="lg:hidden">
+                        <div className="flex flex-wrap items-center gap-1 lg:hidden">
                           {row.isAggregated ? (
-                            <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-[10px] mb-1">
-                              <Layers className="w-3 h-3 mr-0.5" />
+                            <Badge
+                              variant="secondary"
+                              className="bg-purple-100 text-[10px] text-purple-800"
+                            >
+                              <Layers className="mr-0.5 h-3 w-3" />
                               {row.aggregatedFrom?.length}x
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-[10px] mb-1">{row.activityApp}</Badge>
+                            <>
+                              <Badge variant="outline" className="text-[10px]">
+                                {row.activityApp}
+                              </Badge>
+                              {meetingInfo.isMeeting && (
+                                <Video className="h-3 w-3 text-orange-500" />
+                              )}
+                            </>
                           )}
                         </div>
                         <Textarea
                           value={row.description}
-                          onChange={(e) => updateRow(row.id, 'description', e.target.value)}
-                          className={`min-h-[50px] text-xs resize-none ${row.isAggregated ? 'bg-purple-50/50 dark:bg-purple-900/20' : ''}`}
+                          onChange={e => updateRow(row.id, 'description', e.target.value)}
+                          className={`min-h-[50px] resize-none text-xs ${row.isAggregated ? 'bg-purple-50/50 dark:bg-purple-900/20' : ''}`}
                           placeholder="Opis..."
                           disabled={isActuallyLogged}
                         />
@@ -820,31 +1212,87 @@ export function TimesheetTable({
 
                     {/* Task */}
                     <TableCell className="px-2">
-                      <TicketCombobox
-                        tickets={tickets}
-                        value={row.selectedTicket}
-                        onValueChange={(value) => updateRow(row.id, 'selectedTicket', value)}
-                        disabled={isActuallyLogged}
-                        placeholder="Task..."
-                      />
+                      <div className="space-y-1">
+                        <TicketCombobox
+                          tickets={tickets}
+                          value={row.selectedTicket}
+                          onValueChange={value => {
+                            updateRow(row.id, 'selectedTicket', value);
+                            // Record meeting-ticket association if this is a meeting
+                            if (meetingInfo.isMeeting && value) {
+                              recordMeetingTicket(
+                                row.activityTitle,
+                                meetingInfo.platform,
+                                value,
+                                tickets.find(t => t.key === value)?.name
+                              );
+                            }
+                          }}
+                          disabled={isActuallyLogged}
+                          placeholder="Task..."
+                        />
+                        {/* Suggestion button when no ticket selected but we have a suggestion */}
+                        {!row.selectedTicket &&
+                          !isActuallyLogged &&
+                          meetingInfo.isMeeting &&
+                          (meetingInfo.matchResult?.matchType === 'exact' ||
+                          meetingInfo.matchResult?.matchType === 'strong' ? (
+                            <button
+                              onClick={() => {
+                                const ticketKey = meetingInfo.matchResult!.worklog.issue.key;
+                                updateRow(row.id, 'selectedTicket', ticketKey);
+                                recordMeetingTicket(
+                                  row.activityTitle,
+                                  meetingInfo.platform,
+                                  ticketKey
+                                );
+                                toast.success(`Ustawiono ${ticketKey}`);
+                              }}
+                              className="flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 transition-colors hover:bg-blue-100"
+                            >
+                              <Lightbulb className="h-3 w-3" />
+                              {meetingInfo.matchResult.worklog.issue.key}
+                            </button>
+                          ) : (
+                            meetingInfo.historicalTicket &&
+                            meetingInfo.historicalTicket.confidence >= 0.5 && (
+                              <button
+                                onClick={() => {
+                                  const ticketKey = meetingInfo.historicalTicket!.ticketKey;
+                                  updateRow(row.id, 'selectedTicket', ticketKey);
+                                  toast.success(`Ustawiono ${ticketKey} z historii`);
+                                }}
+                                className="flex items-center gap-1 rounded bg-green-50 px-1.5 py-0.5 text-[10px] text-green-700 transition-colors hover:bg-green-100"
+                              >
+                                <Clock className="h-3 w-3" />
+                                {meetingInfo.historicalTicket.ticketKey}
+                              </button>
+                            )
+                          ))}
+                      </div>
                     </TableCell>
 
                     {/* Status + Actions (combined) */}
                     <TableCell className="px-2">
-                      <div className="flex flex-col gap-1 items-center">
+                      <div className="flex flex-col items-center gap-1">
                         {/* Status badge */}
                         {(() => {
                           const statusStyles: Record<ActivityStatus, string> = {
                             logged: 'bg-green-100 text-green-800',
                             new: 'bg-blue-50 text-blue-700',
                             partial: 'bg-yellow-100 text-yellow-800',
-                            conflict: 'bg-red-100 text-red-800'
+                            conflict: 'bg-red-100 text-red-800',
                           };
                           const statusIcons: Record<ActivityStatus, string> = {
-                            logged: '✓', new: '●', partial: '◐', conflict: '!'
+                            logged: '✓',
+                            new: '●',
+                            partial: '◐',
+                            conflict: '!',
                           };
                           return (
-                            <Badge className={`${statusStyles[statusInfo.status]} text-[10px] px-1.5 py-0`}>
+                            <Badge
+                              className={`${statusStyles[statusInfo.status]} px-1.5 py-0 text-[10px]`}
+                            >
                               {statusIcons[statusInfo.status]}
                               {statusInfo.status === 'partial' && ` ${statusInfo.overlapPercent}%`}
                             </Badge>
@@ -854,18 +1302,24 @@ export function TimesheetTable({
                         {/* Action buttons */}
                         <div className="flex gap-0.5">
                           {isActuallyLogged ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
+                            <CheckCircle className="h-4 w-4 text-green-600" />
                           ) : (
                             <>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleLogRow(row)}
-                                disabled={isLogging || !row.selectedTicket}
-                                className="h-6 px-2 text-xs"
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  console.log('Log clicked:', row.id, row.selectedTicket);
+                                  if (!row.selectedTicket) {
+                                    toast.error('Wybierz ticket!');
+                                    return;
+                                  }
+                                  handleLogRow(row);
+                                }}
+                                disabled={isLogging}
+                                className="h-7 rounded bg-blue-600 px-3 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {isLogging ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Log'}
-                              </Button>
+                                {isLogging ? '...' : '▶ Log'}
+                              </button>
                               {row.isAggregated && (
                                 <Button
                                   size="sm"
@@ -873,7 +1327,7 @@ export function TimesheetTable({
                                   onClick={() => disaggregateRow(row.id)}
                                   className="h-6 w-6 p-0 text-purple-600"
                                 >
-                                  <Unlink className="w-3 h-3" />
+                                  <Unlink className="h-3 w-3" />
                                 </Button>
                               )}
                               {row.isManual && !row.isAggregated && (
@@ -883,7 +1337,7 @@ export function TimesheetTable({
                                   onClick={() => removeRow(row.id)}
                                   className="h-6 w-6 p-0"
                                 >
-                                  <Trash2 className="w-3 h-3 text-destructive" />
+                                  <Trash2 className="text-destructive h-3 w-3" />
                                 </Button>
                               )}
                             </>
@@ -893,19 +1347,136 @@ export function TimesheetTable({
                     </TableCell>
 
                     {/* W Tempo (hidden on mobile) */}
-                    <TableCell className="hidden md:table-cell px-2">
+                    <TableCell className="hidden px-2 md:table-cell">
                       {overlappingWorklogs.length === 0 ? (
                         <span className="text-muted-foreground text-xs">—</span>
                       ) : (
-                        <div className="text-xs space-y-1 max-h-[80px] overflow-y-auto">
-                          {overlappingWorklogs.slice(0, 2).map(w => (
-                            <div key={w.tempoWorklogId} className="p-1 bg-green-50 dark:bg-green-950/30 rounded text-[10px]">
-                              <span className="font-mono font-semibold text-green-700">{w.issue.key}</span>
-                              <span className="text-muted-foreground ml-1">{formatSecondsToTime(w.timeSpentSeconds)}</span>
+                        <div className="max-h-[120px] space-y-1 overflow-y-auto text-xs">
+                          {overlappingWorklogs.slice(0, 3).map(w => (
+                            <div
+                              key={w.tempoWorklogId}
+                              className="group rounded bg-green-50 p-1.5 text-[10px] dark:bg-green-950/30"
+                            >
+                              {editingWorklogId === w.tempoWorklogId ? (
+                                // Edit mode
+                                <div className="flex items-center gap-1">
+                                  <span className="font-mono font-semibold text-green-700">
+                                    {w.issue.key}
+                                  </span>
+                                  <EditableTimeInput
+                                    value={editingWorklogTime}
+                                    onChange={setEditingWorklogTime}
+                                    disabled={savingWorklogId === w.tempoWorklogId}
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0 text-green-600 hover:text-green-700"
+                                    disabled={savingWorklogId === w.tempoWorklogId}
+                                    onClick={async () => {
+                                      if (!onEditWorklog) return;
+                                      setSavingWorklogId(w.tempoWorklogId);
+                                      try {
+                                        await onEditWorklog(w, editingWorklogTime);
+                                        setEditingWorklogId(null);
+                                        toast.success('Worklog zaktualizowany');
+                                      } catch (err) {
+                                        toast.error('Błąd aktualizacji', {
+                                          description:
+                                            err instanceof Error ? err.message : 'Spróbuj ponownie',
+                                        });
+                                      } finally {
+                                        setSavingWorklogId(null);
+                                      }
+                                    }}
+                                  >
+                                    {savingWorklogId === w.tempoWorklogId ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <CheckCircle className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-muted-foreground hover:text-foreground h-5 w-5 p-0"
+                                    onClick={() => setEditingWorklogId(null)}
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                // View mode
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="font-mono font-semibold text-green-700">
+                                      {w.issue.key}
+                                    </span>
+                                    <span className="text-muted-foreground ml-1">
+                                      {formatSecondsToTime(w.timeSpentSeconds)}
+                                    </span>
+                                  </div>
+                                  <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                                    {onEditWorklog && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-blue-600 hover:text-blue-700"
+                                        onClick={() => {
+                                          setEditingWorklogId(w.tempoWorklogId);
+                                          setEditingWorklogTime(w.timeSpentSeconds);
+                                        }}
+                                        title="Edytuj czas"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    {onDeleteWorklog && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-red-500 hover:text-red-600"
+                                        disabled={deletingWorklogId === w.tempoWorklogId}
+                                        onClick={async () => {
+                                          if (
+                                            !confirm(
+                                              `Usunąć worklog ${w.issue.key} (${formatSecondsToTime(w.timeSpentSeconds)})?`
+                                            )
+                                          )
+                                            return;
+                                          setDeletingWorklogId(w.tempoWorklogId);
+                                          try {
+                                            await onDeleteWorklog(w.tempoWorklogId);
+                                            toast.success('Worklog usunięty');
+                                          } catch (err) {
+                                            toast.error('Błąd usuwania', {
+                                              description:
+                                                err instanceof Error
+                                                  ? err.message
+                                                  : 'Spróbuj ponownie',
+                                            });
+                                          } finally {
+                                            setDeletingWorklogId(null);
+                                          }
+                                        }}
+                                        title="Usuń worklog"
+                                      >
+                                        {deletingWorklogId === w.tempoWorklogId ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="h-3 w-3" />
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ))}
-                          {overlappingWorklogs.length > 2 && (
-                            <span className="text-muted-foreground">+{overlappingWorklogs.length - 2} więcej</span>
+                          {overlappingWorklogs.length > 3 && (
+                            <span className="text-muted-foreground">
+                              +{overlappingWorklogs.length - 3} więcej
+                            </span>
                           )}
                         </div>
                       )}
@@ -914,23 +1485,29 @@ export function TimesheetTable({
 
                   {/* Rozwinięte szczegóły agregacji */}
                   {row.isAggregated && isExpanded && row.aggregatedFrom && (
-                    <TableRow key={`${row.id}-details`} className="bg-purple-50/50 dark:bg-purple-950/10">
-                      <TableCell colSpan={8} className="py-2 px-3">
-                        <div className="text-xs space-y-2">
+                    <TableRow
+                      key={`${row.id}-details`}
+                      className="bg-purple-50/50 dark:bg-purple-950/10"
+                    >
+                      <TableCell colSpan={8} className="px-3 py-2">
+                        <div className="space-y-2 text-xs">
                           {/* Lista aktywności */}
                           <div className="grid gap-1">
                             {row.aggregatedFrom.map((item, idx) => (
                               <div
                                 key={idx}
-                                className="flex items-center gap-2 p-1.5 bg-white dark:bg-gray-800 rounded border border-purple-200 dark:border-purple-800"
+                                className="flex items-center gap-2 rounded border border-purple-200 bg-white p-1.5 dark:border-purple-800 dark:bg-gray-800"
                               >
-                                <span className="font-mono text-purple-600 whitespace-nowrap text-[10px]">
+                                <span className="whitespace-nowrap font-mono text-[10px] text-purple-600">
                                   {item.startTime}-{item.endTime}
                                 </span>
-                                <Badge variant="outline" className="text-[10px] shrink-0 px-1">
+                                <Badge variant="outline" className="shrink-0 px-1 text-[10px]">
                                   {item.app}
                                 </Badge>
-                                <span className="flex-1 truncate text-muted-foreground text-[10px]" title={item.title}>
+                                <span
+                                  className="text-muted-foreground flex-1 truncate text-[10px]"
+                                  title={item.title}
+                                >
                                   {item.title}
                                 </span>
                                 <span className="font-mono text-xs font-semibold text-purple-700">
@@ -940,9 +1517,11 @@ export function TimesheetTable({
                             ))}
                           </div>
                           {/* Footer */}
-                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <div className="text-muted-foreground flex items-center justify-between text-[10px]">
                             <span>{row.aggregatedFrom.length} aktywności</span>
-                            <span className="font-mono font-bold text-purple-700">= {formatSecondsToTime(row.duration)}</span>
+                            <span className="font-mono font-bold text-purple-700">
+                              = {formatSecondsToTime(row.duration)}
+                            </span>
                           </div>
                         </div>
                       </TableCell>
@@ -958,7 +1537,7 @@ export function TimesheetTable({
       {/* Add row button */}
       <div className="flex justify-center">
         <Button variant="outline" onClick={addRow}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="mr-2 h-4 w-4" />
           Dodaj wiersz
         </Button>
       </div>

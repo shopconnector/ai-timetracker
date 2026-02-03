@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWorklog, getWorklogsForDate, roundToMinutes, COMMON_TICKETS, Worklog } from '@/lib/tempo';
-import { getIssueId, getCurrentUser, getIssueKeysByIds } from '@/lib/jira';
+import {
+  createWorklog,
+  getWorklogsForDate,
+  roundToMinutes,
+  COMMON_TICKETS,
+  Worklog,
+} from '@/lib/tempo';
+import { getIssueId, getCurrentUser, getIssueKeysByIds, canLogTimeToIssue } from '@/lib/jira';
 
 // GET - fetch worklogs for a date
 export async function GET(request: NextRequest) {
@@ -8,10 +14,7 @@ export async function GET(request: NextRequest) {
   const date = searchParams.get('date');
 
   if (!date) {
-    return NextResponse.json(
-      { error: 'date parameter required (YYYY-MM-DD)' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'date parameter required (YYYY-MM-DD)' }, { status: 400 });
   }
 
   try {
@@ -23,22 +26,19 @@ export async function GET(request: NextRequest) {
     const allWorklogs = await getWorklogsForDate(date);
 
     // Filter to only my worklogs
-    const myWorklogs = allWorklogs.filter(
-      (w) => w.author?.accountId === myAccountId
-    );
+    const myWorklogs = allWorklogs.filter(w => w.author?.accountId === myAccountId);
 
     // Collect issue IDs that need keys (Tempo returns issue.id but not issue.key)
     const issueIds = myWorklogs
-      .map((w) => w.issue?.id)
+      .map(w => w.issue?.id)
       .filter((id): id is number => id !== undefined && id !== null);
 
     // Fetch issue keys from Jira
-    const issueKeyMap = issueIds.length > 0
-      ? await getIssueKeysByIds(issueIds)
-      : new Map<string, string>();
+    const issueKeyMap =
+      issueIds.length > 0 ? await getIssueKeysByIds(issueIds) : new Map<string, string>();
 
     // Enrich worklogs with issue keys
-    const enrichedWorklogs: Worklog[] = myWorklogs.map((w) => {
+    const enrichedWorklogs: Worklog[] = myWorklogs.map(w => {
       const issueId = w.issue?.id;
       const issueKey = issueId
         ? issueKeyMap.get(String(issueId)) || w.issue.key || `UNKNOWN-${issueId}`
@@ -61,14 +61,11 @@ export async function GET(request: NextRequest) {
       totalSeconds,
       totalFormatted: `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`,
       availableTickets: COMMON_TICKETS,
-      currentUserAccountId: myAccountId
+      currentUserAccountId: myAccountId,
     });
   } catch (error) {
     console.error('Error fetching worklogs:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch worklogs from Tempo' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch worklogs from Tempo' }, { status: 500 });
   }
 }
 
@@ -80,13 +77,13 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // Default Billing Account mapping by project prefix
 const PROJECT_BILLING_ACCOUNT: Record<string, string> = {
-  'BCI': 'BEE-INTERNAL',      // Beecommerce Internal
-  'AR': 'BEE-INTERNAL',       // AI Research
-  'BSL': 'BEE-INTERNAL',      // Baselinker
-  'AGRO': 'AGROSIMEXMARKETING', // Agrosimex
-  'WOSH': 'WOSHWMS',          // Wosh WMS
-  'SAND': 'SANDOZ',           // Sandoz
-  'CEPD': 'CEPDANALYT',       // CEPD Analytics
+  BCI: 'BEE-INTERNAL', // Beecommerce Internal
+  AR: 'BEE-INTERNAL', // AI Research
+  BSL: 'BEE-INTERNAL', // Baselinker
+  AGRO: 'AGROSIMEXMARKETING', // Agrosimex
+  WOSH: 'WOSHWMS', // Wosh WMS
+  SAND: 'SANDOZ', // Sandoz
+  CEPD: 'CEPDANALYT', // CEPD Analytics
 };
 
 // Get billing account for a project
@@ -101,14 +98,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       issueKey,
-      issueId,  // Tempo API v4 requires numeric issueId
+      issueId, // Tempo API v4 requires numeric issueId
       timeSpentSeconds,
       startDate,
       startTime,
       description,
       billableSeconds,
       attributes,
-      authorAccountId
+      authorAccountId,
     } = body;
 
     // Basic required fields check
@@ -140,6 +137,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Nieprawidłowy format daty: ${startDate}. Oczekiwany format: YYYY-MM-DD` },
         { status: 400 }
+      );
+    }
+
+    // 🚫 KAGANIEC: Sprawdź czy można logować do tego typu issue
+    const canLog = await canLogTimeToIssue(issueKey);
+    if (!canLog.allowed) {
+      console.warn(`KAGANIEC blocked worklog to ${issueKey}: ${canLog.reason}`);
+      return NextResponse.json(
+        {
+          error: canLog.reason,
+          issueType: canLog.issueType,
+          subtasks: canLog.subtasks,
+          suggestion:
+            canLog.subtasks && canLog.subtasks.length > 0
+              ? `Użyj zamiast tego: ${canLog.subtasks.map(s => s.key).join(', ')}`
+              : 'Ten ticket nie ma subtasków - utwórz je przed logowaniem czasu.',
+        },
+        { status: 403 }
       );
     }
 
@@ -184,7 +199,7 @@ export async function POST(request: NextRequest) {
       const billingAccount = getBillingAccountForProject(issueKey);
       resolvedAttributes = [
         { key: '_Actiontype_', value: 'standarddevelopment' },
-        { key: '_BillingAccount_', value: billingAccount }
+        { key: '_BillingAccount_', value: billingAccount },
       ];
       console.log(`Using default Billing Account: ${billingAccount} for ${issueKey}`);
     } else {
@@ -196,7 +211,7 @@ export async function POST(request: NextRequest) {
         const billingAccount = getBillingAccountForProject(issueKey);
         resolvedAttributes = [
           ...resolvedAttributes,
-          { key: '_BillingAccount_', value: billingAccount }
+          { key: '_BillingAccount_', value: billingAccount },
         ];
         console.log(`Added default Billing Account: ${billingAccount} for ${issueKey}`);
       }
@@ -210,16 +225,14 @@ export async function POST(request: NextRequest) {
       startTime: startTime || '09:00:00',
       description,
       authorAccountId: resolvedAuthorAccountId,
-      billableSeconds: billableSeconds !== undefined
-        ? roundToMinutes(billableSeconds)
-        : undefined,
-      attributes: resolvedAttributes
+      billableSeconds: billableSeconds !== undefined ? roundToMinutes(billableSeconds) : undefined,
+      attributes: resolvedAttributes,
     });
 
     return NextResponse.json({
       success: true,
       worklog,
-      message: `Logged ${Math.floor(roundedSeconds / 60)} minutes to ${issueKey}`
+      message: `Logged ${Math.floor(roundedSeconds / 60)} minutes to ${issueKey}`,
     });
   } catch (error) {
     console.error('Error creating worklog:', error);

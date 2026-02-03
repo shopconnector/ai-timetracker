@@ -8,7 +8,7 @@ import {
   getFilteredIssues,
   groupIssuesByParent,
   JiraIssue,
-  IssueFilter
+  IssueFilter,
 } from '@/lib/jira';
 
 // Cache for current user (to avoid repeated API calls)
@@ -29,17 +29,24 @@ function formatIssue(issue: JiraIssue) {
     type: issue.fields.issuetype?.name,
     priority: issue.fields.priority?.name,
     updated: issue.fields.updated,
+    updatedAt: issue.fields.updated, // Alias for enricher
+    // Project info
+    project: issue.fields.project?.key || null,
+    projectName: issue.fields.project?.name || null,
     // Hierarchia
     isSubtask: issue.fields.issuetype?.subtask === true,
     parentKey: issue.fields.parent?.key || null,
     parentSummary: issue.fields.parent?.fields?.summary || null,
-    subtaskCount: issue.fields.subtasks?.length || 0
+    subtaskCount: issue.fields.subtasks?.length || 0,
+    // Epic (if available - JIRA stores this in customfield or parent for stories)
+    epicKey: ((issue.fields as Record<string, unknown>).epicKey as string | null) || null,
+    epicName: ((issue.fields as Record<string, unknown>).epicName as string | null) || null,
   };
 }
 
 async function getAccountId(): Promise<string> {
   const now = Date.now();
-  if (cachedAccountId && (now - cacheTime) < CACHE_TTL) {
+  if (cachedAccountId && now - cacheTime < CACHE_TTL) {
     return cachedAccountId;
   }
 
@@ -73,12 +80,12 @@ export async function GET(request: NextRequest) {
     } else if (loadAll || type === 'projects') {
       // Load ALL issues from all accessible projects
       const now = Date.now();
-      if (cachedAllIssues && (now - allIssuesCacheTime) < ALL_ISSUES_CACHE_TTL) {
+      if (cachedAllIssues && now - allIssuesCacheTime < ALL_ISSUES_CACHE_TTL) {
         return NextResponse.json({
           issues: cachedAllIssues,
           total: cachedAllIssues.length,
           accountId,
-          cached: true
+          cached: true,
         });
       }
 
@@ -93,7 +100,7 @@ export async function GET(request: NextRequest) {
         issues: formatted,
         total: formatted.length,
         accountId,
-        cached: false
+        cached: false,
       });
     } else if (type === 'assigned') {
       const result = await getMyRelevantIssues(accountId);
@@ -119,17 +126,17 @@ export async function GET(request: NextRequest) {
           parentKey: g.parentKey,
           parentSummary: g.parentSummary,
           parentStatus: g.parentStatus,
-          issues: g.issues.map(formatIssue)
+          issues: g.issues.map(formatIssue),
         })),
         total: formatted.length,
-        accountId
+        accountId,
       });
     }
 
     return NextResponse.json({
       issues: formatted,
       total: formatted.length,
-      accountId
+      accountId,
     });
   } catch (error) {
     console.error('Error fetching my issues:', error);

@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWindowEvents, extractProjectInfo, extractMeetingInfo, extractCommunicationInfo, extractTerminalInfo, categorizeActivity, ActivityCategory } from '@/lib/activitywatch';
+import {
+  getWindowEvents,
+  extractProjectInfo,
+  extractMeetingInfo,
+  extractCommunicationInfo,
+  extractTerminalInfo,
+  categorizeActivity,
+  ActivityCategory,
+} from '@/lib/activitywatch';
 import { getWorklogs } from '@/lib/tempo';
+import {
+  getTempoCalendarEventsForDate,
+  CalendarEvent as TempoCalendarEvent,
+} from '@/lib/tempo-calendar';
+import { getJiraCalendarEventsForDate, JiraCalendarEvent } from '@/lib/jira';
+import {
+  getGoogleCalendarEventsForDate,
+  GoogleCalendarEvent,
+  isGoogleCalendarConfigured,
+} from '@/lib/google-calendar';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 const MIN_DURATION_MINUTES = 5; // Activities < 5 min are "other"
@@ -10,8 +28,15 @@ const BROWSER_APPS = ['Chrome', 'Google Chrome', 'Safari', 'Firefox', 'Edge', 'A
 
 // System apps filtered out
 const SYSTEM_APPS = [
-  'loginwindow', 'Spotlight', 'Dock', 'SystemUIServer', 'Finder',
-  'dwm.exe', 'explorer.exe', 'ShellExperienceHost', 'SearchApp'
+  'loginwindow',
+  'Spotlight',
+  'Dock',
+  'SystemUIServer',
+  'Finder',
+  'dwm.exe',
+  'explorer.exe',
+  'ShellExperienceHost',
+  'SearchApp',
 ];
 
 export interface TimeBlock {
@@ -133,7 +158,12 @@ async function getActivitiesForDate(date: string): Promise<TimeBlock[]> {
         commInfo.isCommunication
       );
 
-      const hasProject = !!(projectInfo.project || terminalInfo.project || meetingInfo.isMeeting || commInfo.isCommunication);
+      const hasProject = !!(
+        projectInfo.project ||
+        terminalInfo.project ||
+        meetingInfo.isMeeting ||
+        commInfo.isCommunication
+      );
 
       const isOther = shouldBeOther(app, title, durationMinutes, category, hasProject);
 
@@ -143,12 +173,17 @@ async function getActivitiesForDate(date: string): Promise<TimeBlock[]> {
         startTime: formatTimeFromDate(startTime),
         endTime: formatTimeFromDate(endTime),
         durationMinutes,
-        title: projectInfo.project || terminalInfo.project || meetingInfo.meetingTitle || commInfo.channel || title,
+        title:
+          projectInfo.project ||
+          terminalInfo.project ||
+          meetingInfo.meetingTitle ||
+          commInfo.channel ||
+          title,
         app,
         category: isOther ? 'other' : category,
         isLogged: false,
         canLogToTempo: !isOther,
-        project: projectInfo.project || terminalInfo.project
+        project: projectInfo.project || terminalInfo.project,
       };
     })
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -161,38 +196,147 @@ async function getWorklogsForDate(date: string): Promise<TimeBlock[]> {
       (w: { author?: { accountId?: string } }) => w.author?.accountId === MY_ACCOUNT
     );
 
-    return myWorklogs.map((w: {
-      tempoWorklogId: number;
-      issue?: { key?: string };
-      timeSpentSeconds: number;
-      startTime?: string;
-      description?: string;
-    }) => {
-      const startTimeParts = (w.startTime || '09:00').split(':');
-      const startHour = parseInt(startTimeParts[0], 10);
-      const startMin = parseInt(startTimeParts[1] || '0', 10);
-      const durationMinutes = Math.round(w.timeSpentSeconds / 60);
+    return myWorklogs
+      .map(
+        (w: {
+          tempoWorklogId: number;
+          issue?: { key?: string };
+          timeSpentSeconds: number;
+          startTime?: string;
+          description?: string;
+        }) => {
+          const startTimeParts = (w.startTime || '09:00').split(':');
+          const startHour = parseInt(startTimeParts[0], 10);
+          const startMin = parseInt(startTimeParts[1] || '0', 10);
+          const durationMinutes = Math.round(w.timeSpentSeconds / 60);
 
-      const endTotalMinutes = startHour * 60 + startMin + durationMinutes;
-      const endHour = Math.floor(endTotalMinutes / 60);
-      const endMin = endTotalMinutes % 60;
+          const endTotalMinutes = startHour * 60 + startMin + durationMinutes;
+          const endHour = Math.floor(endTotalMinutes / 60);
+          const endMin = endTotalMinutes % 60;
 
-      return {
-        id: `tempo-${w.tempoWorklogId}`,
-        source: 'tempo' as const,
-        startTime: w.startTime || '09:00',
-        endTime: `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`,
-        durationMinutes,
-        title: w.description || w.issue?.key || 'Worklog',
-        issueKey: w.issue?.key,
-        tempoWorklogId: w.tempoWorklogId,
-        category: 'coding' as ActivityCategory,
-        isLogged: true,
-        canLogToTempo: false // Already logged
-      };
-    }).sort((a: TimeBlock, b: TimeBlock) => a.startTime.localeCompare(b.startTime));
+          return {
+            id: `tempo-${w.tempoWorklogId}`,
+            source: 'tempo' as const,
+            startTime: w.startTime || '09:00',
+            endTime: `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`,
+            durationMinutes,
+            title: w.description || w.issue?.key || 'Worklog',
+            issueKey: w.issue?.key,
+            tempoWorklogId: w.tempoWorklogId,
+            category: 'coding' as ActivityCategory,
+            isLogged: true,
+            canLogToTempo: false, // Already logged
+          };
+        }
+      )
+      .sort((a: TimeBlock, b: TimeBlock) => a.startTime.localeCompare(b.startTime));
   } catch (error) {
     console.error('Error fetching worklogs:', error);
+    return [];
+  }
+}
+
+// Get calendar events from all sources for a date
+async function getCalendarEventsForDate(date: string): Promise<TimeBlock[]> {
+  const events: TimeBlock[] = [];
+
+  try {
+    // Fetch from all calendar sources in parallel
+    const [tempoEvents, jiraEvents, googleEvents] = await Promise.all([
+      getTempoCalendarEventsForDate(date).catch(err => {
+        console.warn('Error fetching Tempo calendar:', err);
+        return [] as TempoCalendarEvent[];
+      }),
+      getJiraCalendarEventsForDate(date, MY_ACCOUNT || undefined).catch(err => {
+        console.warn('Error fetching JIRA calendar:', err);
+        return [] as JiraCalendarEvent[];
+      }),
+      isGoogleCalendarConfigured()
+        ? getGoogleCalendarEventsForDate(date).catch(err => {
+            console.warn('Error fetching Google calendar:', err);
+            return [] as GoogleCalendarEvent[];
+          })
+        : Promise.resolve([] as GoogleCalendarEvent[]),
+    ]);
+
+    // Convert Tempo calendar events to TimeBlocks
+    for (const event of tempoEvents) {
+      events.push({
+        id: event.id,
+        source: 'calendar' as const,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        durationMinutes: event.durationMinutes,
+        title: event.title,
+        description: event.description,
+        issueKey: event.issueKey,
+        calendarId: event.id,
+        category: 'coding' as ActivityCategory, // Tempo plans are usually work items
+        isLogged: false,
+        canLogToTempo: true, // Can be logged
+        project: event.projectKey,
+      });
+    }
+
+    // Convert JIRA calendar events to TimeBlocks
+    for (const event of jiraEvents) {
+      events.push({
+        id: event.id,
+        source: 'calendar' as const,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        durationMinutes: event.durationMinutes,
+        title: event.title,
+        description: event.description,
+        issueKey: event.issueKey,
+        calendarId: event.id,
+        category:
+          event.source === 'jira-sprint'
+            ? ('meeting' as ActivityCategory)
+            : ('other' as ActivityCategory),
+        isLogged: false,
+        canLogToTempo: !!event.issueKey, // Can log if has issue key
+        project: event.projectKey,
+      });
+    }
+
+    // Convert Google Calendar events to TimeBlocks
+    for (const event of googleEvents) {
+      // Determine category based on event content
+      const titleLower = event.title.toLowerCase();
+      let category: ActivityCategory | 'other' = 'other';
+      if (
+        titleLower.includes('meeting') ||
+        titleLower.includes('call') ||
+        titleLower.includes('sync') ||
+        titleLower.includes('standup')
+      ) {
+        category = 'meeting';
+      } else if (titleLower.includes('review') || titleLower.includes('code')) {
+        category = 'coding';
+      }
+
+      events.push({
+        id: event.id,
+        source: 'calendar' as const,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        durationMinutes: event.durationMinutes,
+        title: event.title,
+        description: event.description,
+        calendarId: event.id,
+        category,
+        isLogged: false,
+        canLogToTempo: category === 'meeting', // Meetings can be logged
+      });
+    }
+
+    // Sort by start time
+    events.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return events;
+  } catch (error) {
+    console.error('Error fetching calendar events:', error);
     return [];
   }
 }
@@ -239,9 +383,10 @@ export async function GET(request: NextRequest) {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
 
-      const [activities, worklogs] = await Promise.all([
+      const [activities, worklogs, calendarEvents] = await Promise.all([
         getActivitiesForDate(dateStr),
-        getWorklogsForDate(dateStr)
+        getWorklogsForDate(dateStr),
+        getCalendarEventsForDate(dateStr),
       ]);
 
       const awTotalMinutes = activities
@@ -256,17 +401,17 @@ export async function GET(request: NextRequest) {
         isWeekend: isWeekend(d),
         activities,
         worklogs,
-        calendarEvents: [], // TODO: Google Calendar integration
+        calendarEvents,
         awTotalMinutes,
         tempoTotalMinutes,
-        targetMinutes: isWeekend(d) ? 0 : 480 // 8h for weekdays
+        targetMinutes: isWeekend(d) ? 0 : 480, // 8h for weekdays
       });
     }
 
     const weekData: WeekData = {
       startDate,
       endDate,
-      days
+      days,
     };
 
     return NextResponse.json(weekData);

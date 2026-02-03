@@ -5,6 +5,7 @@ import {
   BarChart3,
   Settings,
   Plug,
+  GitCompare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -42,6 +43,11 @@ export const navigation: NavSection[] = [
         title: 'Analytics',
         href: '/analytics',
         icon: BarChart3,
+      },
+      {
+        title: 'Compare',
+        href: '/compare',
+        icon: GitCompare,
       },
     ],
   },
