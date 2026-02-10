@@ -23,6 +23,7 @@ import {
   Clock,
   AlertTriangle,
   FileText,
+  Wand2,
 } from 'lucide-react';
 
 interface JiraIssueItem {
@@ -118,6 +119,13 @@ export default function DailyLoggerSection({ issues }: Props) {
   const [logResults, setLogResults] = useState<LogResult[]>([]);
   const [alreadyLogged, setAlreadyLogged] = useState<TempoWorklog[]>([]);
   const [alreadyLoggedTotal, setAlreadyLoggedTotal] = useState(0);
+  const [startHour, setStartHour] = useState('08:00');
+  const [endHour, setEndHour] = useState('16:00');
+  const [generating, setGenerating] = useState(false);
+  const [generateInfo, setGenerateInfo] = useState<{
+    activitiesCount: number;
+    totalMinutes: number;
+  } | null>(null);
 
   // Fetch existing worklogs for date
   const fetchExistingWorklogs = useCallback(async (d: string) => {
@@ -132,6 +140,43 @@ export default function DailyLoggerSection({ issues }: Props) {
       // ignore
     }
   }, []);
+
+  // Generate note from ActivityWatch data
+  const handleGenerateNote = async () => {
+    setGenerating(true);
+    setGenerateInfo(null);
+
+    try {
+      const res = await fetch('/timetracker/api/llm/generate-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, startHour, endHour }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const note = data.note || '';
+
+        if (note) {
+          // Append to existing notes or set new
+          setRawNotes(prev => (prev.trim() ? prev.trim() + '\n\n' + note : note));
+          setGenerateInfo({
+            activitiesCount: data.activitiesCount,
+            totalMinutes: data.totalMinutes,
+          });
+        } else {
+          alert(data.message || 'Brak aktywnosci w podanym zakresie');
+        }
+      } else {
+        const err = await res.json();
+        alert(`Blad: ${err.error || 'Nie udalo sie wygenerowac notatki'}`);
+      }
+    } catch (error) {
+      alert(`Blad: ${error instanceof Error ? error.message : 'Nieznany blad'}`);
+    }
+
+    setGenerating(false);
+  };
 
   // Parse notes with AI
   const handleParse = async () => {
@@ -294,7 +339,7 @@ export default function DailyLoggerSection({ issues }: Props) {
             <FileText className="h-5 w-5 text-indigo-500" />
             <CardTitle className="text-lg">Dzienny Logger</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm text-gray-500">Data:</label>
             <Input
               type="date"
@@ -302,12 +347,50 @@ export default function DailyLoggerSection({ issues }: Props) {
               onChange={e => setDate(e.target.value)}
               className="w-40"
             />
+            <label className="text-sm text-gray-500">Od:</label>
+            <Input
+              type="time"
+              value={startHour}
+              onChange={e => setStartHour(e.target.value)}
+              className="w-28"
+            />
+            <label className="text-sm text-gray-500">Do:</label>
+            <Input
+              type="time"
+              value={endHour}
+              onChange={e => setEndHour(e.target.value)}
+              className="w-28"
+            />
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Textarea for raw notes */}
+        {/* Generate from ActivityWatch + Textarea */}
         <div>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleGenerateNote}
+              disabled={generating}
+            >
+              {generating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="mr-2 h-4 w-4" />
+              )}
+              Zaproponuj notatke z TimeTrackera
+            </Button>
+            {generating && (
+              <span className="text-sm text-gray-500">Pobieranie danych z ActivityWatch...</span>
+            )}
+            {generateInfo && (
+              <Badge variant="secondary" className="text-xs">
+                Wygenerowano z {generateInfo.activitiesCount} aktywnosci (
+                {Math.floor(generateInfo.totalMinutes / 60)}h{' '}
+                {generateInfo.totalMinutes % 60}m)
+              </Badge>
+            )}
+          </div>
           <Textarea
             placeholder={`Wklej notatki z dnia pracy...\nnp. 09:30-10:30 research Mike n8n\n    11:00-11:30 call Natalia claude setup\n    11:30-12:30 call z Piotkiem headlamp k8s`}
             value={rawNotes}

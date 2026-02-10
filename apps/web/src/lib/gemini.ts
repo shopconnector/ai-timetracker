@@ -7,6 +7,7 @@ export interface GeminiConfig {
   model: string;
   temperature?: number;
   maxTokens?: number;
+  responseMimeType?: string;
 }
 
 const DEFAULT_GEMINI_CONFIG: GeminiConfig = {
@@ -36,7 +37,7 @@ export async function callGemini(prompt: string, config?: Partial<GeminiConfig>)
       generationConfig: {
         temperature: cfg.temperature ?? 0.3,
         maxOutputTokens: cfg.maxTokens ?? 2000,
-        responseMimeType: 'application/json',
+        responseMimeType: cfg.responseMimeType ?? 'application/json',
       },
     }),
   });
