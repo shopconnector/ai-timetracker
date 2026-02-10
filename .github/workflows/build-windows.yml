@@ -21,10 +21,15 @@ env:
 jobs:
   build-windows:
     runs-on: windows-latest
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -314,19 +319,34 @@ jobs:
           
           Write-Host "Updated installer version to: $Version"
 
+      - name: Enable long paths
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+          Write-Host "Long paths enabled"
+
       - name: Build installer
         shell: pwsh
         run: |
           $InnoPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          
-          # Run from repo root so paths in .iss are relative
+
+          # Map repo to short drive letter to avoid MAX_PATH issues with pnpm paths
+          subst B: $PWD
+          Push-Location B:\
+
           & $InnoPath "installer\timetracker.iss"
-          
+
           if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            subst B: /d
             Write-Error "Inno Setup failed"
             exit 1
           }
-          
+
+          Pop-Location
+          subst B: /d
+
           # Move output to dist
           Move-Item "installer\output\*.exe" "dist\"
           Write-Host "Installer created"
