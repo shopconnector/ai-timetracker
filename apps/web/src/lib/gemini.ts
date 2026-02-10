@@ -38,6 +38,7 @@ export async function callGemini(prompt: string, config?: Partial<GeminiConfig>)
         temperature: cfg.temperature ?? 0.3,
         maxOutputTokens: cfg.maxTokens ?? 2000,
         responseMimeType: cfg.responseMimeType ?? 'application/json',
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });

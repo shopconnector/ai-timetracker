@@ -285,16 +285,19 @@ export default function DailyLoggerSection({ issues }: Props) {
       }
 
       try {
+        const requestBody = {
+          issueKey: entry.suggestedTicket,
+          timeSpentSeconds: entry.durationMinutes * 60,
+          startDate: date,
+          startTime: `${entry.startTime}:00`,
+          description: entry.description,
+        };
+        console.log(`[DailyLogger] Logging entry ${i}:`, requestBody);
+
         const res = await fetch('/timetracker/api/tempo/worklogs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            issueKey: entry.suggestedTicket,
-            timeSpentSeconds: entry.durationMinutes * 60,
-            startDate: date,
-            startTime: `${entry.startTime}:00`,
-            description: entry.description,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (res.ok) {
@@ -304,8 +307,10 @@ export default function DailyLoggerSection({ issues }: Props) {
             message: `${entry.durationMinutes}m zalogowano`,
           });
         } else {
-          const err = await res.json();
-          results.push({ index: i, success: false, message: err.error || 'Blad logowania' });
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          const errorMsg = err.error || `Blad logowania (HTTP ${res.status})`;
+          console.error(`[DailyLogger] Error logging entry ${i}:`, errorMsg);
+          results.push({ index: i, success: false, message: errorMsg });
         }
       } catch (error) {
         results.push({

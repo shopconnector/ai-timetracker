@@ -24,27 +24,123 @@ function filterByTimeRange(
   });
 }
 
-// Format activities for prompt
-function formatActivitiesForPrompt(activities: GroupedActivity[]): string {
-  return activities
-    .sort((a, b) => new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime())
-    .map(a => {
-      const first = new Date(a.firstSeen);
-      const last = new Date(a.lastSeen);
-      const from = `${String(first.getHours()).padStart(2, '0')}:${String(first.getMinutes()).padStart(2, '0')}`;
-      const to = `${String(last.getHours()).padStart(2, '0')}:${String(last.getMinutes()).padStart(2, '0')}`;
-      const mins = Math.round(a.totalSeconds / 60);
+interface AggregatedSlot {
+  startTime: Date;
+  endTime: Date;
+  totalSeconds: number;
+  app: string;
+  description: string; // compact description
+  project?: string;
+  gitBranch?: string;
+  isMeeting?: boolean;
+  isCommunication?: boolean;
+}
 
-      const parts = [`${from}-${to} (${mins}min)`, `app: ${a.app}`, `title: ${a.title}`];
-      if (a.category) parts.push(`category: ${a.category}`);
-      if (a.project) parts.push(`project: ${a.project}`);
-      if (a.gitBranch) parts.push(`branch: ${a.gitBranch}`);
-      if (a.isMeeting) parts.push(`meeting: ${a.meetingPlatform || 'yes'}`);
-      if (a.isCommunication) parts.push(`communication: ${a.channel || a.app}`);
+function fmt(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
-      return parts.join(' | ');
-    })
-    .join('\n');
+// Pre-aggregate activities to reduce token count
+function aggregateActivities(activities: GroupedActivity[]): AggregatedSlot[] {
+  const sorted = activities
+    .filter(a => a.totalSeconds >= 120) // drop < 2min
+    .sort((a, b) => new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime());
+
+  if (sorted.length === 0) return [];
+
+  // Group short communication into one entry
+  const commActivities = sorted.filter(a => a.isCommunication);
+  const nonCommActivities = sorted.filter(a => !a.isCommunication);
+  const totalCommSeconds = commActivities.reduce((s, a) => s + a.totalSeconds, 0);
+
+  const slots: AggregatedSlot[] = [];
+
+  // Merge adjacent non-comm activities with same project or app+category
+  for (const a of nonCommActivities) {
+    const first = new Date(a.firstSeen);
+    const last = new Date(a.lastSeen);
+    const prev = slots[slots.length - 1];
+
+    const canMerge = prev && !a.isMeeting && !prev.isMeeting &&
+      (first.getTime() - prev.endTime.getTime()) < 15 * 60 * 1000 && // gap < 15min
+      ((a.project && a.project === prev.project) ||
+       (!a.project && a.app === prev.app));
+
+    if (canMerge) {
+      if (last > prev.endTime) prev.endTime = last;
+      prev.totalSeconds += a.totalSeconds;
+      // Append branch info if new
+      if (a.gitBranch && !prev.gitBranch) prev.gitBranch = a.gitBranch;
+    } else {
+      const desc = a.isMeeting
+        ? (a.meetingPlatform || a.app)
+        : a.project
+          ? a.project
+          : a.title.substring(0, 50);
+
+      slots.push({
+        startTime: first,
+        endTime: last,
+        totalSeconds: a.totalSeconds,
+        app: a.app,
+        description: desc,
+        project: a.project,
+        gitBranch: a.gitBranch,
+        isMeeting: a.isMeeting,
+        isCommunication: false,
+      });
+    }
+  }
+
+  // Add single comm entry if total > 0
+  if (totalCommSeconds > 0 && commActivities.length > 0) {
+    const commApps = [...new Set(commActivities.map(a => a.app))];
+    const commFirst = new Date(commActivities[0].firstSeen);
+    const commLast = new Date(commActivities[commActivities.length - 1].lastSeen);
+
+    // If total comm < 5 min, collapse to one line
+    if (totalCommSeconds < 300) {
+      slots.push({
+        startTime: commFirst,
+        endTime: commLast,
+        totalSeconds: totalCommSeconds,
+        app: commApps.join('/'),
+        description: `${commApps.join('/')} (krotko)`,
+        isCommunication: true,
+      });
+    } else {
+      // Add individual comm entries
+      for (const a of commActivities) {
+        slots.push({
+          startTime: new Date(a.firstSeen),
+          endTime: new Date(a.lastSeen),
+          totalSeconds: a.totalSeconds,
+          app: a.app,
+          description: a.channel || a.app,
+          isCommunication: true,
+        });
+      }
+    }
+  }
+
+  // Sort by start time
+  slots.sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+  return slots;
+}
+
+// Format aggregated slots as compact text for prompt
+function formatCompact(slots: AggregatedSlot[]): string {
+  return slots.map(s => {
+    const mins = Math.round(s.totalSeconds / 60);
+    let line = `${fmt(s.startTime)}-${fmt(s.endTime)} ${mins}m ${s.app}`;
+    if (s.description && s.description !== s.app) {
+      line += `: ${s.description}`;
+    }
+    if (s.gitBranch) line += ` (${s.gitBranch})`;
+    if (s.isMeeting) line += ' [spotkanie]';
+    return line;
+  }).join('\n');
 }
 
 // Fallback: generate plain text note without AI
@@ -116,29 +212,27 @@ export async function POST(request: Request) {
       activities.reduce((sum, a) => sum + a.totalSeconds, 0) / 60
     );
 
-    // 4. Try Gemini first
+    // 4. Pre-aggregate activities to reduce token count
+    let aggregated = aggregateActivities(activities);
+    const MAX_SLOTS = 30;
+    let truncated = false;
+    if (aggregated.length > MAX_SLOTS) {
+      aggregated = aggregated.slice(0, MAX_SLOTS);
+      truncated = true;
+    }
+
+    console.log(`[generate-note] ${activities.length} raw activities -> ${aggregated.length} aggregated slots`);
+
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
-    const activitiesText = formatActivitiesForPrompt(activities);
+    const activitiesText = formatCompact(aggregated);
 
-    const prompt = `Jestes asystentem generujacym notatki z dnia pracy.
-Na podstawie danych z ActivityWatch wygeneruj zwiezla notatke.
-
-FORMAT (kazda linia):
-HH:MM-HH:MM krotki opis aktywnosci
-
-ZASADY:
-- Grupuj podobne aktywnosci (np. 30min w VS Code na tym samym projekcie = jeden wpis)
-- Spotkania (Teams/Zoom/Meet) zapisz jako "spotkanie [platforma]"
-- Komunikacja (Slack/email) grupuj jesli krotka (<5 min)
-- Ignoruj bardzo krotkie aktywnosci (<2 min)
-- Pisz krotko, po polsku
-- Uzyj nazw projektow/branchy jesli dostepne
-- NIE dodawaj zadnych naglowkow ani komentarzy, tylko linie HH:MM-HH:MM opis
-- Jesli aktywnosci nakladaja sie czasowo, polacz je w jeden wpis lub wybierz glowna
-
-DANE Z ACTIVITYWATCH:
+    const prompt = `Przepisz ponizsze aktywnosci jako notatke z dnia pracy.
+Format: HH:MM-HH:MM opis (po polsku, krotko).
+Polacz nakladajace sie aktywnosci. Tylko linie HH:MM-HH:MM opis, bez naglowkow.
+${truncated ? '(Dane obciete do 30 wpisow)\n' : ''}
+DANE:
 ${activitiesText}`;
 
     let note = '';

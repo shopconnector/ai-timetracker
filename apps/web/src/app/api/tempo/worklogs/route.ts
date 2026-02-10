@@ -99,6 +99,8 @@ function getBillingAccountForProject(issueKey: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('[tempo/worklogs POST] Request body:', JSON.stringify(body, null, 2));
+
     const {
       issueKey,
       issueId,  // Tempo API v4 requires numeric issueId
@@ -202,9 +204,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const numericIssueId = parseInt(String(resolvedIssueId), 10);
+    if (isNaN(numericIssueId)) {
+      console.error(`[tempo/worklogs POST] Invalid issueId after resolution: ${resolvedIssueId}`);
+      return NextResponse.json(
+        { error: `Nieprawidłowe issueId: ${resolvedIssueId}. Nie udało się skonwertować na liczbę.` },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[tempo/worklogs POST] Creating worklog: issueKey=${issueKey}, issueId=${numericIssueId}, seconds=${roundedSeconds}`);
+
     const worklog = await createWorklog({
       issueKey,
-      issueId: parseInt(String(resolvedIssueId), 10),
+      issueId: numericIssueId,
       timeSpentSeconds: roundedSeconds,
       startDate,
       startTime: startTime || '09:00:00',
@@ -216,13 +229,15 @@ export async function POST(request: NextRequest) {
       attributes: resolvedAttributes
     });
 
+    console.log(`[tempo/worklogs POST] Success: ${Math.floor(roundedSeconds / 60)}m to ${issueKey}`, worklog?.tempoWorklogId);
+
     return NextResponse.json({
       success: true,
       worklog,
       message: `Logged ${Math.floor(roundedSeconds / 60)} minutes to ${issueKey}`
     });
   } catch (error) {
-    console.error('Error creating worklog:', error);
+    console.error('[tempo/worklogs POST] Error creating worklog:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create worklog' },
       { status: 500 }
