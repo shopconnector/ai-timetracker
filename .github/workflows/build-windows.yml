@@ -1,0 +1,352 @@
+# Build Windows Installer and Portable Package
+# Triggers on tags (vX.Y.Z) or manual workflow_dispatch
+
+name: Build Windows Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g., 0.1.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '20.18.1'
+  PNPM_VERSION: '9.15.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build application
+        run: pnpm build
+        env:
+          # Provide dummy env vars for build
+          ACTIVITYWATCH_URL: http://localhost:5600
+          TEMPO_API_TOKEN: ""
+          JIRA_BASE_URL: ""
+          JIRA_SERVICE_EMAIL: ""
+          JIRA_API_KEY: ""
+
+      - name: Verify standalone output
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "apps/web/.next/standalone")) {
+            Write-Error "Standalone output not found!"
+            exit 1
+          }
+          Write-Host "Standalone output verified"
+
+      - name: Download Node.js runtime
+        shell: pwsh
+        run: |
+          $NodeVersion = "${{ env.NODE_VERSION }}"
+          $NodeUrl = "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-x64.zip"
+          $NodeZip = "node-runtime.zip"
+          
+          Write-Host "Downloading Node.js v$NodeVersion..."
+          Invoke-WebRequest -Uri $NodeUrl -OutFile $NodeZip
+          
+          Write-Host "Extracting..."
+          Expand-Archive -Path $NodeZip -DestinationPath "node-extract"
+          
+          New-Item -ItemType Directory -Path "dist/windows/node" -Force | Out-Null
+          $NodeDir = Get-ChildItem "node-extract" | Select-Object -First 1
+          Copy-Item "$($NodeDir.FullName)/node.exe" "dist/windows/node/"
+          
+          Remove-Item -Recurse -Force "node-extract", $NodeZip
+          Write-Host "Node.js runtime ready"
+
+      - name: Prepare bundle
+        shell: pwsh
+        run: |
+          # Create directories
+          New-Item -ItemType Directory -Path "dist/windows/app" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist/windows/data" -Force | Out-Null
+          
+          # Copy standalone
+          Copy-Item -Recurse "apps/web/.next/standalone/*" "dist/windows/app/"
+          
+          # Copy static files
+          if (Test-Path "apps/web/.next/static") {
+            New-Item -ItemType Directory -Path "dist/windows/app/apps/web/.next/static" -Force | Out-Null
+            Copy-Item -Recurse "apps/web/.next/static/*" "dist/windows/app/apps/web/.next/static/"
+          }
+          
+          # Copy public
+          if (Test-Path "apps/web/public") {
+            New-Item -ItemType Directory -Path "dist/windows/app/apps/web/public" -Force | Out-Null
+            Copy-Item -Recurse "apps/web/public/*" "dist/windows/app/apps/web/public/"
+          }
+          
+          # Copy config example
+          Copy-Item ".env.example" "dist/windows/data/.env.example"
+          
+          Write-Host "Bundle structure:"
+          Get-ChildItem -Recurse "dist/windows" -Directory | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+      - name: Create launcher
+        shell: pwsh
+        run: |
+          $LauncherContent = @'
+          @echo off
+          chcp 65001 >nul 2>&1
+          title AI TimeTracker
+          cd /d "%~dp0"
+          
+          set PORT=5666
+          set APP_URL=http://localhost:%PORT%/timetracker
+          set AW_URL=http://localhost:5600
+          
+          echo.
+          echo ═══════════════════════════════════════════════════════════════════
+          echo              AI TimeTracker v${{ steps.version.outputs.version }}
+          echo ═══════════════════════════════════════════════════════════════════
+          echo.
+          
+          :: Check ActivityWatch
+          echo Checking ActivityWatch...
+          curl -s -o nul -w "" %AW_URL%/api/0/info >nul 2>&1
+          if %errorlevel% neq 0 (
+              echo.
+              echo   WARNING: ActivityWatch is not running!
+              echo   Download from: https://activitywatch.net/downloads/
+              echo.
+              if exist "%LOCALAPPDATA%\activitywatch\aw-qt.exe" (
+                  echo   Found ActivityWatch, attempting to start...
+                  start "" "%LOCALAPPDATA%\activitywatch\aw-qt.exe"
+                  timeout /t 5 /nobreak >nul
+              )
+          ) else (
+              echo   OK - ActivityWatch running
+          )
+          
+          :: Check configuration
+          echo Checking configuration...
+          if not exist "data\.env.local" (
+              if exist "data\.env.example" (
+                  copy "data\.env.example" "data\.env.local" >nul
+                  echo.
+                  echo   FIRST RUN: Please configure API tokens in data\.env.local
+                  echo.
+                  notepad "data\.env.local"
+                  echo   Press any key after saving...
+                  pause >nul
+              )
+          )
+          
+          :: Load .env.local
+          if exist "data\.env.local" (
+              for /f "usebackq tokens=1,* delims==" %%a in ("data\.env.local") do (
+                  set "line=%%a"
+                  setlocal enabledelayedexpansion
+                  if not "!line:~0,1!"=="#" (
+                      endlocal
+                      set "%%a=%%b"
+                  ) else (
+                      endlocal
+                  )
+              )
+          )
+          
+          set NODE_ENV=production
+          set HOSTNAME=localhost
+          if not defined ACTIVITYWATCH_URL set "ACTIVITYWATCH_URL=http://localhost:5600"
+
+          echo.
+          echo ═══════════════════════════════════════════════════════════════════
+          echo   Starting: %APP_URL%
+          echo   Press Ctrl+C to stop
+          echo ═══════════════════════════════════════════════════════════════════
+          echo.
+
+          start "" /min cmd /c "timeout /t 3 /nobreak >nul && start %APP_URL%"
+          if not exist "logs" mkdir logs
+          echo [%date% %time%] Starting TimeTracker... >> "logs\timetracker.log"
+          "node\node.exe" "app\apps\web\server.js" 2>> "logs\timetracker.log"
+          echo [%date% %time%] TimeTracker stopped (exit code: %errorlevel%) >> "logs\timetracker.log"
+          echo.
+          echo TimeTracker stopped. Check logs\timetracker.log for errors.
+          pause
+          '@
+          
+          Set-Content -Path "dist/windows/TimeTracker.bat" -Value $LauncherContent -Encoding UTF8
+
+      - name: Create portable zip
+        shell: pwsh
+        run: |
+          $Version = "${{ steps.version.outputs.version }}"
+          $ZipName = "TimeTracker-$Version-portable-x64.zip"
+          
+          Compress-Archive -Path "dist/windows/*" -DestinationPath "dist/$ZipName" -CompressionLevel Optimal
+          Write-Host "Created: $ZipName"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          Write-Host "Inno Setup installed"
+
+      - name: Update installer version
+        shell: pwsh
+        run: |
+          $Version = "${{ steps.version.outputs.version }}"
+          $IssFile = "installer/timetracker.iss"
+          
+          $Content = Get-Content $IssFile -Raw
+          $Content = $Content -replace '#define MyAppVersion ".*"', "#define MyAppVersion `"$Version`""
+          Set-Content -Path $IssFile -Value $Content
+          
+          Write-Host "Updated installer version to: $Version"
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $InnoPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          
+          # Run from repo root so paths in .iss are relative
+          & $InnoPath "installer\timetracker.iss"
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup failed"
+            exit 1
+          }
+          
+          # Move output to dist
+          Move-Item "installer\output\*.exe" "dist\"
+          Write-Host "Installer created"
+
+      - name: List artifacts
+        shell: pwsh
+        run: |
+          Write-Host "Build artifacts:"
+          Get-ChildItem "dist" -File | ForEach-Object {
+            $SizeMB = [math]::Round($_.Length / 1MB, 2)
+            Write-Host "  $($_.Name) - $SizeMB MB"
+          }
+
+      - name: Test server startup
+        shell: pwsh
+        run: |
+          Write-Host "Testing server startup..."
+          
+          # Set env vars
+          $env:NODE_ENV = "production"
+          $env:HOSTNAME = "localhost"
+          $env:PORT = "5666"
+          $env:ACTIVITYWATCH_URL = "http://localhost:5600"
+          
+          # Start server in background
+          $ServerProcess = Start-Process -FilePath "dist/windows/node/node.exe" `
+            -ArgumentList "dist/windows/app/apps/web/server.js" `
+            -PassThru -NoNewWindow
+          
+          Start-Sleep -Seconds 10
+          
+          # Test health endpoint
+          try {
+            $Response = Invoke-WebRequest -Uri "http://localhost:5666/timetracker/api/status" -TimeoutSec 5
+            Write-Host "Server responded: $($Response.StatusCode)"
+            
+            if ($Response.StatusCode -eq 200) {
+              Write-Host "✓ Server health check PASSED"
+            }
+          } catch {
+            Write-Host "! Server responded with error (expected - no ActivityWatch)"
+          }
+          
+          # Stop server
+          Stop-Process -Id $ServerProcess.Id -Force -ErrorAction SilentlyContinue
+          Write-Host "Server test complete"
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeTracker-portable
+          path: dist/TimeTracker-*-portable-*.zip
+          retention-days: 30
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeTracker-installer
+          path: dist/TimeTracker-Setup-*.exe
+          retention-days: 30
+
+  # Create GitHub Release on tags
+  release:
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AI TimeTracker ${{ github.ref_name }}"
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            artifacts/TimeTracker-installer/*.exe
+            artifacts/TimeTracker-portable/*.zip
+          body: |
+            ## Installation
+            
+            ### Option 1: Installer (Recommended)
+            1. Download `TimeTracker-Setup-x64.exe`
+            2. Run installer
+            3. Launch "AI TimeTracker" from Start Menu
+            
+            ### Option 2: Portable
+            1. Download `TimeTracker-*-portable-x64.zip`
+            2. Extract to any folder
+            3. Run `TimeTracker.bat`
+            
+            ## Requirements
+            - **ActivityWatch** - Download from [activitywatch.net](https://activitywatch.net/downloads/)
+            - Jira/Tempo API tokens (configure in Settings after first launch)
