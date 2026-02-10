@@ -209,6 +209,84 @@ jobs:
           
           Set-Content -Path "dist/windows/TimeTracker.bat" -Value $LauncherContent -Encoding UTF8
 
+      - name: Create PowerShell launcher
+        shell: pwsh
+        run: |
+          $PsLauncherContent = @'
+          # AI TimeTracker Launcher (PowerShell)
+          $ErrorActionPreference = "SilentlyContinue"
+          $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+          Set-Location $ScriptDir
+
+          $Port = 5666
+          $AppUrl = "http://localhost:$Port/timetracker"
+          $AwUrl = "http://localhost:5600"
+
+          Write-Host ""
+          Write-Host "AI TimeTracker - Starting..." -ForegroundColor Cyan
+          Write-Host ""
+
+          # Check ActivityWatch
+          try {
+              $null = Invoke-RestMethod -Uri "$AwUrl/api/0/info" -TimeoutSec 2
+              Write-Host "[OK] ActivityWatch running" -ForegroundColor Green
+          } catch {
+              Write-Host "[!] ActivityWatch not running!" -ForegroundColor Yellow
+              Write-Host "    Download: https://activitywatch.net/downloads/" -ForegroundColor Gray
+
+              # Try to start
+              $awPaths = @(
+                  "$env:LOCALAPPDATA\activitywatch\aw-qt.exe",
+                  "$env:LOCALAPPDATA\Programs\activitywatch\aw-qt.exe"
+              )
+              foreach ($path in $awPaths) {
+                  if (Test-Path $path) {
+                      Write-Host "    Starting ActivityWatch..." -ForegroundColor Gray
+                      Start-Process $path
+                      Start-Sleep -Seconds 5
+                      break
+                  }
+              }
+          }
+
+          # Check config
+          if (-not (Test-Path "data\.env.local")) {
+              if (Test-Path "data\.env.example") {
+                  Copy-Item "data\.env.example" "data\.env.local"
+                  Write-Host "[!] First run - please configure data\.env.local" -ForegroundColor Yellow
+                  Start-Process notepad "data\.env.local" -Wait
+              }
+          }
+
+          # Load environment
+          if (Test-Path "data\.env.local") {
+              Get-Content "data\.env.local" | ForEach-Object {
+                  if ($_ -match "^([^#][^=]+)=(.*)$") {
+                      [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process")
+                  }
+              }
+          }
+
+          # Set server env
+          $env:NODE_ENV = "production"
+          $env:HOSTNAME = "localhost"
+          $env:PORT = $Port
+
+          Write-Host ""
+          Write-Host "Starting server on $AppUrl" -ForegroundColor Cyan
+          Write-Host "Press Ctrl+C to stop" -ForegroundColor Gray
+          Write-Host ""
+
+          # Open browser
+          Start-Job { Start-Sleep -Seconds 3; Start-Process $using:AppUrl } | Out-Null
+
+          # Start server
+          & "node\node.exe" "app\apps\web\server.js"
+          '@
+
+          Set-Content -Path "dist/windows/TimeTracker.ps1" -Value $PsLauncherContent -Encoding UTF8
+          Write-Host "PowerShell launcher created"
+
       - name: Create portable zip
         shell: pwsh
         run: |
@@ -309,6 +387,17 @@ jobs:
           name: TimeTracker-installer
           path: dist/TimeTracker-Setup-*.exe
           retention-days: 30
+
+      - name: Commit EXE to releases folder
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p releases
+          cp dist/TimeTracker-Setup-x64.exe releases/
+          git add releases/TimeTracker-Setup-x64.exe
+          git commit -m "chore: Auto-update Windows installer (${{ steps.version.outputs.version }}) [skip ci]"
+          git push origin HEAD:main
 
   # Create GitHub Release on tags
   release:

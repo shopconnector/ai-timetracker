@@ -2,6 +2,12 @@
 
 **Inteligentny system logowania czasu pracy — Jira + Tempo + ActivityWatch + AI (Gemini)**
 
+## Download (Windows 11)
+
+**[⬇ Pobierz TimeTracker-Setup-x64.exe](releases/TimeTracker-Setup-x64.exe)** — Installer Windows (~55MB, Node.js wbudowany)
+
+---
+
 ```
 ActivityWatch ──> TimeTracker ──> Tempo/Jira
  (monitoring)      (web UI)       (worklogs)
