@@ -75,12 +75,18 @@ async function checkJira(): Promise<ApiStatus> {
 }
 
 async function checkOpenRouter(): Promise<ApiStatus> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return { name: 'OpenRouter (LLM)', configured: false, status: 'unconfigured' };
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    return { name: 'AI/LLM (Gemini)', configured: true, status: 'ok', message: `Model: ${model}` };
   }
 
-  return { name: 'OpenRouter (LLM)', configured: true, status: 'ok', message: 'Configured' };
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    return { name: 'AI/LLM', configured: false, status: 'unconfigured' };
+  }
+
+  return { name: 'AI/LLM (OpenRouter)', configured: true, status: 'ok', message: 'Configured' };
 }
 
 export async function GET() {

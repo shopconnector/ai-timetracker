@@ -52,6 +52,25 @@ export interface JiraIssue {
         };
       };
     }>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    description?: any;
+    created?: string;
+    duedate?: string;
+    labels?: string[];
+    components?: Array<{ name: string }>;
+    timeoriginalestimate?: number; // seconds
+    timespent?: number; // seconds
+    resolution?: { name: string } | null;
+    comment?: {
+      total: number;
+      maxResults: number;
+      comments: Array<{
+        author?: { displayName: string };
+        created: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        body: any;
+      }>;
+    };
   };
 }
 
@@ -117,14 +136,66 @@ function getAuthHeader(): HeadersInit {
   };
 }
 
+// Konwertuj Atlassian Document Format (ADF) na zwykły tekst
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function adfToPlainText(adf: any): string {
+  if (!adf) return '';
+  if (typeof adf === 'string') return adf;
+
+  function extractText(node: Record<string, unknown>): string {
+    if (node.type === 'text' && typeof node.text === 'string') return node.text;
+    if (node.type === 'hardBreak') return '\n';
+    if (Array.isArray(node.content)) {
+      return node.content.map((child: Record<string, unknown>) => extractText(child)).join('');
+    }
+    return '';
+  }
+
+  if (adf.content && Array.isArray(adf.content)) {
+    return adf.content
+      .map((block: Record<string, unknown>) => {
+        const text = extractText(block);
+        if (
+          ['paragraph', 'heading', 'bulletList', 'orderedList', 'codeBlock', 'blockquote'].includes(
+            block.type as string
+          )
+        ) {
+          return text + '\n';
+        }
+        return text;
+      })
+      .join('')
+      .trim();
+  }
+  return '';
+}
+
 // Pola do pobierania z Jira (z hierarchią)
 const JIRA_FIELDS = [
   'summary', 'status', 'project', 'assignee', 'issuetype',
   'priority', 'updated', 'parent', 'subtasks'
 ];
 
+// Rozszerzone pola z opisem, komentarzami i czasem (dla strony My Issues)
+export const JIRA_FIELDS_WITH_DESCRIPTION = [
+  ...JIRA_FIELDS,
+  'description',
+  'created',
+  'duedate',
+  'labels',
+  'components',
+  'timeoriginalestimate',
+  'timespent',
+  'comment',
+  'resolution',
+];
+
 // Search for issues by JQL (using new POST /search/jql endpoint)
-export async function searchIssues(jql: string, maxResults = 50): Promise<JiraSearchResult> {
+export async function searchIssues(
+  jql: string,
+  maxResults = 50,
+  fields: string[] = JIRA_FIELDS
+): Promise<JiraSearchResult> {
   const url = `${JIRA_BASE_URL}/rest/api/3/search/jql`;
 
   const response = await fetch(url, {
@@ -133,8 +204,8 @@ export async function searchIssues(jql: string, maxResults = 50): Promise<JiraSe
     body: JSON.stringify({
       jql,
       maxResults,
-      fields: JIRA_FIELDS
-    })
+      fields,
+    }),
   });
 
   if (!response.ok) {
@@ -150,14 +221,15 @@ export async function searchIssuesPaginated(
   jql: string,
   startAt = 0,
   maxResults = 50,
-  nextPageToken?: string
+  nextPageToken?: string,
+  fields: string[] = JIRA_FIELDS
 ): Promise<PaginatedSearchResult> {
   const url = `${JIRA_BASE_URL}/rest/api/3/search/jql`;
 
   const body: Record<string, unknown> = {
     jql,
     maxResults,
-    fields: JIRA_FIELDS
+    fields,
   };
 
   // Use nextPageToken if available, otherwise use startAt (though new API prefers tokens)
@@ -470,7 +542,8 @@ export function formatIssueForDisplay(issue: JiraIssue): {
 export async function getFilteredIssues(
   accountId: string,
   filter: IssueFilter,
-  maxResults = 50
+  maxResults = 50,
+  fields: string[] = JIRA_FIELDS
 ): Promise<JiraIssue[]> {
   let jql: string;
 
@@ -495,7 +568,7 @@ export async function getFilteredIssues(
   }
 
   try {
-    const result = await searchIssues(jql, maxResults);
+    const result = await searchIssues(jql, maxResults, fields);
     return result.issues;
   } catch (error) {
     console.error(`Error fetching filtered issues (${filter}):`, error);

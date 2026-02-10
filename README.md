@@ -1,579 +1,431 @@
 # AI TimeTracker
 
-**Automatyczny system logowania czasu pracy z ActivityWatch do Tempo/Jira z wsparciem AI**
+**Inteligentny system logowania czasu pracy — Jira + Tempo + ActivityWatch + AI (Gemini)**
 
 ```
-ActivityWatch  ───▶  TimeTracker  ───▶  Tempo/Jira
- (monitoring)         (web UI)          (worklogs)
+ActivityWatch ──> TimeTracker ──> Tempo/Jira
+ (monitoring)      (web UI)       (worklogs)
 ```
 
 **Live demo:** https://ai.beecommerce.pl/timetracker
 
 ---
 
-# 🚀 SZYBKA INSTALACJA (Windows)
+## Co to robi?
 
-## Opcja 1: Instalator (Zalecane)
+AI TimeTracker automatyzuje logowanie czasu pracy do Tempo/Jira:
 
-1. **Pobierz instalator:** [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest)
-2. **Uruchom instalator** - bez dodatkowych wymagań (Node.js jest wbudowany)
-3. **Kliknij skrót "AI TimeTracker"** w menu Start
+1. **ActivityWatch** zbiera dane o aktywnosciach (jakie okna, aplikacje, jak dlugo)
+2. **TimeTracker** wyswietla je w czytelnej tabeli i **AI dopasowuje tickety Jira**
+3. Jednym kliknieciem logujesz caly dzien do **Tempo**
 
-> ⚠️ **Wymagane:** Zainstaluj [ActivityWatch](https://activitywatch.net/downloads/) przed pierwszym uruchomieniem
+### Kluczowe funkcje
 
-## Opcja 2: Portable (bez instalacji)
-
-1. Pobierz `TimeTracker-*-portable-x64.zip` z [Releases](https://github.com/shopconnector/ai-timetracker/releases/latest)
-2. Wypakuj do dowolnego folderu
-3. Uruchom `TimeTracker.bat`
-
-## Opcja 3: Z kodu źródłowego (dla developerów)
-
-Patrz: [Instalacja z kodu źródłowego](#instalacja-na-windows) poniżej
-
----
-
-# JAK TO DZIAŁA
-
-```
-┌─────────────────────┐        HTTP API         ┌─────────────────────┐
-│   ActivityWatch     │ ◄──────────────────────►│    TimeTracker      │
-│  (localhost:5600)   │   GET /api/0/buckets/   │  (localhost:5666)   │
-│                     │   GET /api/0/events     │                     │
-│  Zbiera dane o      │                         │  Wyświetla dane     │
-│  aktywnościach      │                         │  i loguje do Jira   │
-│  (działa w tle)     │                         │  (strona www)       │
-└─────────────────────┘                         └─────────────────────┘
-```
-
-**WAŻNE:**
-- **ActivityWatch** = program który działa w tle i zapisuje co robisz
-- **TimeTracker** = strona www która CZYTA dane z ActivityWatch przez API
-- **BEZ ActivityWatch TimeTracker NIE BĘDZIE DZIAŁAĆ!**
-- TimeTracker łączy się z ActivityWatch przez `http://localhost:5600`
+| Funkcja                | Opis                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **AI Daily Logger**    | Wklej surowe notatki z dnia — AI parsuje na tabelke z dopasowanymi ticketami Jira. Edytuj i zaloguj jednym kliknieciem. |
+| **AI Ticket Matching** | Automatyczne dopasowanie aktywnosci do ticketow Jira (Gemini / OpenRouter)                                              |
+| **Timesheet**          | Tygodniowy widok worklogow z edycja, drag & drop, hurtowym przypisywaniem                                               |
+| **Moje Zadania**       | Pelna lista zadan Jira z filtrami, sortowaniem, notatkami, Readiness Criteria                                           |
+| **Kalendarz**          | Tygodniowy widok worklogow + Google Calendar + Jira sprint events                                                       |
+| **Analityka**          | Wykresy: czas per projekt, per dzien, per typ aktywnosci, trendy                                                        |
+| **Porownanie**         | Zestawienie: czas ActivityWatch vs zalogowany w Tempo (diff per dzien)                                                  |
+| **KAGANIEC**           | Automatyczna blokada logowania do Stories/Epics — wymusza subtaski                                                      |
+| **Readiness Criteria** | Parsowanie oceny RC z komentarzy Jira (Automation for Jira)                                                             |
+| **Rules Engine**       | Reguly automatycznego dopasowywania ticketow (bez AI)                                                                   |
+| **Electron**           | Desktopowa aplikacja Windows z wbudowanym Node.js                                                                       |
 
 ---
 
-# GDZIE ACTIVITYWATCH PRZECHOWUJE DANE
-
-| System | Lokalizacja bazy danych |
-|--------|------------------------|
-| **Windows** | `C:\Users\NAZWA\AppData\Local\activitywatch\aw-server\peewee-sqlite.v2.db` |
-| **macOS** | `~/Library/Application Support/activitywatch/aw-server/peewee-sqlite.v2.db` |
-| **Linux** | `~/.local/share/activitywatch/aw-server/peewee-sqlite.v2.db` |
-
-**Dane NIE giną po restarcie!** ActivityWatch przechowuje całą historię.
-
----
-
-# INSTALACJA NA WINDOWS (z kodu źródłowego)
-
-## ETAP 1: INSTALACJA NARZĘDZI
-
-### WAŻNE ZASADY:
-- Wykonuj komendy **POJEDYNCZO** - nie kopiuj wielu naraz!
-- Po każdej instalacji **ZAMKNIJ PowerShell** i **OTWÓRZ NOWE OKNO**!
-
----
-
-### Krok 1.1: Zainstaluj Git
-
-Otwórz PowerShell i wpisz:
-
-```powershell
-winget install Git.Git
-```
-
-**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
-
-Sprawdź: `git --version` → powinno pokazać `git version 2.xx.x`
-
----
-
-### Krok 1.2: Zainstaluj Node.js
-
-```powershell
-winget install OpenJS.NodeJS.LTS
-```
-
-**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
-
-Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
-
----
-
-### Krok 1.3: Zainstaluj pnpm
-
-```powershell
-iwr https://get.pnpm.io/install.ps1 -useb | iex
-```
-
-**ZAMKNIJ PowerShell. Otwórz NOWE okno.**
-
-Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
-
----
-
-### Krok 1.4: Zainstaluj ActivityWatch
-
-1. Otwórz: https://activitywatch.net/downloads/
-2. Kliknij **Download for Windows**
-3. Uruchom pobrany plik `.exe`
-4. Po instalacji ActivityWatch uruchomi się automatycznie
-5. Ikona pojawi się przy zegarku (zasobnik systemowy)
-
-**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
-
----
-
-## ETAP 2: POBIERANIE TIMETRACKER
-
-```powershell
-cd ~\Documents
-git clone https://github.com/shopconnector/ai-timetracker.git
-cd ai-timetracker
-pnpm install
-```
-
----
-
-## ETAP 3: KONFIGURACJA
-
-```powershell
-Copy-Item .env.example -Destination apps\web\.env.local
-notepad apps\web\.env.local
-```
-
-Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
-
-```
-ACTIVITYWATCH_URL=http://localhost:5600
-TEMPO_API_TOKEN=twoj_token
-JIRA_BASE_URL=https://twoja-firma.atlassian.net
-JIRA_SERVICE_EMAIL=twoj.email@firma.com
-JIRA_API_KEY=twoj_token
-```
-
----
-
-## ETAP 4: URUCHOMIENIE
-
-### Opcja A: Ręcznie
-```powershell
-pnpm dev
-```
-Otwórz: http://localhost:5666
-
-### Opcja B: Jednym kliknięciem
-Kliknij dwukrotnie `start-timetracker.bat`
-
-### Opcja C: Jako usługa w tle (pm2)
-```powershell
-npm install -g pm2
-pm2 start "pnpm dev" --name timetracker
-pm2 save
-```
-
----
-
-## ETAP 5: AUTOSTART
-
-1. `Win + R` → wpisz `shell:startup` → Enter
-2. Utwórz skrót do `start-timetracker.bat`
-
----
-
-# INSTALACJA NA macOS (krok po kroku)
-
-## ETAP 1: INSTALACJA NARZĘDZI
-
-### Krok 1.1: Zainstaluj Homebrew (jeśli nie masz)
-
-Otwórz Terminal i wpisz:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-Po instalacji **ZAMKNIJ Terminal i otwórz NOWY**.
-
-Sprawdź: `brew --version` → powinno pokazać `Homebrew x.x.x`
-
----
-
-### Krok 1.2: Zainstaluj Node.js
-
-```bash
-brew install node
-```
-
-Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
-
----
-
-### Krok 1.3: Zainstaluj pnpm
-
-```bash
-npm install -g pnpm
-```
-
-Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
-
----
-
-### Krok 1.4: Zainstaluj ActivityWatch
-
-```bash
-brew install --cask activitywatch
-```
-
-**LUB** pobierz z: https://activitywatch.net/downloads/
-
----
-
-### Krok 1.5: Skonfiguruj uprawnienia ActivityWatch
-
-**TO JEST BARDZO WAŻNE!** Bez tego ActivityWatch nie będzie zbierać danych!
-
-1. Otwórz **System Preferences** (Ustawienia systemowe)
-2. Przejdź do **Privacy & Security** → **Accessibility**
-3. Kliknij kłódkę, aby odblokować
-4. Dodaj **ActivityWatch** do listy i zaznacz checkbox
-5. Powtórz dla **Screen Recording** (opcjonalnie, dla tytułów okien)
-
----
-
-### Krok 1.6: Uruchom ActivityWatch
-
-```bash
-open -a ActivityWatch
-```
-
-ActivityWatch pojawi się w pasku menu (góra ekranu).
-
-**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
-
----
-
-## ETAP 2: POBIERANIE TIMETRACKER
-
-```bash
-cd ~/Documents
-git clone https://github.com/shopconnector/ai-timetracker.git
-cd ai-timetracker
-pnpm install
-```
-
----
-
-## ETAP 3: KONFIGURACJA
-
-```bash
-cp .env.example apps/web/.env.local
-nano apps/web/.env.local
-```
-
-Lub otwórz w edytorze tekstowym:
-```bash
-open -a TextEdit apps/web/.env.local
-```
-
-Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
-
-```
-ACTIVITYWATCH_URL=http://localhost:5600
-TEMPO_API_TOKEN=twoj_token
-JIRA_BASE_URL=https://twoja-firma.atlassian.net
-JIRA_SERVICE_EMAIL=twoj.email@firma.com
-JIRA_API_KEY=twoj_token
-```
-
----
-
-## ETAP 4: URUCHOMIENIE
-
-### Opcja A: Ręcznie
-```bash
-pnpm dev
-```
-Otwórz: http://localhost:5666
-
-### Opcja B: Jako usługa w tle (pm2)
-```bash
-npm install -g pm2
-cd ~/Documents/ai-timetracker
-pm2 start "pnpm dev" --name timetracker
-pm2 save
-```
-
----
-
-## ETAP 5: AUTOSTART
-
-### ActivityWatch
-ActivityWatch domyślnie dodaje się do autostartu podczas instalacji.
-Jeśli nie, otwórz ActivityWatch → Preferences → "Start on login"
-
-### TimeTracker (z pm2)
-```bash
-pm2 startup
-# Skopiuj i uruchom komendę którą wyświetli pm2
-pm2 save
-```
-
----
-
-## ROZWIĄZYWANIE PROBLEMÓW (macOS)
-
-| Problem | Rozwiązanie |
-|---------|-------------|
-| ActivityWatch nie zbiera danych | Sprawdź uprawnienia w System Preferences → Privacy & Security → Accessibility |
-| `brew` nie znaleziony | Zamknij Terminal i otwórz nowy po instalacji Homebrew |
-| `pnpm` nie znaleziony | Uruchom `source ~/.zshrc` lub otwórz nowy Terminal |
-| Port 5666 zajęty | `lsof -i :5666` aby znaleźć proces |
-
----
-
-# INSTALACJA NA LINUX (krok po kroku)
-
-## ETAP 1: INSTALACJA NARZĘDZI
-
-### Krok 1.1: Zainstaluj Node.js
-
-**Ubuntu/Debian:**
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-**Fedora:**
-```bash
-sudo dnf install nodejs
-```
-
-**Arch Linux:**
-```bash
-sudo pacman -S nodejs npm
-```
-
-Sprawdź: `node --version` → powinno pokazać `v20.xx.x` lub wyżej
-
----
-
-### Krok 1.2: Zainstaluj pnpm
-
-```bash
-npm install -g pnpm
-```
-
-Sprawdź: `pnpm --version` → powinno pokazać `10.xx.x` lub wyżej
-
----
-
-### Krok 1.3: Zainstaluj ActivityWatch
-
-**Metoda 1: Snap (Ubuntu/Debian)**
-```bash
-sudo snap install activitywatch
-```
-
-**Metoda 2: Pobranie ręczne**
-1. Pobierz z: https://activitywatch.net/downloads/
-2. Rozpakuj archiwum
-3. Uruchom `./aw-qt`
-
-**Metoda 3: AUR (Arch Linux)**
-```bash
-yay -S activitywatch-bin
-```
-
----
-
-### Krok 1.4: Uruchom ActivityWatch
-
-```bash
-# Jeśli zainstalowane przez snap:
-activitywatch
-
-# Jeśli pobrane ręcznie:
-./aw-qt
-```
-
-ActivityWatch pojawi się w zasobniku systemowym.
-
-**SPRAWDŹ:** Otwórz http://localhost:5600 - powinieneś widzieć dashboard
-
----
-
-## ETAP 2: POBIERANIE TIMETRACKER
-
-```bash
-cd ~/Documents
-git clone https://github.com/shopconnector/ai-timetracker.git
-cd ai-timetracker
-pnpm install
-```
-
----
-
-## ETAP 3: KONFIGURACJA
-
-```bash
-cp .env.example apps/web/.env.local
-nano apps/web/.env.local
-```
-
-Uzupełnij dane (ACTIVITYWATCH_URL zostaw bez zmian!):
-
-```
-ACTIVITYWATCH_URL=http://localhost:5600
-TEMPO_API_TOKEN=twoj_token
-JIRA_BASE_URL=https://twoja-firma.atlassian.net
-JIRA_SERVICE_EMAIL=twoj.email@firma.com
-JIRA_API_KEY=twoj_token
-```
-
-Zapisz: `Ctrl+O`, `Enter`, `Ctrl+X`
-
----
-
-## ETAP 4: URUCHOMIENIE
-
-### Opcja A: Ręcznie
-```bash
-pnpm dev
-```
-Otwórz: http://localhost:5666
-
-### Opcja B: Jako usługa w tle (pm2)
-```bash
-npm install -g pm2
-cd ~/Documents/ai-timetracker
-pm2 start "pnpm dev" --name timetracker
-pm2 save
-```
-
----
-
-## ETAP 5: AUTOSTART
-
-### ActivityWatch
-
-**Snap:**
-ActivityWatch automatycznie uruchamia się przy logowaniu.
-
-**Ręcznie:**
-Dodaj `aw-qt` do autostartu w ustawieniach środowiska graficznego.
-
-**Systemd (zaawansowane):**
-```bash
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/activitywatch.service << EOF
-[Unit]
-Description=ActivityWatch
-After=graphical-session.target
-
-[Service]
-ExecStart=/path/to/aw-qt
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-EOF
-
-systemctl --user enable activitywatch
-systemctl --user start activitywatch
-```
-
-### TimeTracker (z pm2)
-```bash
-pm2 startup
-# Skopiuj i uruchom komendę którą wyświetli pm2
-pm2 save
-```
-
----
-
-## ROZWIĄZYWANIE PROBLEMÓW (Linux)
-
-| Problem | Rozwiązanie |
-|---------|-------------|
-| ActivityWatch nie zbiera danych | Upewnij się że masz zainstalowane xdotool i xprop |
-| `snap` nie znaleziony | `sudo apt install snapd` |
-| `pnpm` nie znaleziony | Dodaj `export PATH="$HOME/.local/share/pnpm:$PATH"` do `~/.bashrc` |
-| Port 5666 zajęty | `lsof -i :5666` lub `fuser 5666/tcp` |
-
----
-
-# SZYBKA INSTALACJA (jeden skrypt)
-
-### macOS / Linux:
-```bash
-curl -sSL https://raw.githubusercontent.com/shopconnector/ai-timetracker/main/install.sh | bash
-```
-
-### Windows:
-Pobierz i uruchom `install.ps1` z repozytorium.
-
----
-
-# SPRAWDZENIE CZY WSZYSTKO DZIAŁA
-
-### Test 1: ActivityWatch
-- Otwórz: http://localhost:5600
-- Powinieneś widzieć dashboard z aktywnościami
-- Jeśli puste - poczekaj chwilę i odśwież
-
-### Test 2: TimeTracker
-- Otwórz: http://localhost:5666
-- W zakładce "Timesheet" powinny być widoczne aktywności
-
-### Jeśli TimeTracker nie widzi aktywności:
-1. Czy ActivityWatch działa? (http://localhost:5600)
-2. Czy plik `.env.local` zawiera `ACTIVITYWATCH_URL=http://localhost:5600`?
-3. Czy ActivityWatch ma uprawnienia do zbierania danych?
-
----
-
-# JAK UZYSKAĆ TOKENY API
-
-### Token Jira
-1. Wejdź: https://id.atlassian.com/manage-profile/security/api-tokens
-2. **Create API token** → nazwij "TimeTracker"
-3. Skopiuj token → wklej do `JIRA_API_KEY=`
-
-### Token Tempo
-1. Jira → Apps → Tempo → Settings → API Integration
-2. **New Token** → nazwij "TimeTracker"
-3. Uprawnienia: Worklogs (View, Create, Edit)
-4. Skopiuj token → wklej do `TEMPO_API_TOKEN=`
-
----
-
-# ADRESY
-
-| Co | Adres |
-|----|-------|
-| **TimeTracker** | http://localhost:5666 |
-| **ActivityWatch** | http://localhost:5600 |
-
----
-
-# STRUKTURA PROJEKTU
+## Architektura
 
 ```
 ai-timetracker/
-├── apps/web/                    # Aplikacja Next.js
-│   ├── src/lib/activitywatch.ts # Integracja z ActivityWatch API
-│   └── .env.local               # KONFIGURACJA (tokeny)
-├── scripts/windows/             # Skrypty budowania paczki Windows
-│   ├── build-bundle.ps1         # Buduje bundle z Node.js runtime
-│   └── test-bundle.ps1          # Testuje lokalnie bundle
-├── installer/                   # Definicja instalatora (Inno Setup)
-├── start-timetracker.bat        # Uruchamiacz Windows (wymaga Node.js)
-├── install.sh                   # Instalator macOS/Linux
-└── .env.example                 # Szablon konfiguracji
+├── apps/
+│   └── web/                         # Next.js 16 (React 19, Tailwind 4)
+│       ├── src/
+│       │   ├── app/                  # Pages + API routes
+│       │   │   ├── page.tsx          # Dashboard
+│       │   │   ├── timesheet/        # Tygodniowy timesheet
+│       │   │   ├── my-issues/        # Zadania Jira + Daily Logger
+│       │   │   ├── calendar/         # Widok kalendarza
+│       │   │   ├── analytics/        # Wykresy i statystyki
+│       │   │   ├── compare/          # AW vs Tempo porownanie
+│       │   │   ├── tasks/            # Zarzadzanie taskami
+│       │   │   ├── connections/      # Status polaczen API
+│       │   │   ├── settings/         # Konfiguracja + Rules Engine
+│       │   │   └── api/
+│       │   │       ├── jira/         # Proxy do Jira REST API
+│       │   │       ├── tempo/        # Proxy do Tempo REST API
+│       │   │       ├── llm/          # AI endpoints (Gemini/OpenRouter)
+│       │   │       │   ├── parse-daily/    # Parsowanie notatek dnia
+│       │   │       │   ├── suggest/        # Sugestia ticketa
+│       │   │       │   └── suggest-worklog/# Sugestia workloga
+│       │   │       ├── activities/   # ActivityWatch integration
+│       │   │       ├── dashboard/    # Dashboard aggregation
+│       │   │       ├── analytics/    # Analytics data
+│       │   │       └── settings/     # Settings + API tests
+│       │   ├── components/
+│       │   │   ├── ui/               # shadcn/ui (21 komponentow)
+│       │   │   ├── WorklogFormDialog  # Formularz workloga
+│       │   │   ├── TimesheetTable     # Tabela timesheet
+│       │   │   └── ...
+│       │   └── lib/
+│       │       ├── gemini.ts         # Natywny klient Google Gemini API
+│       │       ├── openrouter.ts     # OpenRouter LLM client (fallback)
+│       │       ├── ai-config.ts      # Konfiguracja AI (modele, provider)
+│       │       ├── jira.ts           # Jira REST API client
+│       │       ├── tempo.ts          # Tempo REST API client
+│       │       ├── activitywatch.ts  # ActivityWatch API client
+│       │       ├── readiness.ts      # Parser Readiness Criteria
+│       │       ├── rules-engine.ts   # Silnik regul dopasowywania
+│       │       ├── suggestion-service.ts  # Unified AI suggestion pipeline
+│       │       └── ...
+│       └── .env.local                # Konfiguracja (tokeny API)
+├── packages/
+│   ├── shared/                       # Wspolne typy i narzedzia
+│   └── ai/                           # Pakiet AI utilities
+├── electron/                         # Electron wrapper (Windows desktop)
+├── scripts/windows/                  # Build scripts dla instalatora
+└── turbo.json                        # Turborepo config
 ```
+
+### Stack technologiczny
+
+| Warstwa  | Technologia                                        |
+| -------- | -------------------------------------------------- |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4, shadcn/ui    |
+| Backend  | Next.js API Routes (server-side)                   |
+| AI/LLM   | Google Gemini API (natywny), OpenRouter (fallback) |
+| Monorepo | Turborepo + pnpm workspaces                        |
+| Testy    | Vitest + Testing Library                           |
+| Linting  | ESLint + Prettier + Husky + lint-staged            |
+| Desktop  | Electron (Windows)                                 |
+| Build    | Standalone output (deploy bez node_modules)        |
+
+---
+
+## Szybki start
+
+### Wymagania
+
+- **Node.js** >= 20
+- **pnpm** >= 9
+- **ActivityWatch** (opcjonalne — do monitorowania aktywnosci)
+
+### Instalacja
+
+```bash
+# 1. Klonuj repo
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+
+# 2. Skopiuj konfiguracje
+cp .env.example apps/web/.env.local
+
+# 3. Uzupelnij tokeny w apps/web/.env.local (instrukcje nizej)
+
+# 4. Zainstaluj zaleznosi
+pnpm install
+
+# 5. Uruchom
+pnpm dev
+```
+
+Aplikacja bedzie dostepna na: **http://localhost:5666/timetracker**
+
+### Tokeny API
+
+#### Jira API (wymagane)
+
+1. Wejdz: https://id.atlassian.com/manage-profile/security/api-tokens
+2. **Create API token** > nazwij "TimeTracker"
+3. Skopiuj do `JIRA_API_KEY=` w `.env.local`
+
+#### Tempo API (wymagane)
+
+1. Jira > Apps > Tempo > Settings > API Integration
+2. **New Token** > uprawnienia: Worklogs (View, Create, Edit)
+3. Skopiuj do `TEMPO_API_TOKEN=` w `.env.local`
+
+#### Gemini API (zalecane — darmowe)
+
+1. Wejdz: https://aistudio.google.com/apikey
+2. **Create API key**
+3. Skopiuj do `GEMINI_API_KEY=` w `.env.local`
+
+> Gemini 2.5 Flash jest darmowy i wystarczajaco szybki. Bez klucza AI sugestie nie beda dzialac, ale reszta aplikacji tak (regex fallback).
+
+#### OpenRouter (opcjonalne — fallback)
+
+1. Wejdz: https://openrouter.ai/keys
+2. Skopiuj do `OPENROUTER_API_KEY=` w `.env.local`
+
+---
+
+## Konfiguracja (.env.local)
+
+```env
+# Tempo API (wymagane)
+TEMPO_API_TOKEN=twoj_token
+
+# Jira API (wymagane)
+JIRA_BASE_URL=https://twoja-firma.atlassian.net
+JIRA_SERVICE_EMAIL=twoj.email@firma.com
+JIRA_API_KEY=twoj_token
+
+# Gemini API (zalecane — darmowe)
+GEMINI_API_KEY=twoj_klucz_gemini
+# GEMINI_MODEL=gemini-2.5-flash  # opcjonalnie
+
+# ActivityWatch (opcjonalne)
+ACTIVITYWATCH_URL=http://localhost:5600
+
+# OpenRouter (opcjonalne — fallback)
+OPENROUTER_API_KEY=
+```
+
+---
+
+## AI Daily Logger
+
+Glowna nowa funkcja — zamiast recznego logowania kazdego workloga osobno:
+
+1. **Wklej surowe notatki** z dnia pracy:
+
+   ```
+   09:30-10:30 research Mike n8n workflow
+   11:00-11:30 call Natalia claude setup
+   11:30-12:30 call z Piotkiem headlamp k8s
+   13:00-14:00 dofinansowanie unijne
+   14:00-15:00 Mike prompty linkedin
+   ```
+
+2. **AI parsuje** na strukturalna tabelke:
+   - Czas (edytowalny)
+   - Opis (edytowalny)
+   - Ticket Jira (dropdown z wszystkich zadan)
+   - Kategoria (meeting/dev/research/comm/infra)
+   - Czas trwania (edytowalny)
+
+3. **Edytuj** co trzeba — zmien ticket, skoryguj czas
+
+4. **Zaloguj jednym kliknieciem** — wszystkie zaznaczone wpisy do Tempo
+
+### Fallback bez AI
+
+Bez klucza Gemini/OpenRouter dziala **regex parser**:
+
+- Rozpoznaje wzorce `HH:MM-HH:MM`
+- Dopasowuje tickety po slowach kluczowych
+- Wykrywa kategorie (meeting/dev/research)
+
+---
+
+## AI Pipeline
+
+Kazde wywolanie AI probuje providerow w kolejnosci:
+
+```
+1. Gemini API (GEMINI_API_KEY) — natywne Google AI, darmowy tier
+   ↓ jesli blad
+2. OpenRouter (OPENROUTER_API_KEY) — Claude, GPT-4, Llama, etc.
+   ↓ jesli blad
+3. Regex / keyword fallback — bez AI
+```
+
+### Dostepne modele Gemini
+
+| Model              | Cena            | Szybkosc | Jakosc            |
+| ------------------ | --------------- | -------- | ----------------- |
+| `gemini-2.5-flash` | Darmowy         | Szybki   | Wysoka (domyslny) |
+| `gemini-2.5-pro`   | $1.25/1k tokens | Sredni   | Najwyzsza         |
+| `gemini-2.0-flash` | Darmowy         | Szybki   | Wysoka            |
+
+Zmiana modelu: Settings > AI/LLM > Model Gemini
+
+---
+
+## Readiness Criteria
+
+Automatyczne parsowanie oceny "Readiness Criteria" z komentarzy Jira (dodawane przez Automation for Jira):
+
+- **4 kolorowe kropki** w tabeli zadan (Completeness, Clarity, Auditability, Estimated)
+- **Pelna karta** w rozwinietym wierszu z sugestiami
+- **Stat card** — ile zadan ma pelne RC (4/4 zielone)
+
+Format rozpoznawany w komentarzach:
+
+```
+Completeness 🟢
+Clarity 🟡
+Auditability 🔴
+Estimated 🟢
+```
+
+---
+
+## KAGANIEC
+
+Automatyczna blokada logowania czasu do nieodpowiednich typow zadan:
+
+- **Story** — zablokowane (loguj do subtaskow)
+- **Epic** — zablokowane
+- **Task z subtaskami** — zablokowane (loguj do subtaska)
+
+Przy probie zalogowania do zablokowanego ticketa: komunikat bledu z lista dostepnych subtaskow.
+
+---
+
+## Strony aplikacji
+
+| Strona       | URL               | Opis                                                   |
+| ------------ | ----------------- | ------------------------------------------------------ |
+| Dashboard    | `/`               | Podsumowanie dnia: godziny, aktywnosci, worklogi       |
+| Timesheet    | `/timesheet`      | Tygodniowy timesheet z ActivityWatch + Tempo           |
+| Moje Zadania | `/my-issues`      | Lista Jira + Daily Logger + Readiness Criteria         |
+| Kalendarz    | `/calendar`       | Tygodniowy widok: worklogi + Google Calendar + sprinty |
+| Analityka    | `/analytics`      | Wykresy: czas per projekt, trendy, kategorie           |
+| Porownanie   | `/compare`        | ActivityWatch vs Tempo (ile brakuje do zalogowania)    |
+| Taski        | `/tasks`          | Szybkie zarzadzanie taskami z historii                 |
+| Polaczenia   | `/connections`    | Status API: Jira, Tempo, ActivityWatch, AI             |
+| Ustawienia   | `/settings`       | Tokeny, modele AI, cele czasowe, mapowania             |
+| Reguly       | `/settings/rules` | Rules Engine — reguly dopasowywania bez AI             |
+
+---
+
+## API Endpoints
+
+| Endpoint                       | Metoda       | Opis                              |
+| ------------------------------ | ------------ | --------------------------------- |
+| `/api/jira/my-issues`          | GET          | Pobierz przypisane zadania z Jira |
+| `/api/jira/issues`             | GET          | Wyszukaj zadania                  |
+| `/api/jira/projects`           | GET          | Lista projektow Jira              |
+| `/api/tempo/worklogs`          | GET/POST     | Pobierz/utworz worklogi           |
+| `/api/tempo/worklogs/[id]`     | PUT/DELETE   | Edytuj/usun worklog               |
+| `/api/tempo/worklogs-by-issue` | GET          | Worklogi pogrupowane per issue    |
+| `/api/tempo/check-overlap`     | POST         | Sprawdz overlap worklogow         |
+| `/api/tempo/attributes`        | GET          | Atrybuty Tempo (action types)     |
+| `/api/llm/parse-daily`         | POST         | AI parsowanie notatek dnia        |
+| `/api/llm/suggest`             | POST         | AI sugestia ticketa               |
+| `/api/llm/suggest-worklog`     | POST         | AI sugestia workloga              |
+| `/api/activities`              | GET          | Aktywnosci z ActivityWatch        |
+| `/api/dashboard`               | GET          | Dane dashboardu                   |
+| `/api/analytics`               | GET          | Dane analityczne                  |
+| `/api/status`                  | GET          | Status polaczen API               |
+| `/api/settings`                | GET/PUT/POST | Konfiguracja + testy polaczen     |
+
+---
+
+## Komendy
+
+```bash
+# Development
+pnpm dev              # Uruchom dev server (port 5666)
+pnpm build            # Build produkcyjny
+pnpm start            # Uruchom produkcyjnie
+
+# Quality
+pnpm lint             # Sprawdz ESLint
+pnpm lint:fix         # Napraw automatycznie
+pnpm format           # Formatuj Prettier
+pnpm type-check       # Sprawdz typy TypeScript
+pnpm test             # Uruchom testy Vitest
+pnpm test:coverage    # Testy z pokryciem
+
+# Maintenance
+pnpm clean            # Wyczysc build artifacts i node_modules
+
+# Windows
+pnpm build:electron   # Build Electron app
+```
+
+---
+
+## Instalacja per system
+
+<details>
+<summary><strong>Windows (instalator EXE)</strong></summary>
+
+1. Zainstaluj [ActivityWatch](https://github.com/ActivityWatch/activitywatch/releases)
+2. Pobierz [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest)
+3. Uruchom instalator — Node.js jest wbudowany
+4. Kliknij "AI TimeTracker" w menu Start
+
+</details>
+
+<details>
+<summary><strong>macOS</strong></summary>
+
+```bash
+brew install node
+npm install -g pnpm
+brew install --cask activitywatch
+
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+cp .env.example apps/web/.env.local
+# Uzupelnij tokeny
+pnpm install && pnpm dev
+```
+
+**Uprawnienia:** System Settings > Privacy > Accessibility — dodaj ActivityWatch.
+
+</details>
+
+<details>
+<summary><strong>Linux (Ubuntu/Debian)</strong></summary>
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs git
+npm install -g pnpm
+sudo snap install activitywatch
+
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+cp .env.example apps/web/.env.local
+# Uzupelnij tokeny
+pnpm install && pnpm dev
+```
+
+</details>
+
+<details>
+<summary><strong>Docker</strong></summary>
+
+```bash
+git clone https://github.com/shopconnector/ai-timetracker.git
+cd ai-timetracker
+cp .env.example apps/web/.env.local
+# Uzupelnij tokeny
+docker build -t timetracker .
+docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
+```
+
+</details>
+
+---
+
+## Adresy
+
+| Usluga        | URL                               |
+| ------------- | --------------------------------- |
+| TimeTracker   | http://localhost:5666/timetracker |
+| ActivityWatch | http://localhost:5600             |
+
+---
+
+## Troubleshooting
+
+| Problem                    | Rozwiazanie                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| AI nie sugeruje ticketow   | Sprawdz `GEMINI_API_KEY` w `.env.local`. Bez klucza dziala regex fallback.     |
+| ActivityWatch brak danych  | macOS: System Settings > Privacy > Accessibility. Windows: uruchom jako admin. |
+| Port 5666 zajety           | `lsof -i :5666` (mac/linux) lub `netstat -ano \| findstr :5666` (windows)      |
+| KAGANIEC blokuje logowanie | Loguj do subtaskow zamiast do Story/Epic.                                      |
+| Gemini quota exceeded      | Darmowy tier ma limit. Zmien model na `gemini-2.5-pro` lub uzyj OpenRouter.    |
+| Build sie nie buduje       | `pnpm clean && pnpm install && pnpm build`                                     |
 
 ---
 
@@ -584,9 +436,5 @@ MIT
 ---
 
 <p align="center">
-  <a href="https://beecommerce.pl">
-    <img src="data:image/png;base64,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" alt="beecommerce.pl" width="40" height="40" />
-  </a>
-  <br/>
   <strong>Powered by <a href="https://beecommerce.pl">beecommerce.pl</a></strong>
 </p>

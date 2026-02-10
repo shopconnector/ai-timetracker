@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRecentDescriptions } from '@/lib/tempo';
+import { callGemini, extractJSON } from '@/lib/gemini';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const LLM_MODEL = process.env.LLM_MODEL || 'anthropic/claude-3.5-haiku';
@@ -44,10 +45,12 @@ interface SuggestWorklogResponse {
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openRouterKey = process.env.OPENROUTER_API_KEY;
+
+    if (!geminiKey && !openRouterKey) {
       return NextResponse.json(
-        { error: 'OPENROUTER_API_KEY not configured' },
+        { error: 'No AI API key configured (GEMINI_API_KEY or OPENROUTER_API_KEY)' },
         { status: 500 }
       );
     }
@@ -143,53 +146,64 @@ Odpowiedz TYLKO w formacie JSON:
   "confidence": 0.0-1.0
 }`;
 
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'http://localhost:3001',
-        'X-Title': 'TimeTracker'
-      },
-      body: JSON.stringify({
-        model: LLM_MODEL,
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 300
-      })
-    });
+    let parsed: Partial<SuggestWorklogResponse> | null = null;
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('OpenRouter error:', error);
-      return NextResponse.json(
-        { error: 'LLM API error' },
-        { status: 500 }
-      );
+    // 1. Try Gemini first
+    if (geminiKey) {
+      try {
+        const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+        const geminiResponse = await callGemini(prompt, {
+          apiKey: geminiKey,
+          model: geminiModel,
+          temperature: 0.3,
+          maxTokens: 1000,
+        });
+        parsed = extractJSON<Partial<SuggestWorklogResponse>>(geminiResponse);
+      } catch (error) {
+        console.error('Gemini error in suggest-worklog, falling back to OpenRouter:', error);
+      }
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
+    // 2. Fallback to OpenRouter
+    if (!parsed && openRouterKey) {
+      try {
+        const response = await fetch(OPENROUTER_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openRouterKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'http://localhost:3001',
+            'X-Title': 'TimeTracker'
+          },
+          body: JSON.stringify({
+            model: LLM_MODEL,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
+            max_tokens: 300
+          })
+        });
 
-    // Parse JSON from response with try-catch
-    const jsonMatch = content.match(/\{[\s\S]*?\}/); // Non-greedy to get first JSON object
-    if (!jsonMatch) {
-      console.warn('LLM did not return valid JSON, content:', content);
-      return NextResponse.json({
-        suggestedTicket: '',
-        description: '',
-        actionType: 'standarddevelopment',
-        confidence: 0
-      });
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '';
+          const jsonMatch = content.match(/\{[\s\S]*?\}/);
+          if (jsonMatch) {
+            try {
+              parsed = JSON.parse(jsonMatch[0]);
+            } catch {
+              // parse failed
+            }
+          }
+        } else {
+          const error = await response.text();
+          console.error('OpenRouter error:', error);
+        }
+      } catch (error) {
+        console.error('OpenRouter error in suggest-worklog:', error);
+      }
     }
 
-    let parsed: Partial<SuggestWorklogResponse>;
-    try {
-      parsed = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError, 'Content:', jsonMatch[0]);
+    if (!parsed) {
       return NextResponse.json({
         suggestedTicket: '',
         description: '',

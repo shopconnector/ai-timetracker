@@ -143,7 +143,9 @@ export default function SettingsPage() {
     jiraEmail: '',
     activityWatchUrl: 'http://localhost:5600',
     openRouterApiKey: '',
-    llmModel: 'anthropic/claude-3.5-haiku',
+    llmModel: 'gemini-2.5-flash',
+    geminiApiKey: '',
+    aiProvider: 'gemini' as 'gemini' | 'openrouter',
   });
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
@@ -193,7 +195,9 @@ export default function SettingsPage() {
           jiraEmail: settings.jiraEmail || '',
           activityWatchUrl: settings.activityWatchUrl || 'http://localhost:5600',
           openRouterApiKey: settings.openRouterApiKey || '',
-          llmModel: settings.llmModel || 'anthropic/claude-3.5-haiku',
+          llmModel: settings.llmModel || 'gemini-2.5-flash',
+          geminiApiKey: settings.geminiApiKey || '',
+          aiProvider: settings.aiProvider || 'gemini',
         });
       }
     } catch (error) {
@@ -796,63 +800,118 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* OpenRouter Configuration */}
+            {/* AI Provider Configuration */}
             <div className="space-y-3">
               <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
                 <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                OpenRouter (AI)
+                AI / LLM
               </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm text-gray-500 mb-1 block">API Key</label>
-                  <Input
-                    type="password"
-                    placeholder="OpenRouter API Key"
-                    value={apiConfig.openRouterApiKey}
-                    onChange={(e) => setApiConfig({ ...apiConfig, openRouterApiKey: e.target.value })}
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    Pobierz z: openrouter.ai/keys
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500 mb-1 block">Model LLM</label>
-                  <Select
-                    value={apiConfig.llmModel}
-                    onValueChange={(value) => setApiConfig({ ...apiConfig, llmModel: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Wybierz model" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="anthropic/claude-3.5-haiku">
-                        Claude 3.5 Haiku (szybki, $0.25/1k)
-                      </SelectItem>
-                      <SelectItem value="anthropic/claude-3.5-sonnet">
-                        Claude 3.5 Sonnet (premium, $3/1k)
-                      </SelectItem>
-                      <SelectItem value="openai/gpt-4o-mini">
-                        GPT-4o Mini (tani, $0.15/1k)
-                      </SelectItem>
-                      <SelectItem value="openai/gpt-4o">
-                        GPT-4o (premium, $5/1k)
-                      </SelectItem>
-                      <SelectItem value="google/gemini-flash-1.5">
-                        Gemini Flash 1.5 (najtańszy, $0.075/1k)
-                      </SelectItem>
-                      <SelectItem value="meta-llama/llama-3.1-70b-instruct">
-                        Llama 3.1 70B (open source, $0.59/1k)
-                      </SelectItem>
-                      <SelectItem value="qwen/qwen-2.5-72b-instruct">
-                        Qwen 2.5 72B (open source, $0.35/1k)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Automatyczny fallback do innych modeli jeśli wybrany zawiedzie
-                  </p>
-                </div>
+              <div>
+                <label className="text-sm text-gray-500 mb-1 block">Provider</label>
+                <Select
+                  value={apiConfig.aiProvider}
+                  onValueChange={(value: 'gemini' | 'openrouter') => {
+                    setApiConfig({ ...apiConfig, aiProvider: value });
+                  }}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini (Google AI)</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Gemini Configuration */}
+              {apiConfig.aiProvider === 'gemini' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-500 mb-1 block">Gemini API Key</label>
+                    <Input
+                      type="password"
+                      placeholder="Gemini API Key"
+                      value={apiConfig.geminiApiKey}
+                      onChange={e => setApiConfig({ ...apiConfig, geminiApiKey: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      Pobierz z: aistudio.google.com/apikey
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500 mb-1 block">Model Gemini</label>
+                    <Select
+                      value={apiConfig.llmModel}
+                      onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gemini-2.5-flash">
+                          Gemini 2.5 Flash (darmowy, szybki)
+                        </SelectItem>
+                        <SelectItem value="gemini-2.5-pro">
+                          Gemini 2.5 Pro ($1.25/1k, najlepsza jakosc)
+                        </SelectItem>
+                        <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash (darmowy)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {/* OpenRouter Configuration */}
+              {apiConfig.aiProvider === 'openrouter' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-500 mb-1 block">OpenRouter API Key</label>
+                    <Input
+                      type="password"
+                      placeholder="OpenRouter API Key"
+                      value={apiConfig.openRouterApiKey}
+                      onChange={e => setApiConfig({ ...apiConfig, openRouterApiKey: e.target.value })}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Pobierz z: openrouter.ai/keys</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-500 mb-1 block">Model LLM</label>
+                    <Select
+                      value={apiConfig.llmModel}
+                      onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="anthropic/claude-3.5-haiku">
+                          Claude 3.5 Haiku (szybki, $0.25/1k)
+                        </SelectItem>
+                        <SelectItem value="anthropic/claude-3.5-sonnet">
+                          Claude 3.5 Sonnet (premium, $3/1k)
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-4o-mini">
+                          GPT-4o Mini (tani, $0.15/1k)
+                        </SelectItem>
+                        <SelectItem value="openai/gpt-4o">GPT-4o (premium, $5/1k)</SelectItem>
+                        <SelectItem value="google/gemini-flash-1.5">
+                          Gemini Flash 1.5 ($0.075/1k)
+                        </SelectItem>
+                        <SelectItem value="meta-llama/llama-3.1-70b-instruct">
+                          Llama 3.1 70B ($0.59/1k)
+                        </SelectItem>
+                        <SelectItem value="qwen/qwen-2.5-72b-instruct">
+                          Qwen 2.5 72B ($0.35/1k)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Automatyczny fallback do innych modeli jeśli wybrany zawiedzie
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

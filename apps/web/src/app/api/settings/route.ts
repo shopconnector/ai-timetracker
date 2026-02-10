@@ -10,7 +10,8 @@ export async function GET() {
     const jiraEmail = process.env.JIRA_SERVICE_EMAIL;
     const activityWatchUrl = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    const llmModel = process.env.LLM_MODEL || 'anthropic/claude-3.5-haiku';
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const llmModel = process.env.LLM_MODEL || 'gemini-2.5-flash';
 
     return NextResponse.json({
       // API Config (masked)
@@ -21,12 +22,15 @@ export async function GET() {
       jiraEmail,
       activityWatchUrl,
       openRouterApiKey: openRouterApiKey ? '••••••••' : null,
+      geminiApiKey: geminiApiKey ? '••••••••' : null,
       llmModel,
+      aiProvider: geminiApiKey ? 'gemini' : 'openrouter',
 
       // Status flags
       hasTempoConfig: !!(tempoApiToken && tempoAccountId),
       hasJiraConfig: !!(jiraBaseUrl && jiraApiToken && jiraEmail),
       hasOpenRouterConfig: !!openRouterApiKey,
+      hasGeminiConfig: !!geminiApiKey,
     });
   } catch (error) {
     console.error('Get settings error:', error);
@@ -125,15 +129,38 @@ export async function POST(request: Request) {
       }
     }
 
-    // Test OpenRouter
-    if (testType === 'openrouter' || testType === 'all') {
+    // Test AI/LLM (Gemini first, then OpenRouter)
+    if (testType === 'openrouter' || testType === 'gemini' || testType === 'all') {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
       const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
-      if (openRouterApiKey) {
+      if (geminiApiKey) {
+        try {
+          const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: 'Odpowiedz: OK' }] }],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 10 },
+              }),
+              signal: AbortSignal.timeout(10000),
+            }
+          );
+          results.openrouter = {
+            success: res.ok,
+            message: res.ok ? `Gemini (${geminiModel}) dziala` : `Gemini error: ${res.status}`,
+          };
+        } catch (e) {
+          results.openrouter = { success: false, message: `Gemini blad: ${e}` };
+        }
+      } else if (openRouterApiKey) {
         try {
           const res = await fetch('https://openrouter.ai/api/v1/models', {
             headers: {
-              'Authorization': `Bearer ${openRouterApiKey}`,
+              Authorization: `Bearer ${openRouterApiKey}`,
             },
             signal: AbortSignal.timeout(5000),
           });
@@ -145,7 +172,7 @@ export async function POST(request: Request) {
           results.openrouter = { success: false, message: `Błąd połączenia: ${e}` };
         }
       } else {
-        results.openrouter = { success: false, message: 'Brak klucza API' };
+        results.openrouter = { success: false, message: 'Brak klucza API (Gemini lub OpenRouter)' };
       }
     }
 

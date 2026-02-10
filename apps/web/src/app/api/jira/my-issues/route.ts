@@ -7,6 +7,8 @@ import {
   getAllProjectsIssues,
   getFilteredIssues,
   groupIssuesByParent,
+  adfToPlainText,
+  JIRA_FIELDS_WITH_DESCRIPTION,
   JiraIssue,
   IssueFilter
 } from '@/lib/jira';
@@ -22,6 +24,23 @@ let allIssuesCacheTime = 0;
 const ALL_ISSUES_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 function formatIssue(issue: JiraIssue) {
+  // Komentarze — konwertuj ADF na plain text
+  const comments = (issue.fields.comment?.comments || [])
+    .map(c => ({
+      author: c.author?.displayName || 'System',
+      created: c.created,
+      body: adfToPlainText(c.body),
+    }))
+    .filter(c => c.body.length > 0);
+
+  // Subtaski z pełnymi danymi
+  const subtasks = (issue.fields.subtasks || []).map(s => ({
+    key: s.key,
+    summary: s.fields.summary,
+    status: s.fields.status.name,
+    type: s.fields.issuetype?.name || 'Sub-task',
+  }));
+
   return {
     ...formatIssueForDisplay(issue),
     id: issue.id,
@@ -29,11 +48,31 @@ function formatIssue(issue: JiraIssue) {
     type: issue.fields.issuetype?.name,
     priority: issue.fields.priority?.name,
     updated: issue.fields.updated,
+    updatedAt: issue.fields.updated,
+    // Project info
+    project: issue.fields.project?.key || null,
+    projectName: issue.fields.project?.name || null,
     // Hierarchia
     isSubtask: issue.fields.issuetype?.subtask === true,
     parentKey: issue.fields.parent?.key || null,
     parentSummary: issue.fields.parent?.fields?.summary || null,
-    subtaskCount: issue.fields.subtasks?.length || 0
+    subtaskCount: subtasks.length,
+    subtasks,
+    // Daty
+    created: issue.fields.created || null,
+    duedate: issue.fields.duedate || null,
+    // Czas
+    timeoriginalestimate: issue.fields.timeoriginalestimate || null,
+    timespent: issue.fields.timespent || null,
+    // Etykiety i komponenty
+    labels: issue.fields.labels || [],
+    components: (issue.fields.components || []).map(c => c.name),
+    // Status
+    resolution: issue.fields.resolution?.name || null,
+    // Opis i komentarze
+    description: adfToPlainText(issue.fields.description),
+    commentsCount: issue.fields.comment?.total || 0,
+    comments,
   };
 }
 
@@ -69,7 +108,12 @@ export async function GET(request: NextRequest) {
       issues = await searchAllIssues(query, Math.min(limit, 50));
     } else if (filter) {
       // Nowy filtr: in_progress, assigned, recent, all
-      issues = await getFilteredIssues(accountId, filter, Math.min(limit, 100));
+      issues = await getFilteredIssues(
+        accountId,
+        filter,
+        Math.min(limit, 200),
+        JIRA_FIELDS_WITH_DESCRIPTION
+      );
     } else if (loadAll || type === 'projects') {
       // Load ALL issues from all accessible projects
       const now = Date.now();

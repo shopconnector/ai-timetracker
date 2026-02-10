@@ -1,4 +1,5 @@
-// OpenRouter LLM Client for ticket suggestions
+// OpenRouter LLM Client for ticket suggestions (with Gemini-first fallback)
+import { callGemini, extractJSON } from './gemini';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const LLM_MODEL = process.env.LLM_MODEL || 'anthropic/claude-3.5-haiku';
@@ -356,11 +357,49 @@ async function callLLM(
   }
 }
 
+// Try Gemini for suggestion
+async function callGeminiForSuggestion(context: SuggestionContext): Promise<LLMResponse | null> {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) return null;
+
+  const startTime = Date.now();
+  const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const prompt = buildPrompt(context);
+
+  try {
+    const response = await callGemini(prompt, {
+      apiKey: geminiKey,
+      model: geminiModel,
+      temperature: 0.3,
+      maxTokens: 1000,
+    });
+
+    const parsed = extractJSON<{ ticket: string; confidence: number; reason: string }>(response);
+    if (parsed && parsed.ticket) {
+      return {
+        ticket: parsed.ticket,
+        confidence: Math.min(1, Math.max(0, parsed.confidence || 0.5)),
+        reason: parsed.reason || 'Sugestia Gemini',
+        model: geminiModel,
+        responseTime: Date.now() - startTime,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Gemini suggestion error:', error);
+    return null;
+  }
+}
+
 // Call LLM with automatic fallback to other models
 async function callLLMWithFallback(context: SuggestionContext): Promise<LLMResponse | null> {
+  // 0. Try Gemini first (if configured)
+  const geminiResult = await callGeminiForSuggestion(context);
+  if (geminiResult) return geminiResult;
+
   const primaryModel = LLM_MODEL;
 
-  // Try primary model first
+  // Try primary OpenRouter model
   const result = await callLLM(context, primaryModel);
   if (result) return result;
 

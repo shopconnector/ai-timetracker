@@ -5,6 +5,7 @@ import {
   BarChart3,
   Settings,
   Plug,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,6 +33,11 @@ export const navigation: NavSection[] = [
         title: 'Timesheet',
         href: '/timesheet',
         icon: Clock,
+      },
+      {
+        title: 'My Issues',
+        href: '/my-issues',
+        icon: ClipboardList,
       },
       {
         title: 'Calendar',
