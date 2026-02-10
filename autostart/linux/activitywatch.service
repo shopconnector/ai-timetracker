@@ -1,0 +1,13 @@
+[Unit]
+Description=ActivityWatch - Automated Time Tracking
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=__AW_EXEC_PATH__
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

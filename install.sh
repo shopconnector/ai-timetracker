@@ -226,7 +226,193 @@ fi
 echo ""
 
 # ═══════════════════════════════════════════════════════════════
-# KROK 6: Podsumowanie i uruchomienie
+# KROK 6: Autostart (PM2 + ActivityWatch)
+# ═══════════════════════════════════════════════════════════════
+echo "🔄 Konfiguracja produkcyjnego uruchomienia (PM2)..."
+echo ""
+
+# --- Detekcja ścieżek Node/PM2 ---
+detect_node_paths() {
+    # 1. Sprawdź aktualne PATH (respektuje nvm)
+    if command -v node &> /dev/null; then
+        NODE_BIN=$(command -v node)
+        NODE_BIN_DIR=$(dirname "$NODE_BIN")
+    fi
+
+    # 2. Fallback: source nvm jeśli nie znaleziono
+    if [ -z "$NODE_BIN_DIR" ]; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        if [ -s "$NVM_DIR/nvm.sh" ]; then
+            source "$NVM_DIR/nvm.sh"
+            if command -v node &> /dev/null; then
+                NODE_BIN=$(command -v node)
+                NODE_BIN_DIR=$(dirname "$NODE_BIN")
+            fi
+        fi
+    fi
+
+    # 3. Fallback: znane ścieżki
+    if [ -z "$NODE_BIN_DIR" ]; then
+        for dir in /opt/homebrew/bin /usr/local/bin /usr/bin; do
+            if [ -x "$dir/node" ]; then
+                NODE_BIN="$dir/node"
+                NODE_BIN_DIR="$dir"
+                break
+            fi
+        done
+    fi
+
+    # Resolve symlinks
+    if [ -n "$NODE_BIN" ] && command -v readlink &> /dev/null; then
+        REAL_NODE=$(readlink -f "$NODE_BIN" 2>/dev/null || echo "$NODE_BIN")
+        NODE_BIN_DIR=$(dirname "$REAL_NODE")
+    fi
+
+    # PM2 path
+    if command -v pm2 &> /dev/null; then
+        PM2_PATH=$(command -v pm2)
+    elif [ -n "$NODE_BIN_DIR" ] && [ -x "$NODE_BIN_DIR/pm2" ]; then
+        PM2_PATH="$NODE_BIN_DIR/pm2"
+    fi
+
+    # Resolve PM2 symlinks
+    if [ -n "$PM2_PATH" ] && command -v readlink &> /dev/null; then
+        PM2_PATH=$(readlink -f "$PM2_PATH" 2>/dev/null || echo "$PM2_PATH")
+    fi
+}
+
+detect_node_paths
+
+if [ -z "$NODE_BIN_DIR" ]; then
+    log_error "Nie znaleziono Node.js - nie mogę skonfigurować PM2"
+else
+    log_success "Node.js: $NODE_BIN_DIR"
+
+    # Instalacja PM2 jeśli brak
+    if [ -z "$PM2_PATH" ]; then
+        log_info "Instaluję PM2..."
+        npm install -g pm2
+        detect_node_paths
+    fi
+
+    if [ -n "$PM2_PATH" ]; then
+        log_success "PM2: $PM2_PATH"
+
+        # Build produkcyjny
+        log_info "Buduję aplikację (pnpm build)..."
+        pnpm build
+
+        # Uruchom przez PM2
+        log_info "Uruchamiam TimeTracker przez PM2..."
+        "$PM2_PATH" start ecosystem.config.js 2>/dev/null || "$PM2_PATH" restart ecosystem.config.js
+        "$PM2_PATH" save
+        log_success "TimeTracker działa na http://localhost:5666"
+
+        echo ""
+        # --- Autostart ---
+        read -p "Czy ustawić autostart po restarcie systemu? (Y/n): " SETUP_AUTOSTART
+
+        if [[ ! "$SETUP_AUTOSTART" =~ ^[Nn]$ ]]; then
+            # Utwórz katalog na logi
+            mkdir -p "$HOME/.timetracker/logs"
+
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # ═══ macOS: launchd ═══
+                log_info "Konfiguruję autostart macOS (launchd)..."
+
+                LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+                AUTOSTART_DIR="$(cd "$(dirname "$0")" && pwd)/autostart/macos"
+
+                # Migracja starego plista
+                OLD_PLIST="$LAUNCH_AGENTS/com.gaca.pm2-timetracker.plist"
+                if [ -f "$OLD_PLIST" ]; then
+                    log_info "Migruję stary plist (com.gaca.pm2-timetracker)..."
+                    launchctl bootout "gui/$(id -u)" "$OLD_PLIST" 2>/dev/null || true
+                    rm -f "$OLD_PLIST"
+                    log_success "Stary plist usunięty"
+                fi
+
+                # ActivityWatch plist
+                AW_PLIST="$LAUNCH_AGENTS/com.timetracker.activitywatch.plist"
+                if [ -f "$AUTOSTART_DIR/com.timetracker.activitywatch.plist" ]; then
+                    sed "s|__USER_HOME__|$HOME|g" \
+                        "$AUTOSTART_DIR/com.timetracker.activitywatch.plist" > "$AW_PLIST"
+                    launchctl bootstrap "gui/$(id -u)" "$AW_PLIST" 2>/dev/null || true
+                    log_success "ActivityWatch autostart zainstalowany"
+                fi
+
+                # PM2 plist
+                PM2_PLIST="$LAUNCH_AGENTS/com.timetracker.pm2.plist"
+                if [ -f "$AUTOSTART_DIR/com.timetracker.pm2.plist" ]; then
+                    sed -e "s|__PM2_PATH__|$PM2_PATH|g" \
+                        -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                        -e "s|__USER_HOME__|$HOME|g" \
+                        "$AUTOSTART_DIR/com.timetracker.pm2.plist" > "$PM2_PLIST"
+                    launchctl bootstrap "gui/$(id -u)" "$PM2_PLIST" 2>/dev/null || true
+                    log_success "PM2 TimeTracker autostart zainstalowany"
+                fi
+
+                echo ""
+                log_success "Autostart macOS skonfigurowany!"
+                log_info "Weryfikacja: launchctl list | grep timetracker"
+
+            elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+                # ═══ Linux: systemd user ═══
+                log_info "Konfiguruję autostart Linux (systemd)..."
+
+                SYSTEMD_DIR="$HOME/.config/systemd/user"
+                mkdir -p "$SYSTEMD_DIR"
+                AUTOSTART_DIR="$(cd "$(dirname "$0")" && pwd)/autostart/linux"
+
+                # Detekcja ActivityWatch executable
+                AW_EXEC=""
+                if command -v aw-qt &> /dev/null; then
+                    AW_EXEC=$(command -v aw-qt)
+                elif [ -x "/snap/bin/activitywatch" ]; then
+                    AW_EXEC="/snap/bin/activitywatch"
+                elif [ -x "$HOME/activitywatch/aw-qt" ]; then
+                    AW_EXEC="$HOME/activitywatch/aw-qt"
+                fi
+
+                # ActivityWatch service
+                if [ -n "$AW_EXEC" ] && [ -f "$AUTOSTART_DIR/activitywatch.service" ]; then
+                    sed "s|__AW_EXEC_PATH__|$AW_EXEC|g" \
+                        "$AUTOSTART_DIR/activitywatch.service" > "$SYSTEMD_DIR/activitywatch.service"
+                    systemctl --user enable activitywatch.service 2>/dev/null || true
+                    log_success "ActivityWatch autostart zainstalowany ($AW_EXEC)"
+                else
+                    log_warning "ActivityWatch nie znaleziony - pomijam autostart AW"
+                fi
+
+                # PM2 service
+                if [ -f "$AUTOSTART_DIR/timetracker-pm2.service" ]; then
+                    sed -e "s|__PM2_PATH__|$PM2_PATH|g" \
+                        -e "s|__NODE_BIN_DIR__|$NODE_BIN_DIR|g" \
+                        -e "s|__USER_HOME__|$HOME|g" \
+                        "$AUTOSTART_DIR/timetracker-pm2.service" > "$SYSTEMD_DIR/timetracker-pm2.service"
+                    systemctl --user enable timetracker-pm2.service 2>/dev/null || true
+                    log_success "PM2 TimeTracker autostart zainstalowany"
+                fi
+
+                systemctl --user daemon-reload 2>/dev/null || true
+                loginctl enable-linger "$USER" 2>/dev/null || true
+
+                echo ""
+                log_success "Autostart Linux skonfigurowany!"
+                log_info "Weryfikacja: systemctl --user status activitywatch timetracker-pm2"
+            fi
+        else
+            log_info "Pomijam konfigurację autostartu"
+        fi
+    else
+        log_error "Nie udało się zainstalować PM2"
+    fi
+fi
+
+echo ""
+
+# ═══════════════════════════════════════════════════════════════
+# KROK 7: Podsumowanie
 # ═══════════════════════════════════════════════════════════════
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -239,17 +425,15 @@ echo "║                                                              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
 
-read -p "Czy uruchomić TimeTracker teraz? (Y/n): " RUN_NOW
+log_info "TimeTracker działa w tle przez PM2."
+log_info "Komendy PM2:"
+echo "  pm2 status          - sprawdź status"
+echo "  pm2 logs             - logi aplikacji"
+echo "  pm2 restart all      - restart"
+echo ""
 
-if [[ ! "$RUN_NOW" =~ ^[Nn]$ ]]; then
-    echo ""
-    log_info "Uruchamiam TimeTracker..."
-    echo ""
-    pnpm dev
-else
-    echo ""
-    log_info "Aby uruchomić później, wejdź do folderu i uruchom:"
-    echo "  cd ai-timetracker"
-    echo "  pnpm dev"
-    echo ""
+if [[ ! "$SETUP_AUTOSTART" =~ ^[Nn]$ ]] 2>/dev/null; then
+    log_info "Autostart jest WŁĄCZONY - TimeTracker uruchomi się automatycznie po restarcie."
+    log_info "Aby wyłączyć: bash autostart/uninstall-autostart.sh"
 fi
+echo ""

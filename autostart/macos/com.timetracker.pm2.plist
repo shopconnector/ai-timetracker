@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.timetracker.pm2</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PM2_PATH__</string>
+        <string>resurrect</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__NODE_BIN_DIR__:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>__USER_HOME__</string>
+        <key>PM2_HOME</key>
+        <string>__USER_HOME__/.pm2</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>__USER_HOME__/.timetracker/logs/pm2-launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>__USER_HOME__/.timetracker/logs/pm2-launchd-error.log</string>
+</dict>
+</plist>

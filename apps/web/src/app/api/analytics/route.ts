@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorklogsForDate } from '@/lib/tempo';
-import { getWindowEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
+import { getAllEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
   for (const dateStr of workdays) {
     try {
       // ActivityWatch
-      const awEvents = await getWindowEvents(dateStr);
+      const awEvents = await getAllEvents(dateStr);
       const awSeconds = calculateAccurateAWTime(awEvents);
       const hourlyAW = calculateHourlyDistribution(awEvents);
       const apps = calculateAppBreakdown(awEvents);
@@ -262,7 +262,7 @@ export async function GET(request: NextRequest) {
 
   for (const dateStr of prevWorkdays) {
     try {
-      const awEvents = await getWindowEvents(dateStr);
+      const awEvents = await getAllEvents(dateStr);
       prevTotalAW += calculateAccurateAWTime(awEvents);
 
       const worklogs = await getWorklogsForDate(dateStr);

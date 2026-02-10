@@ -860,6 +860,21 @@ export async function getEditorEvents(date: string): Promise<AWEvent[]> {
   return unique;
 }
 
+// Get ALL events from ALL buckets (window + browser + editor) as raw AWEvent[]
+export async function getAllEvents(date: string): Promise<AWEvent[]> {
+  const [windowEvents, browserEvents, editorEvents] = await Promise.all([
+    getWindowEvents(date),
+    getChromeEvents(date),
+    getEditorEvents(date)
+  ]);
+
+  const allEvents = [...windowEvents, ...browserEvents, ...editorEvents];
+
+  console.log(`[ActivityWatch] getAllEvents ${date}: ${windowEvents.length} window, ${browserEvents.length} browser, ${editorEvents.length} editor = ${allEvents.length} total`);
+
+  return allEvents;
+}
+
 // Normalize title for grouping (bez usuwania ścieżek terminala)
 function normalizeTitle(title: string, isTerminal: boolean = false): string {
   // Dla terminali nie usuwaj ścieżek - będą parsowane osobno

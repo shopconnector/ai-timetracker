@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorklogsForDate } from '@/lib/tempo';
-import { getWindowEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
+import { getAllEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
 
 // System apps to filter out (cross-platform)
 const SYSTEM_APPS = [
@@ -232,7 +232,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Fetch ActivityWatch events
-    const awEvents = await getWindowEvents(date);
+    const awEvents = await getAllEvents(date);
     const activities = groupActivities(awEvents);
 
     // Fetch Tempo worklogs

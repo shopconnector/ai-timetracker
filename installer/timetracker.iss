@@ -79,8 +79,9 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
-; Autostart entry (if selected)
+; Autostart entries (if selected)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AITimeTracker"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ActivityWatch"; ValueData: """{localappdata}\activitywatch\aw-qt.exe"""; Flags: uninsdeletevalue createvalueifdoesntexist; Tasks: autostart
 
 [Run]
 ; Show readme / open app after install

@@ -1,0 +1,19 @@
+[Unit]
+Description=TimeTracker via PM2 - Auto time logging to Tempo/Jira
+After=activitywatch.service network.target
+Wants=activitywatch.service
+
+[Service]
+Type=forking
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=__USER_HOME__
+Environment=PM2_HOME=__USER_HOME__/.pm2
+ExecStartPre=/bin/sleep 5
+ExecStart=__PM2_PATH__ resurrect
+ExecStop=__PM2_PATH__ kill
+PIDFile=__USER_HOME__/.pm2/pm2.pid
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

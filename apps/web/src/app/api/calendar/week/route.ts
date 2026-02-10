@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWindowEvents, extractProjectInfo, extractMeetingInfo, extractCommunicationInfo, extractTerminalInfo, categorizeActivity, ActivityCategory } from '@/lib/activitywatch';
+import { getAllEvents, extractProjectInfo, extractMeetingInfo, extractCommunicationInfo, extractTerminalInfo, categorizeActivity, ActivityCategory } from '@/lib/activitywatch';
 import { getWorklogs } from '@/lib/tempo';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
@@ -105,7 +105,7 @@ function shouldBeOther(
 }
 
 async function getActivitiesForDate(date: string): Promise<TimeBlock[]> {
-  const events = await getWindowEvents(date);
+  const events = await getAllEvents(date);
 
   return events
     .filter(e => {

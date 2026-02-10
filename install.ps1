@@ -207,7 +207,60 @@ OPENROUTER_API_KEY=$openrouterKey
 Write-Host ""
 
 # ═══════════════════════════════════════════════════════════════
-# KROK 6: Podsumowanie i uruchomienie
+# KROK 6: Autostart (PM2 + ActivityWatch)
+# ═══════════════════════════════════════════════════════════════
+Write-Host "🔄 Konfiguracja produkcyjnego uruchomienia (PM2)..." -ForegroundColor Yellow
+Write-Host ""
+
+# Instalacja PM2 jeśli brak
+$hasPm2 = Get-Command pm2 -ErrorAction SilentlyContinue
+if (-not $hasPm2) {
+    Write-Host "ℹ️ Instaluję PM2..." -ForegroundColor Blue
+    npm install -g pm2
+    $hasPm2 = Get-Command pm2 -ErrorAction SilentlyContinue
+}
+
+if ($hasPm2) {
+    Write-Host "✅ PM2: $($(Get-Command pm2).Source)" -ForegroundColor Green
+
+    # Build produkcyjny
+    Write-Host "ℹ️ Buduję aplikację (pnpm build)..." -ForegroundColor Blue
+    pnpm build
+
+    # Uruchom przez PM2
+    Write-Host "ℹ️ Uruchamiam TimeTracker przez PM2..." -ForegroundColor Blue
+    try {
+        pm2 start ecosystem.config.js 2>$null
+    } catch {
+        pm2 restart ecosystem.config.js 2>$null
+    }
+    pm2 save
+
+    Write-Host "✅ TimeTracker działa na http://localhost:5666" -ForegroundColor Green
+    Write-Host ""
+
+    # Autostart
+    $setupAutostart = Read-Host "Czy ustawić autostart po restarcie systemu? (Y/n)"
+
+    if ($setupAutostart -notmatch "^[Nn]$") {
+        $autostartScript = Join-Path $PSScriptRoot "autostart\windows\setup-autostart.ps1"
+        if (Test-Path $autostartScript) {
+            Write-Host ""
+            & $autostartScript
+        } else {
+            Write-Host "⚠️ Nie znaleziono skryptu autostart: $autostartScript" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "ℹ️ Pomijam konfigurację autostartu" -ForegroundColor Blue
+    }
+} else {
+    Write-Host "❌ Nie udało się zainstalować PM2" -ForegroundColor Red
+}
+
+Write-Host ""
+
+# ═══════════════════════════════════════════════════════════════
+# KROK 7: Podsumowanie
 # ═══════════════════════════════════════════════════════════════
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Cyan
@@ -215,22 +268,18 @@ Write-Host "                   🎉 Instalacja zakończona!                     
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  ActivityWatch:  http://localhost:5600" -ForegroundColor White
-Write-Host "  TimeTracker:    http://localhost:5666/timetracker" -ForegroundColor White
+Write-Host "  TimeTracker:    http://localhost:5666" -ForegroundColor White
+Write-Host ""
+Write-Host "  Komendy PM2:" -ForegroundColor White
+Write-Host "    pm2 status         - sprawdź status" -ForegroundColor Gray
+Write-Host "    pm2 logs           - logi aplikacji" -ForegroundColor Gray
+Write-Host "    pm2 restart all    - restart" -ForegroundColor Gray
 Write-Host ""
 Write-Host "==================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$runNow = Read-Host "Czy uruchomić TimeTracker teraz? (Y/n)"
-
-if ($runNow -notmatch "^[Nn]$") {
-    Write-Host ""
-    Write-Host "ℹ️ Uruchamiam TimeTracker..." -ForegroundColor Blue
-    Write-Host ""
-    pnpm dev
-} else {
-    Write-Host ""
-    Write-Host "ℹ️ Aby uruchomić później:" -ForegroundColor Blue
-    Write-Host "  cd ai-timetracker" -ForegroundColor White
-    Write-Host "  pnpm dev" -ForegroundColor White
-    Write-Host ""
+if ($setupAutostart -notmatch "^[Nn]$") {
+    Write-Host "ℹ️ Autostart jest WŁĄCZONY - TimeTracker uruchomi się automatycznie po restarcie." -ForegroundColor Blue
+    Write-Host "ℹ️ Aby wyłączyć: powershell autostart\windows\uninstall-autostart.ps1" -ForegroundColor Blue
 }
+Write-Host ""
