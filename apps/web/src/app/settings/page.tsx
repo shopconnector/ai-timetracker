@@ -145,6 +145,7 @@ export default function SettingsPage() {
     openRouterApiKey: '',
     llmModel: 'gemini-2.5-flash',
     geminiApiKey: '',
+    slackUserToken: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
   });
   const [savingConfig, setSavingConfig] = useState(false);
@@ -197,6 +198,7 @@ export default function SettingsPage() {
           openRouterApiKey: settings.openRouterApiKey || '',
           llmModel: settings.llmModel || 'gemini-2.5-flash',
           geminiApiKey: settings.geminiApiKey || '',
+          slackUserToken: settings.slackUserToken || '',
           aiProvider: settings.aiProvider || 'gemini',
         });
       }
@@ -796,6 +798,26 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   Domyślnie: http://localhost:5600 (ActivityWatch musi być uruchomiony)
+                </p>
+              </div>
+            </div>
+
+            {/* Slack Configuration */}
+            <div className="space-y-3">
+              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+                <span className="w-2 h-2 bg-fuchsia-500 rounded-full"></span>
+                Slack (opcjonalne)
+              </h3>
+              <div>
+                <label className="text-sm text-gray-500 mb-1 block">User Token (xoxp-)</label>
+                <Input
+                  type="password"
+                  placeholder="xoxp-..."
+                  value={apiConfig.slackUserToken}
+                  onChange={(e) => setApiConfig({ ...apiConfig, slackUserToken: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Utwórz w: api.slack.com/apps &rarr; OAuth &amp; Permissions. Wymagane scopes: channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read
                 </p>
               </div>
             </div>

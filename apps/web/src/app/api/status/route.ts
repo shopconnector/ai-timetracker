@@ -74,6 +74,31 @@ async function checkJira(): Promise<ApiStatus> {
   }
 }
 
+async function checkSlack(): Promise<ApiStatus> {
+  const token = process.env.SLACK_USER_TOKEN;
+  if (!token) {
+    return { name: 'Slack', configured: false, status: 'unconfigured' };
+  }
+
+  try {
+    const response = await fetch('https://slack.com/api/auth.test', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await response.json();
+    if (data.ok) {
+      return { name: 'Slack', configured: true, status: 'ok', message: `Connected as ${data.user}` };
+    }
+    return { name: 'Slack', configured: true, status: 'error', message: data.error || 'Auth failed' };
+  } catch {
+    return { name: 'Slack', configured: true, status: 'error', message: 'Connection failed' };
+  }
+}
+
 async function checkOpenRouter(): Promise<ApiStatus> {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
@@ -90,15 +115,16 @@ async function checkOpenRouter(): Promise<ApiStatus> {
 }
 
 export async function GET() {
-  const [activityWatch, tempo, jira, openRouter] = await Promise.all([
+  const [activityWatch, tempo, jira, slack, openRouter] = await Promise.all([
     checkActivityWatch(),
     checkTempo(),
     checkJira(),
+    checkSlack(),
     checkOpenRouter()
   ]);
 
   return NextResponse.json({
-    apis: [activityWatch, tempo, jira, openRouter],
+    apis: [activityWatch, tempo, jira, slack, openRouter],
     allOk: [activityWatch, tempo, jira].every(a => a.status === 'ok')
   });
 }

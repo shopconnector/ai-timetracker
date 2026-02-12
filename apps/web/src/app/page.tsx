@@ -83,6 +83,13 @@ interface TempoWorklog {
   startTime: string;
 }
 
+interface SlackSummary {
+  totalMinutes: number;
+  conversationCount: number;
+  huddleCount: number;
+  configured: boolean;
+}
+
 interface DetailedData {
   date: string;
   summary: {
@@ -115,6 +122,8 @@ export default function DashboardPage() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
+  const [slackSummary, setSlackSummary] = useState<SlackSummary | null>(null);
+
   // Quick log form state
   const [quickLogTicket, setQuickLogTicket] = useState(QUICK_TICKETS[1].id);
   const [quickLogHours, setQuickLogHours] = useState('1');
@@ -142,6 +151,29 @@ export default function DashboardPage() {
       console.error('Error fetching dashboard:', error);
     } finally {
       setDashboardLoading(false);
+    }
+  };
+
+  const fetchSlackSummary = async (date: string) => {
+    try {
+      const response = await fetch(apiUrl(`/api/slack/activities?date=${date}`));
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.configured) {
+        setSlackSummary(null);
+        return;
+      }
+      const activities = data.activities || [];
+      const totalSeconds = activities.reduce((sum: number, a: { totalSeconds: number }) => sum + a.totalSeconds, 0);
+      const huddleCount = activities.filter((a: { isMeeting?: boolean }) => a.isMeeting).length;
+      setSlackSummary({
+        totalMinutes: Math.round(totalSeconds / 60),
+        conversationCount: activities.length,
+        huddleCount,
+        configured: true,
+      });
+    } catch {
+      // Slack is optional, ignore errors
     }
   };
 
@@ -200,12 +232,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchStatus(), fetchDashboard(), fetchDetailed(selectedDate)])
+    Promise.all([fetchStatus(), fetchDashboard(), fetchDetailed(selectedDate), fetchSlackSummary(selectedDate)])
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     fetchDetailed(selectedDate);
+    fetchSlackSummary(selectedDate);
   }, [selectedDate]);
 
   const getStatusBadge = (status: ApiStatus['status']) => {
@@ -357,6 +390,35 @@ export default function DashboardPage() {
               </>
             )}
           </div>
+        )}
+
+        {/* Slack Summary Card (optional) */}
+        {slackSummary && slackSummary.configured && slackSummary.conversationCount > 0 && (
+          <Card className="mb-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 border-0 shadow-xl">
+            <CardContent className="pt-6 pb-4">
+              <div className="flex items-center gap-6">
+                <div className="text-4xl">💬</div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-purple-100">Slack Activity — {selectedDate}</div>
+                  <div className="text-2xl font-bold text-white">
+                    {Math.floor(slackSummary.totalMinutes / 60)}h {slackSummary.totalMinutes % 60}m
+                  </div>
+                </div>
+                <div className="flex gap-6">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{slackSummary.conversationCount}</div>
+                    <div className="text-xs text-purple-200">conversations</div>
+                  </div>
+                  {slackSummary.huddleCount > 0 && (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">{slackSummary.huddleCount}</div>
+                      <div className="text-xs text-purple-200">huddles</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Charts Row */}

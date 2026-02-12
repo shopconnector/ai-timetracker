@@ -62,6 +62,8 @@ export interface Activity {
   meetingId?: string;
   isCommunication?: boolean;
   channel?: string;
+  // Source tracking (AW+Slack merge)
+  source?: 'aw' | 'slack' | 'merged';
 }
 
 // Helper: format time from ISO string
@@ -252,6 +254,18 @@ export function ActivityCard({
               {activity.category && (
                 <Badge className={`${getCategoryColor(activity.category)} text-xs`}>
                   {getCategoryLabel(activity.category)}
+                </Badge>
+              )}
+
+              {/* Source badge (AW+Slack correlation) */}
+              {activity.source === 'merged' && (
+                <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 text-xs">
+                  AW+Slack
+                </Badge>
+              )}
+              {activity.source === 'slack' && (
+                <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 text-xs">
+                  Slack
                 </Badge>
               )}
 

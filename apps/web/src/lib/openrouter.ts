@@ -131,6 +131,11 @@ export interface SuggestionContext {
     workingDir?: string;   // Katalog roboczy (PWD)
     gitBranch?: string;    // Branch git
     terminalCommand?: string; // Komenda
+    // Communication/meeting fields (Slack)
+    isCommunication?: boolean;
+    isMeeting?: boolean;
+    meetingPlatform?: string;
+    channel?: string;
   };
   history?: {
     recentTasks?: Array<{ key: string; name: string; useCount: number }>;
@@ -243,6 +248,14 @@ function buildPrompt(context: SuggestionContext): string {
     if (activity.terminalCommand) {
       contextSection += `\n  Komenda: ${activity.terminalCommand}`;
     }
+  }
+
+  // Communication/meeting context (Slack)
+  if (activity.isCommunication) {
+    contextSection += `\n[KOMUNIKACJA: ${activity.channel || activity.app}]`;
+  }
+  if (activity.isMeeting) {
+    contextSection += `\n[SPOTKANIE: ${activity.meetingPlatform || 'Unknown'}]`;
   }
 
   if (history?.recentTasks && history.recentTasks.length > 0) {
@@ -506,10 +519,29 @@ function getDefaultSuggestion(title: string, app: string, project?: string): Tic
   };
 }
 
+// Activity fields for batch suggestion
+interface BatchActivity {
+  id: string;
+  title: string;
+  app: string;
+  project?: string;
+  totalSeconds?: number;
+  isTerminal?: boolean;
+  shell?: string;
+  workingDir?: string;
+  gitBranch?: string;
+  terminalCommand?: string;
+  isCommunication?: boolean;
+  isMeeting?: boolean;
+  meetingPlatform?: string;
+  channel?: string;
+}
+
 // Batch suggest tickets for multiple activities
 export async function suggestTicketsForActivities(
-  activities: Array<{ id: string; title: string; app: string }>,
-  availableTickets: AvailableTicket[]
+  activities: BatchActivity[],
+  availableTickets: AvailableTicket[],
+  context?: SuggestionContext['history']
 ): Promise<Map<string, TicketSuggestion>> {
   const suggestions = new Map<string, TicketSuggestion>();
 
@@ -519,7 +551,25 @@ export async function suggestTicketsForActivities(
     const batch = activities.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (activity) => {
-        const suggestion = await suggestTicket(activity.title, activity.app, availableTickets);
+        const suggestion = await suggestTicketWithContext({
+          activity: {
+            title: activity.title,
+            app: activity.app,
+            project: activity.project,
+            duration: activity.totalSeconds,
+            isTerminal: activity.isTerminal,
+            shell: activity.shell,
+            workingDir: activity.workingDir,
+            gitBranch: activity.gitBranch,
+            terminalCommand: activity.terminalCommand,
+            isCommunication: activity.isCommunication,
+            isMeeting: activity.isMeeting,
+            meetingPlatform: activity.meetingPlatform,
+            channel: activity.channel,
+          },
+          history: context,
+          availableTickets,
+        });
         return { id: activity.id, suggestion };
       })
     );

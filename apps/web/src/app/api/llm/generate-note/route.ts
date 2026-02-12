@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getActivitiesForDate, GroupedActivity } from '@/lib/activitywatch';
+import { mergeActivities, getSlackActivitiesForDateSafe } from '@/lib/mergeActivities';
 import { callGemini } from '@/lib/gemini';
 
 // Filter activities by time range (startHour/endHour like "08:00"/"16:00")
@@ -190,8 +191,14 @@ export async function POST(request: Request) {
     const start = startHour || '08:00';
     const end = endHour || '16:00';
 
-    // 1. Fetch activities from ActivityWatch
-    const allActivities = await getActivitiesForDate(date);
+    // 1. Fetch activities from ActivityWatch + Slack
+    const [awActivities, slackActivities] = await Promise.all([
+      getActivitiesForDate(date),
+      getSlackActivitiesForDateSafe(date),
+    ]);
+    const allActivities = slackActivities.length > 0
+      ? mergeActivities(awActivities, slackActivities)
+      : awActivities;
 
     // 2. Filter by time range
     const filtered = filterByTimeRange(allActivities, start, end);

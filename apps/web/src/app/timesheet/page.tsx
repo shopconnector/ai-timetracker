@@ -33,6 +33,12 @@ import {
 } from '@/lib/taskHistory';
 import { recordTimeLog, recordMerge, recordSplit } from '@/lib/auditTrail';
 
+function formatSeconds(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 interface Summary {
   date: string;
   totalSeconds: number;
@@ -117,22 +123,26 @@ export default function TimesheetPage() {
 
   const dateStr = format(date, 'yyyy-MM-dd');
 
-  // Fetch activities from ActivityWatch
+  // Fetch activities from ActivityWatch + Slack (merged endpoint handles correlation)
   const fetchActivities = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(apiUrl(`/api/activities?date=${dateStr}`));
+      const response = await fetch(apiUrl(`/api/activities/merged?date=${dateStr}`));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data: ApiResponse = await response.json();
+      const data = await response.json();
       setActivities(data.activities);
       setSummary(data.summary);
       setAwStatus('connected');
+
+      const { awCount, slackCount, mergedCount } = data.stats || {};
+      const slackInfo = slackCount > 0 ? ` + ${slackCount} Slack` : '';
+      const mergeInfo = mergedCount > 0 ? ` (${mergedCount} merged)` : '';
       toast.success('Aktywności odświeżone', {
-        description: `${data.activities.length} aktywności na ${dateStr}`
+        description: `${awCount} AW${slackInfo}${mergeInfo} na ${dateStr}`
       });
     } catch (error) {
       setAwStatus('error');
@@ -282,7 +292,12 @@ export default function TimesheetPage() {
             shell: a.shell,
             workingDir: a.workingDir,
             gitBranch: a.gitBranch,
-            terminalCommand: a.terminalCommand
+            terminalCommand: a.terminalCommand,
+            // Slack/communication fields
+            isCommunication: a.isCommunication,
+            isMeeting: a.isMeeting,
+            meetingPlatform: a.meetingPlatform,
+            channel: a.channel,
           })),
           context: {
             recentTasks: recentTasks.map(t => ({

@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       const { activities } = body;
       const availableTickets = body.availableTickets || COMMON_TICKETS;
 
-      const suggestions = await suggestTicketsForActivities(activities, availableTickets);
+      const suggestions = await suggestTicketsForActivities(activities, availableTickets, body.context);
 
       // Convert Map to object for JSON
       const result: Record<string, { ticket: string; confidence: number; reason: string }> = {};

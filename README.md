@@ -1,6 +1,6 @@
 # AI TimeTracker
 
-**Inteligentny system logowania czasu pracy — Jira + Tempo + ActivityWatch + AI (Gemini)**
+**Inteligentny system logowania czasu pracy — Jira + Tempo + ActivityWatch + Slack + AI (Gemini)**
 
 ## Download (Windows 11)
 
@@ -9,8 +9,8 @@
 ---
 
 ```
-ActivityWatch ──> TimeTracker ──> Tempo/Jira
- (monitoring)      (web UI)       (worklogs)
+ActivityWatch + Slack ──> TimeTracker ──> Tempo/Jira
+ (monitoring)   (chat)     (web UI)       (worklogs)
 ```
 
 **Live demo:** https://ai.beecommerce.pl/timetracker
@@ -38,6 +38,7 @@ AI TimeTracker automatyzuje logowanie czasu pracy do Tempo/Jira:
 | **Porownanie**         | Zestawienie: czas ActivityWatch vs zalogowany w Tempo (diff per dzien)                                                  |
 | **KAGANIEC**           | Automatyczna blokada logowania do Stories/Epics — wymusza subtaski                                                      |
 | **Readiness Criteria** | Parsowanie oceny RC z komentarzy Jira (Automation for Jira)                                                             |
+| **Slack Integration**  | Korelacja AW+Slack: huddle, DM, kanaly — badge "AW+Slack", brak duplikatow                                             |
 | **Rules Engine**       | Reguly automatycznego dopasowywania ticketow (bez AI)                                                                   |
 | **Electron**           | Desktopowa aplikacja Windows z wbudowanym Node.js                                                                       |
 
@@ -83,6 +84,8 @@ ai-timetracker/
 │       │       ├── jira.ts           # Jira REST API client
 │       │       ├── tempo.ts          # Tempo REST API client
 │       │       ├── activitywatch.ts  # ActivityWatch API client
+│       │       ├── slack.ts          # Slack User Token API client
+│       │       ├── mergeActivities.ts # AW+Slack korelacja
 │       │       ├── readiness.ts      # Parser Readiness Criteria
 │       │       ├── rules-engine.ts   # Silnik regul dopasowywania
 │       │       ├── suggestion-service.ts  # Unified AI suggestion pipeline
@@ -167,6 +170,15 @@ Aplikacja bedzie dostepna na: **http://localhost:5666/timetracker**
 1. Wejdz: https://openrouter.ai/keys
 2. Skopiuj do `OPENROUTER_API_KEY=` w `.env.local`
 
+#### Slack Integration (opcjonalne)
+
+1. Stworz Slack App: https://api.slack.com/apps > **Create New App** > From scratch
+2. **OAuth & Permissions** > User Token Scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `users:read`
+3. **Install to Workspace** > skopiuj **User OAuth Token** (`xoxp-...`)
+4. Wklej do `SLACK_USER_TOKEN=` w `.env.local`
+
+> Slack integration koreluje aktywnosci AW (okno Slack) z danymi Slack API (kanaly, huddle). Eliminuje podwojne liczenie czasu.
+
 ---
 
 ## Konfiguracja (.env.local)
@@ -189,6 +201,9 @@ ACTIVITYWATCH_URL=http://localhost:5600
 
 # OpenRouter (opcjonalne — fallback)
 OPENROUTER_API_KEY=
+
+# Slack (opcjonalne — korelacja z ActivityWatch)
+SLACK_USER_TOKEN=xoxp-...
 ```
 
 ---
@@ -316,6 +331,8 @@ Przy probie zalogowania do zablokowanego ticketa: komunikat bledu z lista dostep
 | `/api/llm/suggest`             | POST         | AI sugestia ticketa               |
 | `/api/llm/suggest-worklog`     | POST         | AI sugestia workloga              |
 | `/api/activities`              | GET          | Aktywnosci z ActivityWatch        |
+| `/api/activities/merged`       | GET          | AW + Slack (skorelowane)          |
+| `/api/slack/activities`        | GET          | Aktywnosci ze Slack API           |
 | `/api/dashboard`               | GET          | Dane dashboardu                   |
 | `/api/analytics`               | GET          | Dane analityczne                  |
 | `/api/status`                  | GET          | Status polaczen API               |
