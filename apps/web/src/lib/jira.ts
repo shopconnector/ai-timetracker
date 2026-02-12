@@ -268,8 +268,8 @@ export async function getAllAccessibleIssues(
   // Query for issues user can access - must have restrictions for new API
   // Using updatedDate restriction to satisfy "bounded query" requirement
   const jql = accountId
-    ? `(assignee = "${accountId}" OR worklogAuthor = "${accountId}") AND updatedDate >= -90d AND status != Done ORDER BY updated DESC`
-    : `updatedDate >= -90d AND status != Done ORDER BY updated DESC`;
+    ? `(assignee = "${accountId}" OR worklogAuthor = "${accountId}") AND updatedDate >= -90d AND status not in (Done) ORDER BY updated DESC`
+    : `updatedDate >= -90d AND status not in (Done) ORDER BY updated DESC`;
 
   const allIssues: JiraIssue[] = [];
   let nextPageToken: string | undefined;
@@ -301,7 +301,7 @@ export async function getAllProjectsIssues(maxTotal = 300): Promise<JiraIssue[]>
 
   // Query all projects at once - add date restriction for new API
   const projectsJql = projectKeys.slice(0, 20).map(k => `"${k}"`).join(', ');
-  const jql = `project IN (${projectsJql}) AND updatedDate >= -180d AND status != Done ORDER BY updated DESC`;
+  const jql = `project IN (${projectsJql}) AND updatedDate >= -180d AND status not in (Done) ORDER BY updated DESC`;
 
   const allIssues: JiraIssue[] = [];
   let nextPageToken: string | undefined;
@@ -442,7 +442,7 @@ export async function getAllProjects(): Promise<JiraProject[]> {
 
 // Get issues assigned to a specific user
 export async function getAssignedIssues(accountId: string, maxResults = 50): Promise<JiraIssue[]> {
-  const jql = `assignee = "${accountId}" AND status != Done ORDER BY updated DESC`;
+  const jql = `assignee = "${accountId}" AND status not in (Done) ORDER BY updated DESC`;
   const result = await searchIssues(jql, maxResults);
   return result.issues;
 }
@@ -554,7 +554,7 @@ export async function getFilteredIssues(
       break;
     case 'assigned':
       // Wszystkie przypisane (nie Done)
-      jql = `assignee = "${accountId}" AND status != Done ORDER BY updated DESC`;
+      jql = `assignee = "${accountId}" AND status not in (Done) ORDER BY updated DESC`;
       break;
     case 'recent':
       // Ostatnio logowane (7 dni)
