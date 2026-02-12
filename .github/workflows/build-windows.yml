@@ -217,6 +217,64 @@ jobs:
           }
           Write-Host "All paths within MAX_PATH limit"
 
+      - name: Create start-server.js
+        shell: pwsh
+        run: |
+          $StartServerContent = @'
+          // TimeTracker start-server.js
+          // Loads env vars from data\.env.local before starting the Next.js server.
+          // This replaces the fragile batch-file env parser that broke on Windows
+          // with values containing special characters or empty values.
+          const fs = require('fs');
+          const path = require('path');
+
+          const envFile = path.join(__dirname, 'data', '.env.local');
+          if (fs.existsSync(envFile)) {
+            const lines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
+            let loaded = 0;
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith('#')) continue;
+              const eqIdx = trimmed.indexOf('=');
+              if (eqIdx > 0) {
+                const key = trimmed.substring(0, eqIdx).trim();
+                let val = trimmed.substring(eqIdx + 1).trim();
+                // Strip surrounding quotes if present
+                if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                  val = val.slice(1, -1);
+                }
+                if (val) {
+                  process.env[key] = val;
+                  loaded++;
+                }
+              }
+            }
+            console.log(`[start-server] Loaded ${loaded} env vars from data/.env.local`);
+          } else {
+            console.log('[start-server] No data/.env.local found — using system env vars only');
+          }
+
+          // Log Jira config status (helps diagnose "tasks not loading" issues)
+          const jiraUrl = process.env.JIRA_BASE_URL;
+          const jiraEmail = process.env.JIRA_SERVICE_EMAIL;
+          const jiraKey = process.env.JIRA_API_KEY;
+          if (jiraUrl && jiraEmail && jiraKey) {
+            console.log(`[start-server] Jira: configured (${jiraUrl})`);
+          } else {
+            const missing = [];
+            if (!jiraUrl) missing.push('JIRA_BASE_URL');
+            if (!jiraEmail) missing.push('JIRA_SERVICE_EMAIL');
+            if (!jiraKey) missing.push('JIRA_API_KEY');
+            console.log(`[start-server] WARNING: Jira not fully configured — missing: ${missing.join(', ')}`);
+          }
+
+          // Start the Next.js server
+          require('./app/apps/web/server.js');
+          '@
+
+          Set-Content -Path "dist/windows/start-server.js" -Value $StartServerContent -Encoding UTF8
+          Write-Host "start-server.js created"
+
       - name: Create launcher
         shell: pwsh
         run: |
@@ -225,17 +283,17 @@ jobs:
           chcp 65001 >nul 2>&1
           title AI TimeTracker
           cd /d "%~dp0"
-          
+
           set PORT=5666
           set APP_URL=http://localhost:%PORT%/timetracker
           set AW_URL=http://localhost:5600
-          
+
           echo.
           echo ═══════════════════════════════════════════════════════════════════
           echo              AI TimeTracker v${{ steps.version.outputs.version }}
           echo ═══════════════════════════════════════════════════════════════════
           echo.
-          
+
           :: Check ActivityWatch
           echo Checking ActivityWatch...
           curl -s -o nul -w "" %AW_URL%/api/0/info >nul 2>&1
@@ -252,7 +310,7 @@ jobs:
           ) else (
               echo   OK - ActivityWatch running
           )
-          
+
           :: Check configuration
           echo Checking configuration...
           if not exist "data\.env.local" (
@@ -266,21 +324,8 @@ jobs:
                   pause >nul
               )
           )
-          
-          :: Load .env.local
-          if exist "data\.env.local" (
-              for /f "usebackq tokens=1,* delims==" %%a in ("data\.env.local") do (
-                  set "line=%%a"
-                  setlocal enabledelayedexpansion
-                  if not "!line:~0,1!"=="#" (
-                      endlocal
-                      set "%%a=%%b"
-                  ) else (
-                      endlocal
-                  )
-              )
-          )
-          
+
+          :: Env vars from data\.env.local are loaded by start-server.js (Node.js side)
           set NODE_ENV=production
           set HOSTNAME=localhost
           if not defined ACTIVITYWATCH_URL set "ACTIVITYWATCH_URL=http://localhost:5600"
@@ -295,13 +340,16 @@ jobs:
           start "" /min cmd /c "timeout /t 3 /nobreak >nul && start %APP_URL%"
           if not exist "logs" mkdir logs
           echo [%date% %time%] Starting TimeTracker... >> "logs\timetracker.log"
-          "node\node.exe" "app\apps\web\server.js" 2>> "logs\timetracker.log"
-          echo [%date% %time%] TimeTracker stopped (exit code: %errorlevel%) >> "logs\timetracker.log"
+
+          :start_server
+          "node\node.exe" "start-server.js" 2>> "logs\timetracker.log"
+          echo [%date% %time%] Server exited (code: %errorlevel%) >> "logs\timetracker.log"
           echo.
-          echo TimeTracker stopped. Check logs\timetracker.log for errors.
-          pause
+          echo   Server stopped. Restarting in 5 seconds... (close window to stop)
+          timeout /t 5 /nobreak >nul
+          goto start_server
           '@
-          
+
           Set-Content -Path "dist/windows/TimeTracker.bat" -Value $LauncherContent -Encoding UTF8
 
       - name: Create PowerShell launcher
@@ -353,14 +401,7 @@ jobs:
               }
           }
 
-          # Load environment
-          if (Test-Path "data\.env.local") {
-              Get-Content "data\.env.local" | ForEach-Object {
-                  if ($_ -match "^([^#][^=]+)=(.*)$") {
-                      [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process")
-                  }
-              }
-          }
+          # Env vars from data\.env.local are loaded by start-server.js (Node.js side)
 
           # Set server env
           $env:NODE_ENV = "production"
@@ -375,8 +416,8 @@ jobs:
           # Open browser
           Start-Job { Start-Sleep -Seconds 3; Start-Process $using:AppUrl } | Out-Null
 
-          # Start server
-          & "node\node.exe" "app\apps\web\server.js"
+          # Start server (start-server.js loads .env.local before launching Next.js)
+          & "node\node.exe" "start-server.js"
           '@
 
           Set-Content -Path "dist/windows/TimeTracker.ps1" -Value $PsLauncherContent -Encoding UTF8
@@ -469,7 +510,8 @@ jobs:
           
           # Start server in background
           $ServerProcess = Start-Process -FilePath "dist/windows/node/node.exe" `
-            -ArgumentList "dist/windows/app/apps/web/server.js" `
+            -ArgumentList "dist/windows/start-server.js" `
+            -WorkingDirectory "dist/windows" `
             -PassThru -NoNewWindow
           
           Start-Sleep -Seconds 10

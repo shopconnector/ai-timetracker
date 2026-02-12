@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "AI TimeTracker"
-#define MyAppVersion "0.4.4"
+#define MyAppVersion "0.4.5"
 #define MyAppPublisher "ShopConnector"
 #define MyAppURL "https://github.com/shopconnector/ai-timetracker"
 #define MyAppExeName "TimeTracker.bat"
@@ -63,6 +63,9 @@ Source: "..\dist\windows\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recu
 
 ; Data directory
 Source: "..\dist\windows\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs onlyifdoesntexist
+
+; Env loader + server wrapper
+Source: "..\dist\windows\start-server.js"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Launchers
 Source: "..\dist\windows\TimeTracker.bat"; DestDir: "{app}"; Flags: ignoreversion
