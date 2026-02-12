@@ -28,7 +28,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 
 ; Output
 OutputDir=output
-OutputBaseFilename=TimeTracker-Setup-x64
+OutputBaseFilename=TimeTracker-Setup-{#MyAppVersion}-x64
 ; SetupIconFile=icon.ico  ; TODO: Add custom icon
 Compression=lzma2/ultra64
 SolidCompression=yes

@@ -546,54 +546,37 @@ jobs:
           path: dist/TimeTracker-Setup-*.exe
           retention-days: 30
 
-      - name: Commit EXE to releases folder
+      - name: Create GitHub Release
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          mkdir -p releases
-          cp dist/TimeTracker-Setup-x64.exe releases/
-          git add releases/TimeTracker-Setup-x64.exe
-          git commit -m "chore: Auto-update Windows installer (${{ steps.version.outputs.version }}) [skip ci]"
-          git push origin HEAD:main
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
 
-  # Create GitHub Release on tags
-  release:
-    needs: build-windows
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+          # Delete existing release/tag if exists (for re-runs)
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "AI TimeTracker ${{ github.ref_name }}"
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
-          files: |
-            artifacts/TimeTracker-installer/*.exe
-            artifacts/TimeTracker-portable/*.zip
-          body: |
-            ## Installation
-            
-            ### Option 1: Installer (Recommended)
-            1. Download `TimeTracker-Setup-x64.exe`
-            2. Run installer
-            3. Launch "AI TimeTracker" from Start Menu
-            
-            ### Option 2: Portable
-            1. Download `TimeTracker-*-portable-x64.zip`
-            2. Extract to any folder
-            3. Run `TimeTracker.bat`
-            
-            ## Requirements
-            - **ActivityWatch** - Download from [activitywatch.net](https://activitywatch.net/downloads/)
-            - Jira/Tempo API tokens (configure in Settings after first launch)
+          # Create release with installer and portable zip
+          gh release create "$TAG" \
+            dist/TimeTracker-Setup-*-x64.exe \
+            dist/TimeTracker-*-portable-x64.zip \
+            --title "AI TimeTracker $TAG" \
+            --notes "$(cat <<EOF
+          ## Installation
+
+          ### Option 1: Installer (Recommended)
+          1. Download \`TimeTracker-Setup-${VERSION}-x64.exe\`
+          2. Run installer
+          3. Launch "AI TimeTracker" from Start Menu
+
+          ### Option 2: Portable
+          1. Download \`TimeTracker-${VERSION}-portable-x64.zip\`
+          2. Extract to any folder
+          3. Run \`TimeTracker.bat\`
+
+          ## Requirements
+          - **ActivityWatch** - Download from [activitywatch.net](https://activitywatch.net/downloads/)
+          - Jira/Tempo API tokens (configure in Settings after first launch)
+          EOF
+          )"
