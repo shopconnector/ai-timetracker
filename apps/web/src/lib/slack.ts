@@ -25,49 +25,111 @@ export function isSlackConfigured(): boolean {
 }
 
 // ========================================
-// RATE LIMITER — max 50 req/min
+// RATE LIMITER — token bucket, ~40 req/min
 // ========================================
 
-class RateLimiter {
-  private queue: Array<() => void> = [];
-  private running = 0;
-  private readonly maxPerMinute: number;
-  private readonly intervalMs: number;
+class TokenBucketLimiter {
+  private tokens: number;
+  private readonly maxTokens: number;
+  private readonly refillIntervalMs: number;
+  private lastRefill: number;
 
-  constructor(maxPerMinute = 50) {
-    this.maxPerMinute = maxPerMinute;
-    this.intervalMs = Math.ceil(60000 / maxPerMinute); // ~1200ms between requests
+  constructor(maxTokens = 40, refillPerMinute = 40) {
+    this.maxTokens = maxTokens;
+    this.tokens = maxTokens;
+    this.refillIntervalMs = 60000 / refillPerMinute;
+    this.lastRefill = Date.now();
+  }
+
+  private refill() {
+    const now = Date.now();
+    const elapsed = now - this.lastRefill;
+    const newTokens = Math.floor(elapsed / this.refillIntervalMs);
+    if (newTokens > 0) {
+      this.tokens = Math.min(this.maxTokens, this.tokens + newTokens);
+      this.lastRefill = now;
+    }
   }
 
   async acquire(): Promise<void> {
-    return new Promise((resolve) => {
-      const tryRun = () => {
-        if (this.running < this.maxPerMinute) {
-          this.running++;
-          setTimeout(() => {
-            this.running--;
-            if (this.queue.length > 0) {
-              const next = this.queue.shift();
-              next?.();
-            }
-          }, this.intervalMs);
-          resolve();
-        } else {
-          this.queue.push(tryRun);
-        }
-      };
-      tryRun();
-    });
+    this.refill();
+    if (this.tokens > 0) {
+      this.tokens--;
+      return;
+    }
+    // Wait until next token is available
+    const waitMs = this.refillIntervalMs - (Date.now() - this.lastRefill);
+    await new Promise(resolve => setTimeout(resolve, Math.max(waitMs, 100)));
+    this.refill();
+    this.tokens = Math.max(0, this.tokens - 1);
   }
 }
 
-const rateLimiter = new RateLimiter(50);
+const rateLimiter = new TokenBucketLimiter(40, 40);
 
 // ========================================
-// USER CACHE — in-memory, per request cycle
+// CACHES — in-memory with TTL
 // ========================================
 
 const userCache = new Map<string, string>();
+
+// Activities cache: date -> { data, expiry }
+const activitiesCache = new Map<string, { data: GroupedActivity[]; expiry: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Conversations list cache
+let conversationsCache: { data: SlackConversation[]; expiry: number } | null = null;
+const CONVERSATIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// In-flight dedup: prevent parallel fetches for same date
+const inFlight = new Map<string, Promise<GroupedActivity[]>>();
+
+// ========================================
+// SLACK API WITH RETRY
+// ========================================
+
+async function slackFetch(url: string, retries = 2): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await rateLimiter.acquire();
+    const res = await fetch(url, {
+      headers: getSlackHeaders(),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      // Re-attach parsed JSON so callers don't double-parse
+      return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (data.error === 'ratelimited') {
+      const retryAfter = parseInt(res.headers.get('Retry-After') || '5', 10);
+      console.warn(`[Slack] Rate limited, waiting ${retryAfter}s (attempt ${attempt + 1}/${retries + 1})`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      continue;
+    }
+
+    // Return non-ok response for caller to handle
+    return new Response(JSON.stringify(data), {
+      status: res.status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // All retries exhausted
+  return new Response(JSON.stringify({ ok: false, error: 'ratelimited_exhausted' }), {
+    status: 429,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// ========================================
+// USER DISPLAY NAME
+// ========================================
 
 async function getUserDisplayName(userId: string): Promise<string> {
   if (userCache.has(userId)) {
@@ -75,16 +137,7 @@ async function getUserDisplayName(userId: string): Promise<string> {
   }
 
   try {
-    await rateLimiter.acquire();
-    const res = await fetch(`${SLACK_API_BASE}/users.info?user=${userId}`, {
-      headers: getSlackHeaders(),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) {
-      return userId;
-    }
-
+    const res = await slackFetch(`${SLACK_API_BASE}/users.info?user=${userId}`);
     const data = await res.json();
     if (data.ok && data.user) {
       const name = data.user.real_name || data.user.name || userId;
@@ -140,11 +193,15 @@ interface SlackMessage {
 }
 
 async function listConversations(): Promise<SlackConversation[]> {
+  // Check cache
+  if (conversationsCache && Date.now() < conversationsCache.expiry) {
+    return conversationsCache.data;
+  }
+
   const allConversations: SlackConversation[] = [];
   let cursor: string | undefined;
 
   do {
-    await rateLimiter.acquire();
     const params = new URLSearchParams({
       types: 'im,mpim,public_channel,private_channel',
       limit: '200',
@@ -154,11 +211,7 @@ async function listConversations(): Promise<SlackConversation[]> {
       params.set('cursor', cursor);
     }
 
-    const res = await fetch(`${SLACK_API_BASE}/conversations.list?${params}`, {
-      headers: getSlackHeaders(),
-      signal: AbortSignal.timeout(10000),
-    });
-
+    const res = await slackFetch(`${SLACK_API_BASE}/conversations.list?${params}`);
     const data = await res.json();
     if (!data.ok) {
       console.error('[Slack] conversations.list error:', data.error);
@@ -168,6 +221,12 @@ async function listConversations(): Promise<SlackConversation[]> {
     allConversations.push(...(data.channels || []));
     cursor = data.response_metadata?.next_cursor;
   } while (cursor);
+
+  // Cache the result
+  conversationsCache = {
+    data: allConversations,
+    expiry: Date.now() + CONVERSATIONS_CACHE_TTL_MS,
+  };
 
   return allConversations;
 }
@@ -181,7 +240,6 @@ async function getConversationHistory(
   let cursor: string | undefined;
 
   do {
-    await rateLimiter.acquire();
     const params = new URLSearchParams({
       channel: channelId,
       oldest,
@@ -192,16 +250,17 @@ async function getConversationHistory(
       params.set('cursor', cursor);
     }
 
-    const res = await fetch(`${SLACK_API_BASE}/conversations.history?${params}`, {
-      headers: getSlackHeaders(),
-      signal: AbortSignal.timeout(10000),
-    });
-
+    const res = await slackFetch(`${SLACK_API_BASE}/conversations.history?${params}`);
     const data = await res.json();
     if (!data.ok) {
       // channel_not_found, not_in_channel — skip silently
       if (data.error === 'channel_not_found' || data.error === 'not_in_channel') {
         return [];
+      }
+      // ratelimited_exhausted — skip this channel, don't break all
+      if (data.error === 'ratelimited_exhausted') {
+        console.warn(`[Slack] Skipping ${channelId} — rate limit exhausted`);
+        return allMessages; // return what we have so far
       }
       console.error(`[Slack] history error for ${channelId}:`, data.error);
       break;
@@ -232,7 +291,7 @@ interface SlackActivityData {
 /**
  * Session-based time estimation for regular messages.
  * Groups messages into sessions (gap > 5 min = new session).
- * Per session: min(numMsgs * 30s + 60s overhead, 600s max).
+ * Per session: min(numMsgs * 15s + 30s overhead, 300s cap).
  */
 function estimateSessionTime(messages: SlackMessage[]): number {
   if (messages.length === 0) return 0;
@@ -264,7 +323,7 @@ function estimateSessionTime(messages: SlackMessage[]): number {
 /**
  * Huddle time estimation: count distinct huddle occurrences.
  * Huddle messages within 30 min = same huddle.
- * Each distinct huddle ≈ 10 minutes.
+ * Each distinct huddle ≈ 8 minutes.
  */
 function estimateHuddleTime(messages: SlackMessage[]): number {
   const HUDDLE_ESTIMATE_S = 8 * 60; // 8 min per huddle (conservative estimate)
@@ -292,11 +351,9 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
   // Sort messages by timestamp
   const sorted = [...messages].sort((a, b) => parseFloat(a.ts) - parseFloat(b.ts));
   const firstTs = sorted[0]?.ts;
-  const lastTs = sorted[sorted.length - 1]?.ts;
 
   // Calculate time span for positioning
   const firstTime = firstTs ? new Date(parseFloat(firstTs) * 1000) : new Date(`${date}T09:00:00`);
-  const lastTime = lastTs ? new Date(parseFloat(lastTs) * 1000) : firstTime;
 
   // Detect huddles
   const huddleMessages = messages.filter(isHuddleMessage);
@@ -341,10 +398,6 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
     title = `#${conversation.name || 'unknown'}`;
   }
 
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const formattedDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-
   // lastSeen = firstSeen + estimated duration (NOT last message time)
   // Otherwise calendar shows e.g. 09:38-18:24 for a 22min huddle
   const estimatedEnd = new Date(firstTime.getTime() + totalSeconds * 1000);
@@ -369,55 +422,80 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
 // MAIN: Get Slack activities for a date
 // ========================================
 
+async function fetchSlackActivitiesForDate(date: string): Promise<GroupedActivity[]> {
+  // Date boundaries as Unix timestamps
+  const dayStart = new Date(`${date}T00:00:00`);
+  const dayEnd = new Date(`${date}T23:59:59`);
+  const oldest = String(Math.floor(dayStart.getTime() / 1000));
+  const latest = String(Math.floor(dayEnd.getTime() / 1000));
+
+  // 1. Get all conversations (cached)
+  const conversations = await listConversations();
+  console.log(`[Slack] Found ${conversations.length} conversations for ${date}`);
+
+  // 2. For each conversation, get messages in the date range
+  const activities: GroupedActivity[] = [];
+
+  for (const conv of conversations) {
+    const messages = await getConversationHistory(conv.id, oldest, latest);
+
+    if (messages.length === 0) continue;
+
+    // Resolve display name for DMs
+    let displayName = conv.name || 'Unknown';
+    if (conv.is_im && conv.user) {
+      displayName = await getUserDisplayName(conv.user);
+    }
+
+    const activity = slackConversationToActivity({
+      conversation: conv,
+      messages,
+      date,
+      displayName,
+    });
+
+    activities.push(activity);
+  }
+
+  // Sort by total time descending
+  activities.sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+  console.log(`[Slack] ${date}: ${activities.length} active conversations`);
+  return activities;
+}
+
 export async function getSlackActivitiesForDate(date: string): Promise<GroupedActivity[]> {
   if (!isSlackConfigured()) {
     return [];
   }
 
-  try {
-    // Date boundaries as Unix timestamps
-    const dayStart = new Date(`${date}T00:00:00`);
-    const dayEnd = new Date(`${date}T23:59:59`);
-    const oldest = String(Math.floor(dayStart.getTime() / 1000));
-    const latest = String(Math.floor(dayEnd.getTime() / 1000));
-
-    // 1. Get all conversations
-    const conversations = await listConversations();
-    console.log(`[Slack] Found ${conversations.length} conversations for ${date}`);
-
-    // 2. For each conversation, get messages in the date range
-    const activities: GroupedActivity[] = [];
-
-    for (const conv of conversations) {
-      const messages = await getConversationHistory(conv.id, oldest, latest);
-
-      if (messages.length === 0) continue;
-
-      // Resolve display name for DMs
-      let displayName = conv.name || 'Unknown';
-      if (conv.is_im && conv.user) {
-        displayName = await getUserDisplayName(conv.user);
-      }
-
-      const activity = slackConversationToActivity({
-        conversation: conv,
-        messages,
-        date,
-        displayName,
-      });
-
-      activities.push(activity);
-    }
-
-    // Sort by total time descending
-    activities.sort((a, b) => b.totalSeconds - a.totalSeconds);
-
-    console.log(`[Slack] ${date}: ${activities.length} active conversations`);
-    return activities;
-  } catch (error) {
-    console.error('[Slack] Error fetching activities:', error);
-    return [];
+  // Check cache
+  const cached = activitiesCache.get(date);
+  if (cached && Date.now() < cached.expiry) {
+    return cached.data;
   }
+
+  // Dedup in-flight requests for same date
+  const existing = inFlight.get(date);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = fetchSlackActivitiesForDate(date)
+    .then(result => {
+      // Cache the result
+      activitiesCache.set(date, { data: result, expiry: Date.now() + CACHE_TTL_MS });
+      inFlight.delete(date);
+      return result;
+    })
+    .catch(error => {
+      console.error('[Slack] Error fetching activities:', error);
+      inFlight.delete(date);
+      return [];
+    });
+
+  inFlight.set(date, promise);
+  return promise;
 }
 
 // Format seconds to human readable
