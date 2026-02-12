@@ -127,6 +127,87 @@ jobs:
           Write-Host "Bundle structure:"
           Get-ChildItem -Recurse "dist/windows" -Directory | ForEach-Object { Write-Host "  $($_.FullName)" }
 
+      - name: Flatten pnpm paths (MAX_PATH fix)
+        shell: pwsh
+        run: |
+          $AppDir = "dist/windows/app/timetracker"
+          $nodeModulesPath = "$AppDir/node_modules"
+          $pnpmDir = "$nodeModulesPath/.pnpm"
+
+          if (-not (Test-Path $pnpmDir)) {
+            Write-Host "No .pnpm directory found - skipping flatten"
+            exit 0
+          }
+
+          Write-Host "Flattening pnpm node_modules for Windows MAX_PATH compatibility..."
+
+          # Copy all packages from .pnpm/*/node_modules/ to flat node_modules/
+          $packagesCopied = 0
+          Get-ChildItem $pnpmDir -Directory | Where-Object { $_.Name -ne "node_modules" } | ForEach-Object {
+            $innerNm = Join-Path $_.FullName "node_modules"
+            if (Test-Path $innerNm) {
+              # Non-scoped packages
+              Get-ChildItem $innerNm -Directory | Where-Object { $_.Name -notlike "@*" } | ForEach-Object {
+                $target = Join-Path $nodeModulesPath $_.Name
+                $isReal = (Test-Path $target) -and -not ((Get-Item $target -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+                if (-not $isReal) {
+                  if (Test-Path $target) { Remove-Item $target -Force }
+                  Copy-Item -Recurse -Force $_.FullName $target
+                  $packagesCopied++
+                }
+              }
+              # Scoped packages (@scope/pkg)
+              Get-ChildItem $innerNm -Directory | Where-Object { $_.Name -like "@*" } | ForEach-Object {
+                $scopeTarget = Join-Path $nodeModulesPath $_.Name
+                if (-not (Test-Path $scopeTarget)) { New-Item -ItemType Directory -Path $scopeTarget -Force | Out-Null }
+                Get-ChildItem $_.FullName -Directory | ForEach-Object {
+                  $pkgTarget = Join-Path $scopeTarget $_.Name
+                  $isReal = (Test-Path $pkgTarget) -and -not ((Get-Item $pkgTarget -Force).Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+                  if (-not $isReal) {
+                    if (Test-Path $pkgTarget) { Remove-Item $pkgTarget -Force }
+                    Copy-Item -Recurse -Force $_.FullName $pkgTarget
+                    $packagesCopied++
+                  }
+                }
+              }
+            }
+          }
+          Write-Host "Copied $packagesCopied packages to flat layout"
+
+          # Remove symlinks/junctions in node_modules
+          Get-ChildItem $nodeModulesPath -Force | Where-Object {
+            ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and ($_.Name -ne ".pnpm")
+          } | Remove-Item -Force
+
+          # Remove .pnpm directory
+          Remove-Item -Recurse -Force $pnpmDir
+          Write-Host "Removed .pnpm directory"
+
+          # Clean up apps/web/node_modules symlinks
+          $webNm = "$AppDir/apps/web/node_modules"
+          if (Test-Path $webNm) {
+            Get-ChildItem $webNm -Force | Where-Object {
+              $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint
+            } | Remove-Item -Force
+            $remaining = @(Get-ChildItem $webNm -Force)
+            if ($remaining.Count -eq 0) { Remove-Item $webNm -Force }
+          }
+
+          # Verify max path length
+          $maxLen = 0
+          $base = "C:\Users\LongUsername\AppData\Local\TimeTracker\app\"
+          Get-ChildItem -Path $AppDir -Recurse -File | ForEach-Object {
+            $rel = $_.FullName.Replace("$((Resolve-Path $AppDir).Path)\", "")
+            $winPath = $base + $rel
+            if ($winPath.Length -gt $maxLen) { $maxLen = $winPath.Length; $maxFile = $winPath }
+          }
+          Write-Host "Max simulated Windows path: $maxLen chars"
+          if ($maxLen -ge 260) {
+            Write-Error "Paths still exceed MAX_PATH after flatten! Longest: $maxFile"
+            exit 1
+          }
+          Write-Host "All paths within MAX_PATH limit"
+
       - name: Create launcher
         shell: pwsh
         run: |

@@ -117,6 +117,20 @@ if (Test-Path "apps/web/public") {
 Write-Host "      OK - App copied" -ForegroundColor Green
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Step 3.5: Flatten pnpm node_modules (fix Windows MAX_PATH issue)
+# ═══════════════════════════════════════════════════════════════════════════════
+Write-Host "[3.5/5] Flattening pnpm node_modules..." -ForegroundColor Yellow
+
+& "$ScriptDir\flatten-pnpm.ps1" -AppDir "$AppDir\timetracker"
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Flatten script failed!" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "      OK - pnpm paths flattened" -ForegroundColor Green
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Step 4: Create launcher and config files
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host "[4/5] Creating launcher files..." -ForegroundColor Yellow

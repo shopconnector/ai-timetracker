@@ -20,7 +20,7 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
 
 ; Installation
-DefaultDirName={autopf}\TimeTracker
+DefaultDirName={localappdata}\TimeTracker
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
