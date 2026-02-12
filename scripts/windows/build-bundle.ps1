@@ -347,6 +347,9 @@ Start-Job { Start-Sleep -Seconds 3; Start-Process $using:AppUrl } | Out-Null
 
 Set-Content -Path "$OutputDir\TimeTracker.ps1" -Value $PsLauncherContent -Encoding UTF8
 
+# Copy VBS silent launcher
+Copy-Item "$ScriptDir\TimeTrackerSilent.vbs" "$OutputDir\TimeTrackerSilent.vbs"
+
 Write-Host "      OK - Launchers created" -ForegroundColor Green
 
 # ═══════════════════════════════════════════════════════════════════════════════

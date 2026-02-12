@@ -382,6 +382,12 @@ jobs:
           Set-Content -Path "dist/windows/TimeTracker.ps1" -Value $PsLauncherContent -Encoding UTF8
           Write-Host "PowerShell launcher created"
 
+      - name: Create silent launcher (VBS)
+        shell: pwsh
+        run: |
+          Copy-Item "scripts/windows/TimeTrackerSilent.vbs" "dist/windows/TimeTrackerSilent.vbs"
+          Write-Host "Silent VBS launcher created"
+
       - name: Create portable zip
         shell: pwsh
         run: |

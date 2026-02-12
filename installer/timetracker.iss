@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "AI TimeTracker"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.4.4"
 #define MyAppPublisher "ShopConnector"
 #define MyAppURL "https://github.com/shopconnector/ai-timetracker"
 #define MyAppExeName "TimeTracker.bat"
@@ -52,7 +52,7 @@ polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI T
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autostart"; Description: "Start with Windows (run in tray)"; GroupDescription: "Startup:"; Flags: unchecked
+Name: "autostart"; Description: "Start with Windows (silent, no console window)"; GroupDescription: "Startup:"; Flags: checked
 
 [Files]
 ; Node.js runtime
@@ -67,6 +67,7 @@ Source: "..\dist\windows\data\*"; DestDir: "{app}\data"; Flags: ignoreversion re
 ; Launchers
 Source: "..\dist\windows\TimeTracker.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\windows\TimeTracker.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\windows\TimeTrackerSilent.vbs"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Service installer for standalone bundle
 Source: "..\scripts\windows\install-service-standalone.bat"; DestDir: "{app}"; Flags: ignoreversion
@@ -80,7 +81,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 
 [Registry]
 ; Autostart entries (if selected)
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AITimeTracker"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AITimeTracker"; ValueData: """wscript.exe"" ""{app}\TimeTrackerSilent.vbs"""; Flags: uninsdeletevalue; Tasks: autostart
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ActivityWatch"; ValueData: """{localappdata}\activitywatch\aw-qt.exe"""; Flags: uninsdeletevalue createvalueifdoesntexist; Tasks: autostart
 
 [Run]
