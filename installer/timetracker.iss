@@ -52,7 +52,7 @@ polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI T
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autostart"; Description: "Start with Windows (silent, no console window)"; GroupDescription: "Startup:"; Flags: checked
+Name: "autostart"; Description: "Start with Windows (silent, no console window)"; GroupDescription: "Startup:"
 
 [Files]
 ; Node.js runtime
