@@ -13,14 +13,24 @@ export async function GET(request: NextRequest) {
 
     const worklogs = await getWorklogs(from, to);
 
+    console.log(`[worklogs-by-issue] Fetched ${worklogs.length} worklogs from ${from} to ${to}`);
+
     // Zbierz unikalne issue IDs
     const issueIds = [
       ...new Set(worklogs.map(w => w.issue?.id).filter((id): id is number => id != null)),
     ];
 
-    // Rozwiąż ID na klucze (np. 38480 -> BCI-394)
+    // Zbierz klucze bezpośrednio z worklogs (Tempo v4 zwraca issue.key)
+    const directKeys = new Set(
+      worklogs.map(w => w.issue?.key).filter((k): k is string => !!k && !k.startsWith('UNKNOWN'))
+    );
+
+    console.log(`[worklogs-by-issue] Unique issue IDs: ${issueIds.length}, direct keys from Tempo: ${directKeys.size}`);
+
+    // Rozwiąż ID na klucze tylko jeśli brakuje kluczy z Tempo
     let keyMap = new Map<string, string>();
-    if (issueIds.length > 0) {
+    if (issueIds.length > 0 && directKeys.size < issueIds.length) {
+      console.log(`[worklogs-by-issue] Resolving ${issueIds.length - directKeys.size} missing keys via Jira API`);
       keyMap = await getIssueKeysByIds(issueIds);
     }
 
@@ -36,11 +46,16 @@ export async function GET(request: NextRequest) {
       const idStr = String(id);
       timeByIssueId[idStr] = (timeByIssueId[idStr] || 0) + seconds;
 
-      // Też agreguj per key jeśli mamy mapowanie
+      // Też agreguj per key — najpierw z Tempo, potem z Jira API
       const key = w.issue?.key || keyMap.get(idStr);
-      if (key) {
+      if (key && !key.startsWith('UNKNOWN')) {
         timeByIssueKey[key] = (timeByIssueKey[key] || 0) + seconds;
       }
+    }
+
+    console.log(`[worklogs-by-issue] Result: ${Object.keys(timeByIssueKey).length} issue keys, ${Object.keys(timeByIssueId).length} issue IDs`);
+    if (Object.keys(timeByIssueKey).length > 0) {
+      console.log(`[worklogs-by-issue] Sample keys:`, Object.entries(timeByIssueKey).slice(0, 5));
     }
 
     return NextResponse.json({

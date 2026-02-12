@@ -9,6 +9,7 @@ interface ParseDailyRequest {
     name: string;
     project: string;
   }>;
+  skipTicketMatching?: boolean;
 }
 
 interface ParsedEntry {
@@ -34,7 +35,8 @@ interface ParseDailyResponse {
 
 function parseWithRegex(
   rawNotes: string,
-  availableTickets: Array<{ key: string; name: string; project: string }>
+  availableTickets: Array<{ key: string; name: string; project: string }>,
+  skipTicketMatching = false
 ): ParseDailyResponse {
   const lines = rawNotes.split('\n').filter(l => l.trim());
   const entries: ParsedEntry[] = [];
@@ -92,39 +94,63 @@ function parseWithRegex(
     const [eh, em] = endTime.split(':').map(Number);
     const durationMinutes = eh * 60 + em - (sh * 60 + sm);
 
-    // Try to match ticket by keywords
+    // Try to match ticket by keywords (skip if requested)
     const descLower = description.toLowerCase();
     let suggestedTicket = '';
     let ticketConfidence = 0;
 
-    // Check if description directly references a ticket key
-    const ticketKeyMatch = description.match(/\b([A-Z]{2,}-\d+)\b/);
-    if (ticketKeyMatch && availableTickets.some(t => t.key === ticketKeyMatch[1])) {
-      suggestedTicket = ticketKeyMatch[1];
-      ticketConfidence = 1.0;
-    }
-
-    if (!suggestedTicket) {
-      // Keyword matching
-      const words = descLower.split(/\s+/).filter(w => w.length > 2);
-      let bestScore = 0;
-
-      for (const ticket of availableTickets) {
-        const ticketText = `${ticket.name} ${ticket.key}`.toLowerCase();
-        let score = 0;
-        for (const word of words) {
-          if (ticketText.includes(word)) score++;
-        }
-        if (score > bestScore) {
-          bestScore = score;
-          suggestedTicket = ticket.key;
-          ticketConfidence = Math.min(score / Math.max(words.length, 1), 0.8);
-        }
+    if (!skipTicketMatching) {
+      // Check if description directly references a ticket key
+      const ticketKeyMatch = description.match(/\b([A-Z]{2,}-\d+)\b/);
+      if (ticketKeyMatch && availableTickets.some(t => t.key === ticketKeyMatch[1])) {
+        suggestedTicket = ticketKeyMatch[1];
+        ticketConfidence = 1.0;
       }
 
-      if (ticketConfidence < 0.2) {
-        suggestedTicket = '';
-        ticketConfidence = 0;
+      if (!suggestedTicket) {
+        // Enhanced keyword matching — bidirectional substring + word overlap
+        const words = descLower
+          .replace(/[^a-z0-9ąćęłńóśźż\s-]/g, ' ')
+          .split(/\s+/)
+          .filter(w => w.length > 2);
+        let bestScore = 0;
+
+        for (const ticket of availableTickets) {
+          const ticketWords = `${ticket.name} ${ticket.project}`
+            .toLowerCase()
+            .replace(/[^a-z0-9ąćęłńóśźż\s-]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 2);
+
+          let score = 0;
+          // Description words found in ticket name
+          for (const word of words) {
+            for (const tw of ticketWords) {
+              if (tw.includes(word) || word.includes(tw)) {
+                score++;
+                break;
+              }
+            }
+          }
+          // Ticket name words found in description (bidirectional)
+          for (const tw of ticketWords) {
+            if (descLower.includes(tw)) {
+              score += 0.5;
+            }
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            suggestedTicket = ticket.key;
+            const totalWords = Math.max(words.length, 1);
+            ticketConfidence = Math.min(score / totalWords, 0.8);
+          }
+        }
+
+        if (ticketConfidence < 0.15) {
+          suggestedTicket = '';
+          ticketConfidence = 0;
+        }
       }
     }
 
@@ -168,8 +194,50 @@ function parseWithRegex(
 
 function buildPrompt(
   rawNotes: string,
-  availableTickets: Array<{ key: string; name: string; project: string }>
+  availableTickets: Array<{ key: string; name: string; project: string }>,
+  skipTicketMatching = false
 ): string {
+  if (skipTicketMatching) {
+    return `Jestes asystentem do parsowania notatek z dnia pracy.
+
+NOTATKI UZYTKOWNIKA:
+${rawNotes}
+
+TWOJE ZADANIE:
+1. Wyodrebnij kazda aktywnosc z czasem (poczatek, koniec)
+2. Oblicz czas trwania w minutach
+3. Oczysc opis (krotki, po polsku)
+4. Przypisz kategorie (NIE dopasowuj ticketow - ustaw suggestedTicket na "" i ticketConfidence na 0)
+
+ZASADY:
+- Jesli notatka ma zakres np. "09:30-10:30" uzyj go
+- Jesli brak godziny koncowej, estymuj na podstawie nastepnej aktywnosci
+- Jesli tekst mowi o spotkaniu (call, z Piotkiem) -> category: meeting
+- Jesli tekst mowi o kodowaniu/setup -> category: development
+- Jesli tekst mowi o research/szukanie -> category: research
+- NIE dopasowuj ticketow - zostaw suggestedTicket puste
+
+FORMAT JSON:
+{
+  "entries": [
+    {
+      "startTime": "HH:MM",
+      "endTime": "HH:MM",
+      "durationMinutes": 60,
+      "description": "krotki opis po polsku",
+      "suggestedTicket": "",
+      "ticketConfidence": 0,
+      "category": "development"
+    }
+  ],
+  "summary": {
+    "totalMinutes": 480,
+    "entriesCount": 8,
+    "unmatchedCount": 8
+  }
+}`;
+  }
+
   const ticketList = availableTickets
     .slice(0, 50)
     .map(t => `- ${t.key}: ${t.name} (${t.project})`)
@@ -223,13 +291,13 @@ FORMAT JSON:
 export async function POST(request: NextRequest) {
   try {
     const body: ParseDailyRequest = await request.json();
-    const { rawNotes, availableTickets } = body;
+    const { rawNotes, availableTickets, skipTicketMatching = false } = body;
 
     if (!rawNotes || !rawNotes.trim()) {
       return NextResponse.json({ error: 'rawNotes is required' }, { status: 400 });
     }
 
-    const prompt = buildPrompt(rawNotes, availableTickets || []);
+    const prompt = buildPrompt(rawNotes, availableTickets || [], skipTicketMatching);
 
     // 1. Try Gemini API first
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -245,12 +313,14 @@ export async function POST(request: NextRequest) {
 
         const parsed = extractJSON<ParseDailyResponse>(response);
         if (parsed && parsed.entries && Array.isArray(parsed.entries)) {
-          // Validate ticket keys exist in available tickets
-          const validKeys = new Set(availableTickets.map(t => t.key));
-          for (const entry of parsed.entries) {
-            if (entry.suggestedTicket && !validKeys.has(entry.suggestedTicket)) {
-              entry.suggestedTicket = '';
-              entry.ticketConfidence = 0;
+          if (!skipTicketMatching) {
+            // Validate ticket keys exist in available tickets
+            const validKeys = new Set(availableTickets.map(t => t.key));
+            for (const entry of parsed.entries) {
+              if (entry.suggestedTicket && !validKeys.has(entry.suggestedTicket)) {
+                entry.suggestedTicket = '';
+                entry.ticketConfidence = 0;
+              }
             }
           }
           return NextResponse.json(parsed);
@@ -287,11 +357,13 @@ export async function POST(request: NextRequest) {
           const content = data.choices?.[0]?.message?.content || '';
           const parsed = extractJSON<ParseDailyResponse>(content);
           if (parsed && parsed.entries && Array.isArray(parsed.entries)) {
-            const validKeys = new Set(availableTickets.map(t => t.key));
-            for (const entry of parsed.entries) {
-              if (entry.suggestedTicket && !validKeys.has(entry.suggestedTicket)) {
-                entry.suggestedTicket = '';
-                entry.ticketConfidence = 0;
+            if (!skipTicketMatching) {
+              const validKeys = new Set(availableTickets.map(t => t.key));
+              for (const entry of parsed.entries) {
+                if (entry.suggestedTicket && !validKeys.has(entry.suggestedTicket)) {
+                  entry.suggestedTicket = '';
+                  entry.ticketConfidence = 0;
+                }
               }
             }
             return NextResponse.json(parsed);
@@ -304,9 +376,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Regex fallback
-    console.log('Using regex fallback parser (no AI keys configured)');
-    const regexResult = parseWithRegex(rawNotes, availableTickets || []);
-    return NextResponse.json(regexResult);
+    const hasGemini = !!process.env.GEMINI_API_KEY;
+    const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+    console.log(`Using regex fallback parser (Gemini: ${hasGemini ? 'configured but failed' : 'not set'}, OpenRouter: ${hasOpenRouter ? 'configured but failed' : 'not set'})`);
+    const regexResult = parseWithRegex(rawNotes, availableTickets || [], skipTicketMatching);
+    return NextResponse.json({ ...regexResult, usedFallback: true });
   } catch (error) {
     console.error('Error in parse-daily:', error);
     return NextResponse.json(

@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   FileText,
   Wand2,
+  History,
 } from 'lucide-react';
 
 interface JiraIssueItem {
@@ -127,6 +128,11 @@ export default function DailyLoggerSection({ issues }: Props) {
     totalMinutes: number;
   } | null>(null);
 
+  // Step 3 states
+  const [suggestingAI, setSuggestingAI] = useState(false);
+  const [suggestingHistory, setSuggestingHistory] = useState(false);
+  const [suggestStatus, setSuggestStatus] = useState('');
+
   // Fetch existing worklogs for date
   const fetchExistingWorklogs = useCallback(async (d: string) => {
     try {
@@ -141,7 +147,7 @@ export default function DailyLoggerSection({ issues }: Props) {
     }
   }, []);
 
-  // Generate note from ActivityWatch data
+  // Step 1: Generate note from ActivityWatch data
   const handleGenerateNote = async () => {
     setGenerating(true);
     setGenerateInfo(null);
@@ -158,7 +164,6 @@ export default function DailyLoggerSection({ issues }: Props) {
         const note = data.note || '';
 
         if (note) {
-          // Append to existing notes or set new
           setRawNotes(prev => (prev.trim() ? prev.trim() + '\n\n' + note : note));
           setGenerateInfo({
             activitiesCount: data.activitiesCount,
@@ -178,30 +183,25 @@ export default function DailyLoggerSection({ issues }: Props) {
     setGenerating(false);
   };
 
-  // Parse notes with AI
+  // Step 2: Parse notes WITHOUT ticket matching
   const handleParse = async () => {
     if (!rawNotes.trim()) return;
     setLoading(true);
     setEntries([]);
     setLogResults([]);
+    setSuggestStatus('');
 
-    // Fetch existing worklogs for the selected date
     await fetchExistingWorklogs(date);
 
     try {
-      const availableTickets = issues.map(i => ({
-        key: i.key,
-        name: i.name,
-        project: i.project,
-      }));
-
       const res = await fetch('/timetracker/api/llm/parse-daily', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rawNotes,
           date,
-          availableTickets,
+          availableTickets: issues.map(i => ({ key: i.key, name: i.name, project: i.project })),
+          skipTicketMatching: true,
         }),
       });
 
@@ -209,7 +209,7 @@ export default function DailyLoggerSection({ issues }: Props) {
         const data = await res.json();
         const parsed = (data.entries || []).map((e: Omit<ParsedEntry, 'selected'>) => ({
           ...e,
-          selected: !!e.suggestedTicket, // auto-select entries with matched tickets
+          selected: true, // select all by default since no tickets yet
         }));
         setEntries(parsed);
       } else {
@@ -223,6 +223,141 @@ export default function DailyLoggerSection({ issues }: Props) {
     setLoading(false);
   };
 
+  // Step 3a: Suggest tickets via AI
+  const handleSuggestByAI = async () => {
+    if (entries.length === 0) return;
+    setSuggestingAI(true);
+    setSuggestStatus('Dopasowywanie ticketow przez AI...');
+
+    try {
+      const availableTickets = issues.map(i => ({
+        key: i.key,
+        name: i.name,
+        project: i.project,
+      }));
+
+      // Re-parse with ticket matching enabled using the original notes
+      const res = await fetch('/timetracker/api/llm/parse-daily', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawNotes,
+          date,
+          availableTickets,
+          skipTicketMatching: false,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const aiEntries: Array<Omit<ParsedEntry, 'selected'>> = data.entries || [];
+        const usedFallback = data.usedFallback === true;
+
+        // Merge AI suggestions into current entries
+        let matchedCount = 0;
+        setEntries(prev =>
+          prev.map((entry, idx) => {
+            const aiEntry = aiEntries[idx];
+            if (aiEntry && aiEntry.suggestedTicket) {
+              matchedCount++;
+              return {
+                ...entry,
+                suggestedTicket: aiEntry.suggestedTicket,
+                ticketConfidence: aiEntry.ticketConfidence,
+                selected: true,
+              };
+            }
+            return entry;
+          })
+        );
+
+        if (usedFallback) {
+          setSuggestStatus(
+            matchedCount > 0
+              ? `Regex dopasował ${matchedCount}/${aiEntries.length} (AI niedostępne — spróbuj "z historii")`
+              : 'AI niedostępne (quota/klucz) — spróbuj "Zaproponuj z historii"'
+          );
+        } else {
+          setSuggestStatus(`AI dopasowalo ${matchedCount}/${aiEntries.length} ticketow`);
+        }
+      } else {
+        const err = await res.json();
+        alert(`Blad AI: ${err.error || 'Unknown error'}`);
+        setSuggestStatus('');
+      }
+    } catch (error) {
+      alert(`Blad: ${error instanceof Error ? error.message : 'Nieznany blad'}`);
+      setSuggestStatus('');
+    }
+
+    setSuggestingAI(false);
+  };
+
+  // Step 3b: Suggest tickets from history
+  const handleSuggestFromHistory = async () => {
+    if (entries.length === 0) return;
+    setSuggestingHistory(true);
+    setSuggestStatus('Dopasowywanie z historii Tempo...');
+
+    try {
+      const res = await fetch('/timetracker/api/llm/suggest-from-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: entries.map(e => ({
+            description: e.description,
+            category: e.category,
+            durationMinutes: e.durationMinutes,
+            startTime: e.startTime,
+            endTime: e.endTime,
+          })),
+          availableTickets: issues.map(i => ({
+            key: i.key,
+            name: i.name,
+            project: i.project,
+          })),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const suggestions: Array<{
+          index: number;
+          suggestedTicket: string;
+          ticketConfidence: number;
+          matchSource: string;
+        }> = data.suggestions || [];
+
+        setEntries(prev =>
+          prev.map((entry, idx) => {
+            const suggestion = suggestions.find(s => s.index === idx);
+            if (suggestion && suggestion.suggestedTicket) {
+              return {
+                ...entry,
+                suggestedTicket: suggestion.suggestedTicket,
+                ticketConfidence: suggestion.ticketConfidence,
+                selected: true,
+              };
+            }
+            return entry;
+          })
+        );
+        setSuggestStatus(
+          `Z historii: ${data.matchedCount}/${entries.length} dopasowanych (${data.historyCount} worklogow)`
+        );
+      } else {
+        const err = await res.json();
+        alert(`Blad historii: ${err.error || 'Unknown error'}`);
+        setSuggestStatus('');
+      }
+    } catch (error) {
+      alert(`Blad: ${error instanceof Error ? error.message : 'Nieznany blad'}`);
+      setSuggestStatus('');
+    }
+
+    setSuggestingHistory(false);
+  };
+
   // Update a single entry field
   const updateEntry = (
     index: number,
@@ -233,7 +368,6 @@ export default function DailyLoggerSection({ issues }: Props) {
       prev.map((e, i) => {
         if (i !== index) return e;
         const updated = { ...e, [field]: value };
-        // Recalculate duration when times change
         if (field === 'startTime' || field === 'endTime') {
           const start = field === 'startTime' ? String(value) : e.startTime;
           const end = field === 'endTime' ? String(value) : e.endTime;
@@ -243,7 +377,6 @@ export default function DailyLoggerSection({ issues }: Props) {
             updated.durationMinutes = Math.max(eh * 60 + em - (sh * 60 + sm), 0);
           }
         }
-        // Recalculate times when duration changes
         if (field === 'durationMinutes') {
           const [sh, sm] = e.startTime.split(':').map(Number);
           if (!isNaN(sh) && !isNaN(sm)) {
@@ -324,7 +457,6 @@ export default function DailyLoggerSection({ issues }: Props) {
     setLogResults(results);
     setLogging(false);
 
-    // Refresh existing worklogs
     await fetchExistingWorklogs(date);
   };
 
@@ -335,6 +467,7 @@ export default function DailyLoggerSection({ issues }: Props) {
     .reduce((s, e) => s + e.durationMinutes, 0);
   const unmatchedCount = entries.filter(e => !e.suggestedTicket).length;
   const allSelected = entries.length > 0 && entries.every(e => e.selected);
+  const isBusy = generating || loading || suggestingAI || suggestingHistory || logging;
 
   return (
     <Card>
@@ -369,28 +502,36 @@ export default function DailyLoggerSection({ issues }: Props) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Generate from ActivityWatch + Textarea */}
-        <div>
+      <CardContent className="space-y-5">
+        {/* ① Step 1: Generate note from ActivityWatch */}
+        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              1
+            </span>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Zaproponuj notatke z TimeTrackera
+            </h3>
+          </div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={handleGenerateNote}
-              disabled={generating}
+              disabled={isBusy}
             >
               {generating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Wand2 className="mr-2 h-4 w-4" />
               )}
-              Zaproponuj notatke z TimeTrackera
+              Generuj z ActivityWatch
             </Button>
             {generating && (
               <span className="text-sm text-gray-500">Pobieranie danych z ActivityWatch...</span>
             )}
             {generateInfo && (
               <Badge variant="secondary" className="text-xs">
-                Wygenerowano z {generateInfo.activitiesCount} aktywnosci (
+                {generateInfo.activitiesCount} aktywnosci (
                 {Math.floor(generateInfo.totalMinutes / 60)}h{' '}
                 {generateInfo.totalMinutes % 60}m)
               </Badge>
@@ -403,8 +544,23 @@ export default function DailyLoggerSection({ issues }: Props) {
             rows={5}
             className="font-mono text-sm"
           />
-          <div className="mt-2 flex items-center gap-2">
-            <Button onClick={handleParse} disabled={loading || !rawNotes.trim()}>
+        </div>
+
+        {/* ② Step 2: Parse notes */}
+        <div className="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              2
+            </span>
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Parsuj notatki
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleParse}
+              disabled={isBusy || !rawNotes.trim()}
+            >
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -413,6 +569,53 @@ export default function DailyLoggerSection({ issues }: Props) {
               Parsuj notatki
             </Button>
             {loading && <span className="text-sm text-gray-500">Analizowanie notatek z AI...</span>}
+            {!rawNotes.trim() && (
+              <span className="text-xs text-gray-400">Najpierw wpisz lub wygeneruj notatki</span>
+            )}
+          </div>
+        </div>
+
+        {/* ③ Step 3: Suggest tickets */}
+        <div className={`rounded-lg border p-4 ${entries.length > 0 ? 'border-slate-200 dark:border-slate-700' : 'border-dashed border-slate-300 dark:border-slate-600'}`}>
+          <div className="mb-3 flex items-center gap-2">
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${entries.length > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'}`}>
+              3
+            </span>
+            <h3 className={`text-sm font-semibold ${entries.length > 0 ? 'text-slate-700 dark:text-slate-300' : 'text-gray-400'}`}>
+              Zaproponuj ticket
+            </h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={handleSuggestByAI}
+              disabled={isBusy || entries.length === 0}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {suggestingAI ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Zaproponuj przez AI
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleSuggestFromHistory}
+              disabled={isBusy || entries.length === 0}
+            >
+              {suggestingHistory ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <History className="mr-2 h-4 w-4" />
+              )}
+              Zaproponuj z historii
+            </Button>
+            {suggestStatus && (
+              <span className="text-sm text-gray-500">{suggestStatus}</span>
+            )}
+            {entries.length === 0 && (
+              <span className="text-xs text-gray-400">Najpierw sparsuj notatki</span>
+            )}
           </div>
         </div>
 
@@ -466,7 +669,7 @@ export default function DailyLoggerSection({ issues }: Props) {
                           />
                         </td>
 
-                        {/* Time range — editable */}
+                        {/* Time range */}
                         <td className="px-2 py-1.5">
                           <div className="flex items-center gap-1">
                             <Input
@@ -483,7 +686,7 @@ export default function DailyLoggerSection({ issues }: Props) {
                           </div>
                         </td>
 
-                        {/* Description — editable */}
+                        {/* Description */}
                         <td className="px-2 py-1.5">
                           <Input
                             value={entry.description}
@@ -492,7 +695,7 @@ export default function DailyLoggerSection({ issues }: Props) {
                           />
                         </td>
 
-                        {/* Ticket — select dropdown */}
+                        {/* Ticket */}
                         <td className="px-2 py-1.5">
                           <Select
                             value={entry.suggestedTicket || '_none'}
@@ -536,7 +739,7 @@ export default function DailyLoggerSection({ issues }: Props) {
                           </Badge>
                         </td>
 
-                        {/* Duration — editable */}
+                        {/* Duration */}
                         <td className="px-2 py-1.5 text-right">
                           <Input
                             type="number"
