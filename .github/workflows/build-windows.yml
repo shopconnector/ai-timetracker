@@ -183,14 +183,15 @@ jobs:
           Remove-Item -Recurse -Force $pnpmDir
           Write-Host "Removed .pnpm directory"
 
-          # Clean up apps/web/node_modules symlinks
-          $webNm = "$AppDir/apps/web/node_modules"
-          if (Test-Path $webNm) {
-            Get-ChildItem $webNm -Force | Where-Object {
-              $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint
-            } | Remove-Item -Force
-            $remaining = @(Get-ChildItem $webNm -Force)
-            if ($remaining.Count -eq 0) { Remove-Item $webNm -Force }
+          # Remove ALL nested node_modules (except root) - on Windows, Copy-Item
+          # resolves junctions to real copies, leaving orphan packages that break
+          # Node.js module resolution (e.g. next can't find styled-jsx)
+          $rootNm = (Resolve-Path $nodeModulesPath).Path
+          Get-ChildItem -Path $AppDir -Directory -Recurse -Filter "node_modules" | Where-Object {
+            $_.FullName -ne $rootNm
+          } | ForEach-Object {
+            Remove-Item $_.FullName -Recurse -Force
+            Write-Host "Removed nested: $($_.FullName)"
           }
 
           # Verify max path length

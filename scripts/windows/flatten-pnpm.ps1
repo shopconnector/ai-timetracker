@@ -120,26 +120,18 @@ foreach ($nodeModulesPath in $nodeModulesDirs) {
     Write-Host "    Removed .pnpm directory" -ForegroundColor Green
 }
 
-# Step 4: Clean up apps/web/node_modules - replace symlink with nothing
-# (Node.js will resolve 'next' from parent node_modules via standard resolution)
-$webNodeModules = Join-Path $AppDir "apps" "web" "node_modules"
-if (Test-Path $webNodeModules) {
-    $removedLinks = 0
-    Get-ChildItem $webNodeModules -Force -ErrorAction SilentlyContinue | Where-Object {
-        $_.Attributes -band [System.IO.FileAttributes]::ReparsePoint
-    } | ForEach-Object {
-        Remove-Item $_.FullName -Force
-        $removedLinks++
-    }
-
-    # Remove apps/web/node_modules if empty
-    $remaining = @(Get-ChildItem $webNodeModules -Force -ErrorAction SilentlyContinue)
-    if ($remaining.Count -eq 0) {
-        Remove-Item $webNodeModules -Force
-        Write-Host "    Removed empty apps/web/node_modules/" -ForegroundColor Green
-    } else {
-        Write-Host "    Cleaned $removedLinks symlinks from apps/web/node_modules/" -ForegroundColor Green
-    }
+# Step 4: Remove ALL nested node_modules directories (except the root one)
+# On Windows, Copy-Item resolves junctions to real copies, so packages like 'next'
+# end up as real directories in apps/web/node_modules/. If Node.js finds 'next' there
+# first, it can't resolve next's dependencies (styled-jsx, react, etc.) which are only
+# in the root node_modules. Removing nested node_modules forces Node.js to use the
+# flat root node_modules where ALL packages are available.
+$rootNodeModules = Join-Path $AppDir "node_modules"
+Get-ChildItem -Path $AppDir -Directory -Recurse -Filter "node_modules" -ErrorAction SilentlyContinue | Where-Object {
+    $_.FullName -ne $rootNodeModules
+} | ForEach-Object {
+    Remove-Item $_.FullName -Recurse -Force
+    Write-Host "    Removed nested: $($_.FullName)" -ForegroundColor Green
 }
 
 # Step 5: Verify max path length
