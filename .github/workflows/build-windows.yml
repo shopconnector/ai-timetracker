@@ -130,14 +130,21 @@ jobs:
       - name: Flatten pnpm paths (MAX_PATH fix)
         shell: pwsh
         run: |
-          $AppDir = "dist/windows/app/timetracker"
-          $nodeModulesPath = "$AppDir/node_modules"
-          $pnpmDir = "$nodeModulesPath/.pnpm"
+          $AppDir = "dist/windows/app"
 
-          if (-not (Test-Path $pnpmDir)) {
-            Write-Host "No .pnpm directory found - skipping flatten"
+          # Dynamically find the node_modules with .pnpm (works with/without workspace wrapper)
+          $nodeModulesPath = $null
+          Get-ChildItem -Path $AppDir -Directory -Recurse -Filter "node_modules" | ForEach-Object {
+            if ((Test-Path (Join-Path $_.FullName ".pnpm")) -and -not $nodeModulesPath) {
+              $nodeModulesPath = $_.FullName
+            }
+          }
+          if (-not $nodeModulesPath) {
+            Write-Host "No .pnpm directory found anywhere in $AppDir - skipping flatten"
             exit 0
           }
+          $pnpmDir = Join-Path $nodeModulesPath ".pnpm"
+          Write-Host "Found pnpm node_modules at: $nodeModulesPath"
 
           Write-Host "Flattening pnpm node_modules for Windows MAX_PATH compatibility..."
 
@@ -183,12 +190,13 @@ jobs:
           Remove-Item -Recurse -Force $pnpmDir
           Write-Host "Removed .pnpm directory"
 
-          # Remove ALL nested node_modules (except root) - on Windows, Copy-Item
-          # resolves junctions to real copies, leaving orphan packages that break
-          # Node.js module resolution (e.g. next can't find styled-jsx)
+          # Remove ALL nested node_modules (except root we just flattened)
+          # On Windows, Copy-Item resolves junctions to real copies, leaving orphan
+          # packages that break Node.js resolution (e.g. next can't find styled-jsx)
           $rootNm = (Resolve-Path $nodeModulesPath).Path
+          Write-Host "Root node_modules (keeping): $rootNm"
           Get-ChildItem -Path $AppDir -Directory -Recurse -Filter "node_modules" | Where-Object {
-            $_.FullName -ne $rootNm
+            (Resolve-Path $_.FullName).Path -ne $rootNm
           } | ForEach-Object {
             Remove-Item $_.FullName -Recurse -Force
             Write-Host "Removed nested: $($_.FullName)"

@@ -2,7 +2,7 @@
 # Replaces .pnpm symlink-based structure with flat npm-style node_modules
 # This prevents Windows installer failures caused by paths exceeding 260 chars
 #
-# Usage: .\scripts\windows\flatten-pnpm.ps1 -AppDir "dist\windows\app\timetracker"
+# Usage: .\scripts\windows\flatten-pnpm.ps1 -AppDir "dist\windows\app"
 
 param(
     [Parameter(Mandatory=$true)]
@@ -120,13 +120,15 @@ foreach ($nodeModulesPath in $nodeModulesDirs) {
     Write-Host "    Removed .pnpm directory" -ForegroundColor Green
 }
 
-# Step 4: Remove ALL nested node_modules directories (except the root one)
+# Step 4: Remove ALL nested node_modules directories (except the root one we just flattened)
 # On Windows, Copy-Item resolves junctions to real copies, so packages like 'next'
 # end up as real directories in apps/web/node_modules/. If Node.js finds 'next' there
 # first, it can't resolve next's dependencies (styled-jsx, react, etc.) which are only
 # in the root node_modules. Removing nested node_modules forces Node.js to use the
 # flat root node_modules where ALL packages are available.
-$rootNodeModules = Join-Path $AppDir "node_modules"
+$rootNodeModules = $nodeModulesDirs[0]  # The first (highest-level) node_modules we flattened
+Write-Host ""
+Write-Host "  Root node_modules (keeping): $rootNodeModules" -ForegroundColor Gray
 Get-ChildItem -Path $AppDir -Directory -Recurse -Filter "node_modules" -ErrorAction SilentlyContinue | Where-Object {
     $_.FullName -ne $rootNodeModules
 } | ForEach-Object {

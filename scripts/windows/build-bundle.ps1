@@ -121,7 +121,7 @@ Write-Host "      OK - App copied" -ForegroundColor Green
 # ═══════════════════════════════════════════════════════════════════════════════
 Write-Host "[3.5/5] Flattening pnpm node_modules..." -ForegroundColor Yellow
 
-& "$ScriptDir\flatten-pnpm.ps1" -AppDir "$AppDir\timetracker"
+& "$ScriptDir\flatten-pnpm.ps1" -AppDir "$AppDir"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR: Flatten script failed!" -ForegroundColor Red
