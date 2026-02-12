@@ -345,6 +345,10 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const formattedDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
+  // lastSeen = firstSeen + estimated duration (NOT last message time)
+  // Otherwise calendar shows e.g. 09:38-18:24 for a 22min huddle
+  const estimatedEnd = new Date(firstTime.getTime() + totalSeconds * 1000);
+
   return {
     id: `slack-${conversation.id}-${date}`,
     title,
@@ -352,7 +356,7 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
     totalSeconds,
     events: messages.length,
     firstSeen: firstTime.toISOString(),
-    lastSeen: lastTime.toISOString(),
+    lastSeen: estimatedEnd.toISOString(),
     category,
     isMeeting,
     meetingPlatform,
