@@ -91,9 +91,10 @@ const inFlight = new Map<string, Promise<GroupedActivity[]>>();
 async function slackFetch(url: string, retries = 2): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     await rateLimiter.acquire();
+    // Create timeout AFTER rate limiter — otherwise the wait counts against it
     const res = await fetch(url, {
       headers: getSlackHeaders(),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
 
     const data = await res.json();
@@ -495,6 +496,149 @@ export async function getSlackActivitiesForDate(date: string): Promise<GroupedAc
     });
 
   inFlight.set(date, promise);
+  return promise;
+}
+
+// ========================================
+// BATCH: Get Slack activities for a date range (calendar/analytics)
+// Fetches each conversation ONCE for the entire range, then splits by day.
+// Reduces API calls from 65*N_days to ~65.
+// ========================================
+
+async function fetchSlackActivitiesForRange(
+  startDate: string,
+  endDate: string
+): Promise<Map<string, GroupedActivity[]>> {
+  const rangeStart = new Date(`${startDate}T00:00:00`);
+  const rangeEnd = new Date(`${endDate}T23:59:59`);
+  const oldest = String(Math.floor(rangeStart.getTime() / 1000));
+  const latest = String(Math.floor(rangeEnd.getTime() / 1000));
+
+  const conversations = await listConversations();
+  console.log(`[Slack] Batch fetch ${startDate}..${endDate}: ${conversations.length} conversations`);
+
+  // Collect all messages per conversation
+  const convMessages = new Map<string, { conv: SlackConversation; messages: SlackMessage[] }>();
+
+  for (const conv of conversations) {
+    const messages = await getConversationHistory(conv.id, oldest, latest);
+    if (messages.length > 0) {
+      convMessages.set(conv.id, { conv, messages });
+    }
+  }
+
+  // Group messages by date
+  const dateActivitiesMap = new Map<string, GroupedActivity[]>();
+
+  // Initialize all dates in range
+  for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+    dateActivitiesMap.set(d.toISOString().split('T')[0], []);
+  }
+
+  // Resolve display names for DM conversations (once per user)
+  const displayNames = new Map<string, string>();
+  for (const { conv } of convMessages.values()) {
+    if (conv.is_im && conv.user && !displayNames.has(conv.user)) {
+      displayNames.set(conv.user, await getUserDisplayName(conv.user));
+    }
+  }
+
+  // Split messages by date and build activities
+  for (const { conv, messages } of convMessages.values()) {
+    const msgsByDate = new Map<string, SlackMessage[]>();
+
+    for (const msg of messages) {
+      const msgDate = new Date(parseFloat(msg.ts) * 1000);
+      const dateKey = msgDate.toISOString().split('T')[0];
+      if (!msgsByDate.has(dateKey)) {
+        msgsByDate.set(dateKey, []);
+      }
+      msgsByDate.get(dateKey)!.push(msg);
+    }
+
+    for (const [dateKey, dayMessages] of msgsByDate) {
+      const displayName = (conv.is_im && conv.user)
+        ? (displayNames.get(conv.user) || conv.name || 'Unknown')
+        : (conv.name || 'Unknown');
+
+      const activity = slackConversationToActivity({
+        conversation: conv,
+        messages: dayMessages,
+        date: dateKey,
+        displayName,
+      });
+
+      if (!dateActivitiesMap.has(dateKey)) {
+        dateActivitiesMap.set(dateKey, []);
+      }
+      dateActivitiesMap.get(dateKey)!.push(activity);
+    }
+  }
+
+  // Sort each day's activities by totalSeconds descending
+  for (const [dateKey, activities] of dateActivitiesMap) {
+    activities.sort((a, b) => b.totalSeconds - a.totalSeconds);
+    // Cache each day individually
+    activitiesCache.set(dateKey, { data: activities, expiry: Date.now() + CACHE_TTL_MS });
+    console.log(`[Slack] ${dateKey}: ${activities.length} active conversations (batch)`);
+  }
+
+  return dateActivitiesMap;
+}
+
+// In-flight dedup for range fetches
+const rangeInFlight = new Map<string, Promise<Map<string, GroupedActivity[]>>>();
+
+export async function getSlackActivitiesForDateRange(
+  startDate: string,
+  endDate: string
+): Promise<Map<string, GroupedActivity[]>> {
+  if (!isSlackConfigured()) {
+    return new Map();
+  }
+
+  // Check if all dates in range are already cached
+  const dates: string[] = [];
+  const rangeStart = new Date(`${startDate}T00:00:00`);
+  const rangeEnd = new Date(`${endDate}T23:59:59`);
+  let allCached = true;
+
+  for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    dates.push(dateStr);
+    const cached = activitiesCache.get(dateStr);
+    if (!cached || Date.now() >= cached.expiry) {
+      allCached = false;
+    }
+  }
+
+  if (allCached) {
+    const result = new Map<string, GroupedActivity[]>();
+    for (const dateStr of dates) {
+      result.set(dateStr, activitiesCache.get(dateStr)!.data);
+    }
+    return result;
+  }
+
+  // Dedup in-flight range requests
+  const rangeKey = `${startDate}..${endDate}`;
+  const existing = rangeInFlight.get(rangeKey);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = fetchSlackActivitiesForRange(startDate, endDate)
+    .then(result => {
+      rangeInFlight.delete(rangeKey);
+      return result;
+    })
+    .catch(error => {
+      console.error('[Slack] Error fetching range activities:', error);
+      rangeInFlight.delete(rangeKey);
+      return new Map<string, GroupedActivity[]>();
+    });
+
+  rangeInFlight.set(rangeKey, promise);
   return promise;
 }
 

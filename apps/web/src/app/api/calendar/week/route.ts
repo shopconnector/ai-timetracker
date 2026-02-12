@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllEvents, extractProjectInfo, extractMeetingInfo, extractCommunicationInfo, extractTerminalInfo, categorizeActivity, ActivityCategory } from '@/lib/activitywatch';
 import { getWorklogs } from '@/lib/tempo';
-import { getSlackActivitiesForDateSafe } from '@/lib/mergeActivities';
+import { getSlackActivitiesForDateRangeSafe } from '@/lib/mergeActivities';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 const MIN_DURATION_MINUTES = 5; // Activities < 5 min are "other"
@@ -260,15 +260,18 @@ export async function GET(request: NextRequest) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
+    // Batch-fetch Slack for entire range (65 API calls instead of 65*N_days)
+    const slackByDate = await getSlackActivitiesForDateRangeSafe(startDate, endDate);
+
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
 
-      const [activities, worklogs, rawSlack] = await Promise.all([
+      const [activities, worklogs] = await Promise.all([
         getActivitiesForDate(dateStr),
         getWorklogsForDate(dateStr),
-        getSlackActivitiesForDateSafe(dateStr)
       ]);
 
+      const rawSlack = slackByDate.get(dateStr) || [];
       const slackActivities = slackToTimeBlocks(rawSlack);
 
       const awTotalMinutes = activities

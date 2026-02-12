@@ -126,3 +126,22 @@ export async function getSlackActivitiesForDateSafe(date: string): Promise<Group
     return [];
   }
 }
+
+/**
+ * Batch fetch Slack activities for a date range.
+ * Much faster than calling getSlackActivitiesForDateSafe per day — fetches each
+ * conversation once for the entire range, then splits by day.
+ */
+export async function getSlackActivitiesForDateRangeSafe(
+  startDate: string,
+  endDate: string
+): Promise<Map<string, GroupedActivity[]>> {
+  try {
+    const { getSlackActivitiesForDateRange, isSlackConfigured } = await import('./slack');
+    if (!isSlackConfigured()) return new Map();
+    return await getSlackActivitiesForDateRange(startDate, endDate);
+  } catch (error) {
+    console.warn('[mergeActivities] Slack range fetch failed:', error);
+    return new Map();
+  }
+}

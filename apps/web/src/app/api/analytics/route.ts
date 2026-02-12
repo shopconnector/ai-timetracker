@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorklogsForDate } from '@/lib/tempo';
 import { getAllEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
-import { getSlackActivitiesForDateSafe } from '@/lib/mergeActivities';
+import { getSlackActivitiesForDateRangeSafe } from '@/lib/mergeActivities';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 
@@ -160,15 +160,20 @@ export async function GET(request: NextRequest) {
 
   const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
 
-  // Fetch current period IN PARALLEL
+  // Batch-fetch Slack for entire range first (65 calls instead of 65*N_days)
+  const firstDay = workdays[0] || start.toISOString().split('T')[0];
+  const lastDay = workdays[workdays.length - 1] || end.toISOString().split('T')[0];
+  const slackByDate = await getSlackActivitiesForDateRangeSafe(firstDay, lastDay);
+
+  // Fetch current period IN PARALLEL (AW + Tempo only, Slack already fetched)
   const dailyResults = await Promise.all(
     workdays.map(async (dateStr) => {
       try {
-        const [awEvents, worklogs, slackActivities] = await Promise.all([
+        const [awEvents, worklogs] = await Promise.all([
           getAllEvents(dateStr),
           getWorklogsForDate(dateStr),
-          getSlackActivitiesForDateSafe(dateStr),
         ]);
+        const slackActivities = slackByDate.get(dateStr) || [];
 
         const awSeconds = calculateAccurateAWTime(awEvents);
         const hourlyAW = calculateHourlyDistribution(awEvents);
