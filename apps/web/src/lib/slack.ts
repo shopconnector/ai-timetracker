@@ -229,6 +229,63 @@ interface SlackActivityData {
   displayName: string;
 }
 
+/**
+ * Session-based time estimation for regular messages.
+ * Groups messages into sessions (gap > 5 min = new session).
+ * Per session: min(numMsgs * 30s + 60s overhead, 600s max).
+ */
+function estimateSessionTime(messages: SlackMessage[]): number {
+  if (messages.length === 0) return 0;
+
+  const SECONDS_PER_MESSAGE = 15; // ~15s to read/process a message
+  const SESSION_GAP_S = 5 * 60; // 5 min gap = new session
+  const SESSION_OVERHEAD = 30; // context switch per session
+  const SESSION_MAX = 300; // 5 min cap per session
+
+  const sorted = [...messages].sort((a, b) => parseFloat(a.ts) - parseFloat(b.ts));
+
+  let totalSeconds = 0;
+  let sessionMsgCount = 1;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = parseFloat(sorted[i].ts) - parseFloat(sorted[i - 1].ts);
+    if (gap > SESSION_GAP_S) {
+      totalSeconds += Math.min(sessionMsgCount * SECONDS_PER_MESSAGE + SESSION_OVERHEAD, SESSION_MAX);
+      sessionMsgCount = 1;
+    } else {
+      sessionMsgCount++;
+    }
+  }
+  // Last session
+  totalSeconds += Math.min(sessionMsgCount * SECONDS_PER_MESSAGE + SESSION_OVERHEAD, SESSION_MAX);
+  return totalSeconds;
+}
+
+/**
+ * Huddle time estimation: count distinct huddle occurrences.
+ * Huddle messages within 30 min = same huddle.
+ * Each distinct huddle ≈ 10 minutes.
+ */
+function estimateHuddleTime(messages: SlackMessage[]): number {
+  const HUDDLE_ESTIMATE_S = 8 * 60; // 8 min per huddle (conservative estimate)
+  const HUDDLE_GAP_S = 30 * 60; // 30 min gap = separate huddle
+
+  const huddleMessages = messages.filter(isHuddleMessage);
+  if (huddleMessages.length === 0) return 0;
+
+  const sorted = [...huddleMessages].sort((a, b) => parseFloat(a.ts) - parseFloat(b.ts));
+  let huddleCount = 1;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = parseFloat(sorted[i].ts) - parseFloat(sorted[i - 1].ts);
+    if (gap > HUDDLE_GAP_S) {
+      huddleCount++;
+    }
+  }
+
+  return huddleCount * HUDDLE_ESTIMATE_S;
+}
+
 function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
   const { conversation, messages, date, displayName } = data;
 
@@ -237,22 +294,20 @@ function slackConversationToActivity(data: SlackActivityData): GroupedActivity {
   const firstTs = sorted[0]?.ts;
   const lastTs = sorted[sorted.length - 1]?.ts;
 
-  // Calculate time span
+  // Calculate time span for positioning
   const firstTime = firstTs ? new Date(parseFloat(firstTs) * 1000) : new Date(`${date}T09:00:00`);
   const lastTime = lastTs ? new Date(parseFloat(lastTs) * 1000) : firstTime;
 
-  // Duration: time between first and last message, minimum 60 seconds per conversation
-  const spanSeconds = Math.max(
-    Math.round((lastTime.getTime() - firstTime.getTime()) / 1000),
-    60
-  );
-  // Cap at reasonable duration: assume ~1 minute per message exchange for DMs
-  const estimatedSeconds = Math.min(spanSeconds, messages.length * 120);
-  const totalSeconds = Math.max(estimatedSeconds, 60);
-
   // Detect huddles
   const huddleMessages = messages.filter(isHuddleMessage);
+  const regularMessages = messages.filter(m => !isHuddleMessage(m));
   const hasHuddle = huddleMessages.length > 0;
+
+  // Estimate time: session-based for regular msgs, distinct count for huddles
+  // Use max (not sum) because huddle time overlaps with DM time in same conversation
+  const regularTime = estimateSessionTime(regularMessages);
+  const huddleTime = estimateHuddleTime(messages);
+  const totalSeconds = Math.max(regularTime, huddleTime, 60);
 
   // Determine title and category
   let title: string;
