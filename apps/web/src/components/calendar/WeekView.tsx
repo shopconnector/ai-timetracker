@@ -14,8 +14,10 @@ interface DayData {
   activities: TimeBlockData[];
   worklogs: TimeBlockData[];
   calendarEvents: TimeBlockData[];
+  slackActivities: TimeBlockData[];
   awTotalMinutes: number;
   tempoTotalMinutes: number;
+  slackTotalMinutes: number;
   targetMinutes: number;
 }
 
@@ -87,10 +89,11 @@ export function WeekView({
     (acc, day) => ({
       awMinutes: acc.awMinutes + day.awTotalMinutes,
       tempoMinutes: acc.tempoMinutes + day.tempoTotalMinutes,
+      slackMinutes: acc.slackMinutes + (day.slackTotalMinutes || 0),
       targetMinutes: acc.targetMinutes + day.targetMinutes
     }),
-    { awMinutes: 0, tempoMinutes: 0, targetMinutes: 0 }
-  ) || { awMinutes: 0, tempoMinutes: 0, targetMinutes: 0 };
+    { awMinutes: 0, tempoMinutes: 0, slackMinutes: 0, targetMinutes: 0 }
+  ) || { awMinutes: 0, tempoMinutes: 0, slackMinutes: 0, targetMinutes: 0 };
 
   return (
     <div className="flex flex-col h-full">
@@ -117,7 +120,7 @@ export function WeekView({
         <div className="flex items-center gap-4">
           {/* Week summary */}
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Week: {Math.floor(weekTotals.tempoMinutes / 60)}h / {Math.floor(weekTotals.targetMinutes / 60)}h logged
+            Week: {Math.floor(weekTotals.tempoMinutes / 60)}h / {Math.floor(weekTotals.targetMinutes / 60)}h logged{weekTotals.slackMinutes > 0 && ` | 💬 ${Math.floor(weekTotals.slackMinutes / 60)}h ${weekTotals.slackMinutes % 60}m Slack`}
           </div>
 
           {/* Toggle "other" */}
@@ -150,6 +153,10 @@ export function WeekView({
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded bg-red-100 border-l-2 border-red-500" />
           <span>Calendar</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded bg-purple-100 border-l-2 border-purple-500" />
+          <span>Slack</span>
         </div>
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded bg-gray-100 border-l-2 border-gray-300" />
@@ -203,6 +210,7 @@ export function WeekView({
               activities={filterActivities(day.activities)}
               worklogs={day.worklogs}
               calendarEvents={day.calendarEvents}
+              slackActivities={day.slackActivities || []}
               tempoTotalMinutes={day.tempoTotalMinutes}
               targetMinutes={day.targetMinutes}
               startHour={START_HOUR}

@@ -35,6 +35,7 @@ import {
   ExternalLink,
   StickyNote,
   Shield,
+  MessageCircle,
 } from 'lucide-react';
 import {
   getAllIssueLocalData,
@@ -124,6 +125,7 @@ export default function MyIssuesPage() {
   const [localData, setLocalData] = useState<Record<string, IssueLocalData>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [slackSummary, setSlackSummary] = useState<{ totalMinutes: number; conversationCount: number; huddleCount: number } | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   // Filters
@@ -166,6 +168,22 @@ export default function MyIssuesPage() {
 
       // Załaduj dane lokalne
       setLocalData(getAllIssueLocalData());
+
+      // Fetch Slack summary for today
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const slackRes = await fetch(`/timetracker/api/slack/activities?date=${today}`);
+        if (slackRes.ok) {
+          const slackData = await slackRes.json();
+          const activities = slackData.activities || [];
+          const totalMinutes = Math.round(activities.reduce((sum: number, a: { totalSeconds: number }) => sum + a.totalSeconds, 0) / 60);
+          const conversationCount = activities.filter((a: { isMeeting?: boolean }) => !a.isMeeting).length;
+          const huddleCount = activities.filter((a: { isMeeting?: boolean }) => a.isMeeting).length;
+          setSlackSummary({ totalMinutes, conversationCount, huddleCount });
+        }
+      } catch {
+        // Slack not configured - silently ignore
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Błąd ładowania danych');
     }
@@ -412,7 +430,7 @@ export default function MyIssuesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-6 lg:grid-cols-7 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -481,6 +499,23 @@ export default function MyIssuesPage() {
             </div>
           </CardContent>
         </Card>
+        {slackSummary && (
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-center gap-3">
+                <MessageCircle className="h-8 w-8 text-purple-500" />
+                <div>
+                  <div className="text-2xl font-bold">
+                    {Math.floor(slackSummary.totalMinutes / 60)}h {slackSummary.totalMinutes % 60}m
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {slackSummary.conversationCount} rozmów dziś
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Filters */}

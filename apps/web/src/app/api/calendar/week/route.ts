@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllEvents, extractProjectInfo, extractMeetingInfo, extractCommunicationInfo, extractTerminalInfo, categorizeActivity, ActivityCategory } from '@/lib/activitywatch';
 import { getWorklogs } from '@/lib/tempo';
+import { getSlackActivitiesForDateSafe } from '@/lib/mergeActivities';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 const MIN_DURATION_MINUTES = 5; // Activities < 5 min are "other"
@@ -16,7 +17,7 @@ const SYSTEM_APPS = [
 
 export interface TimeBlock {
   id: string;
-  source: 'activitywatch' | 'tempo' | 'calendar';
+  source: 'activitywatch' | 'tempo' | 'calendar' | 'slack';
   startTime: string;
   endTime: string;
   durationMinutes: number;
@@ -39,8 +40,10 @@ export interface DayData {
   activities: TimeBlock[];
   worklogs: TimeBlock[];
   calendarEvents: TimeBlock[];
+  slackActivities: TimeBlock[];
   awTotalMinutes: number;
   tempoTotalMinutes: number;
+  slackTotalMinutes: number;
   targetMinutes: number;
 }
 
@@ -197,6 +200,27 @@ async function getWorklogsForDate(date: string): Promise<TimeBlock[]> {
   }
 }
 
+function slackToTimeBlocks(slackActivities: import('@/lib/activitywatch').GroupedActivity[]): TimeBlock[] {
+  return slackActivities.map(a => {
+    const start = a.firstSeen ? new Date(a.firstSeen) : new Date();
+    const end = a.lastSeen ? new Date(a.lastSeen) : new Date(start.getTime() + a.totalSeconds * 1000);
+    const durationMinutes = Math.round(a.totalSeconds / 60);
+
+    return {
+      id: `slack-${a.id}`,
+      source: 'slack' as const,
+      startTime: formatTimeFromDate(start),
+      endTime: formatTimeFromDate(end),
+      durationMinutes,
+      title: a.title,
+      app: 'Slack',
+      category: (a.isMeeting ? 'meeting' : 'communication') as ActivityCategory,
+      isLogged: false,
+      canLogToTempo: false,
+    };
+  }).sort((a, b) => a.startTime.localeCompare(b.startTime));
+}
+
 function getDayName(date: Date): string {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 }
@@ -239,16 +263,20 @@ export async function GET(request: NextRequest) {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
 
-      const [activities, worklogs] = await Promise.all([
+      const [activities, worklogs, rawSlack] = await Promise.all([
         getActivitiesForDate(dateStr),
-        getWorklogsForDate(dateStr)
+        getWorklogsForDate(dateStr),
+        getSlackActivitiesForDateSafe(dateStr)
       ]);
+
+      const slackActivities = slackToTimeBlocks(rawSlack);
 
       const awTotalMinutes = activities
         .filter(a => a.canLogToTempo)
         .reduce((sum, a) => sum + a.durationMinutes, 0);
 
       const tempoTotalMinutes = worklogs.reduce((sum, w) => sum + w.durationMinutes, 0);
+      const slackTotalMinutes = slackActivities.reduce((sum, s) => sum + s.durationMinutes, 0);
 
       days.push({
         date: dateStr,
@@ -257,8 +285,10 @@ export async function GET(request: NextRequest) {
         activities,
         worklogs,
         calendarEvents: [], // TODO: Google Calendar integration
+        slackActivities,
         awTotalMinutes,
         tempoTotalMinutes,
+        slackTotalMinutes,
         targetMinutes: isWeekend(d) ? 0 : 480 // 8h for weekdays
       });
     }

@@ -14,8 +14,10 @@ interface DayData {
   activities: TimeBlockData[];
   worklogs: TimeBlockData[];
   calendarEvents: TimeBlockData[];
+  slackActivities: TimeBlockData[];
   awTotalMinutes: number;
   tempoTotalMinutes: number;
+  slackTotalMinutes: number;
   targetMinutes: number;
 }
 
@@ -125,6 +127,11 @@ export default function CalendarPage() {
     if (block.source === 'calendar') {
       // View-only for calendar events
       toast.info(`Calendar event: ${block.title}`);
+      return;
+    }
+
+    if (block.source === 'slack') {
+      toast.info(`💬 Slack: ${block.title} (${block.durationMinutes}m)`);
       return;
     }
 

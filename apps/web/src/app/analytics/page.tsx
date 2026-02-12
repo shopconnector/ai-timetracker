@@ -47,6 +47,8 @@ interface AnalyticsData {
     totalWorklogs: number;
     peakAWHour: string;
     peakTempoHour: string;
+    totalSlack: { seconds: number; formatted: string; conversations: number; huddles: number };
+    communicationRate: number;
   };
   daysSummary: {
     total: number;
@@ -68,6 +70,9 @@ interface AnalyticsData {
     tempoSeconds: number;
     tempoFormatted: string;
     worklogsCount: number;
+    slackSeconds: number;
+    slackFormatted: string;
+    slackConversations: number;
     status: 'ok' | 'warning' | 'missing';
   }>;
   hourlyChartData: Array<{
@@ -318,7 +323,7 @@ export default function AnalyticsPage() {
         {data && (
           <>
             {/* KPI Row */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
               <KPICard
                 title="ActivityWatch"
                 value={data.kpis.totalAW.formatted}
@@ -365,6 +370,15 @@ export default function AnalyticsPage() {
                 color={data.kpis.productivityScore >= 70 ? 'green' : data.kpis.productivityScore >= 50 ? 'orange' : 'purple'}
                 subtitle={`Peak: ${data.kpis.peakAWHour}`}
               />
+              {data.kpis.totalSlack && (
+                <KPICard
+                  title="Slack"
+                  value={data.kpis.totalSlack.formatted}
+                  icon="💬"
+                  color="purple"
+                  subtitle={`${data.kpis.totalSlack.conversations} rozmów, ${data.kpis.totalSlack.huddles} huddle`}
+                />
+              )}
             </div>
 
             {/* Charts Row 1 */}
@@ -395,13 +409,14 @@ export default function AnalyticsPage() {
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                         formatter={(value, name) => [
                           `${Math.floor(Number(value) / 3600)}h ${Math.floor((Number(value) % 3600) / 60)}m`,
-                          name === 'awSeconds' ? 'ActivityWatch' : 'Tempo'
+                          name === 'awSeconds' ? 'ActivityWatch' : name === 'slackSeconds' ? 'Slack' : 'Tempo'
                         ]}
                         labelFormatter={(_, payload) => payload[0]?.payload?.date || ''}
                       />
                       <Legend />
                       <Bar dataKey="awSeconds" name="ActivityWatch" fill="#8b5cf6" radius={[4, 4, 0, 0]} opacity={0.7} />
                       <Bar dataKey="tempoSeconds" name="Tempo" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="slackSeconds" name="Slack" fill="#a855f7" radius={[4, 4, 0, 0]} opacity={0.6} />
                       <Line type="monotone" dataKey={() => 8 * 3600} name="Target 8h" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -685,6 +700,7 @@ export default function AnalyticsPage() {
                           <th className="text-left py-2 font-medium">Dzień</th>
                           <th className="text-right py-2 font-medium">AW</th>
                           <th className="text-right py-2 font-medium">Tempo</th>
+                          <th className="text-right py-2 font-medium">Slack</th>
                           <th className="text-right py-2 font-medium">Gap</th>
                           <th className="text-right py-2 font-medium">Logs</th>
                           <th className="text-center py-2 font-medium">Status</th>
@@ -700,6 +716,7 @@ export default function AnalyticsPage() {
                               </td>
                               <td className="py-2 text-right font-mono text-purple-400">{day.awFormatted}</td>
                               <td className="py-2 text-right font-mono text-blue-400">{day.tempoFormatted}</td>
+                              <td className="py-2 text-right font-mono text-purple-400">{day.slackFormatted || '-'}</td>
                               <td className={`py-2 text-right font-mono ${gap?.gapHours > 2 ? 'text-red-400' : 'text-slate-500'}`}>
                                 {gap?.gapHours > 0 ? `${gap.gapHours}h` : '-'}
                               </td>

@@ -13,6 +13,7 @@ interface DayColumnProps {
   activities: TimeBlockData[];
   worklogs: TimeBlockData[];
   calendarEvents: TimeBlockData[];
+  slackActivities: TimeBlockData[];
   tempoTotalMinutes: number;
   targetMinutes: number;
   startHour: number;
@@ -44,6 +45,7 @@ export function DayColumn({
   activities,
   worklogs,
   calendarEvents,
+  slackActivities,
   tempoTotalMinutes,
   targetMinutes,
   startHour,
@@ -153,6 +155,17 @@ export function DayColumn({
 
         {/* Calendar events (red - from GCal) */}
         {calendarEvents.map(block => (
+          <TimeBlock
+            key={block.id}
+            block={block}
+            pixelsPerMinute={pixelsPerMinute}
+            startHour={startHour}
+            onClick={onBlockClick}
+          />
+        ))}
+
+        {/* Slack activities (purple) */}
+        {slackActivities.map(block => (
           <TimeBlock
             key={block.id}
             block={block}

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 export interface TimeBlockData {
   id: string;
-  source: 'activitywatch' | 'tempo' | 'calendar';
+  source: 'activitywatch' | 'tempo' | 'calendar' | 'slack';
   startTime: string;
   endTime: string;
   durationMinutes: number;
@@ -48,6 +48,12 @@ function getSourceColors(source: string, category: string) {
         border: 'border-red-500 dark:border-red-600',
         text: 'text-red-700 dark:text-red-300'
       };
+    case 'slack':
+      return {
+        bg: 'bg-purple-100 dark:bg-purple-900/30',
+        border: 'border-purple-500 dark:border-purple-600',
+        text: 'text-purple-700 dark:text-purple-300'
+      };
     case 'activitywatch':
     default:
       return {
@@ -66,6 +72,8 @@ function getSourceIcon(source: string, category: string) {
       return '✓';
     case 'calendar':
       return '📅';
+    case 'slack':
+      return '💬';
     case 'activitywatch':
     default:
       return getCategoryIcon(category);

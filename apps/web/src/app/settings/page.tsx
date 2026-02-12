@@ -462,10 +462,10 @@ export default function SettingsPage() {
           <CardContent>
             <div className="space-y-3">
               {apiStatus.map((api, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                   <div className="flex items-center gap-3">
                     {getStatusIcon(api.status)}
-                    <span className="font-medium">{api.name}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{api.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     {api.message && (
@@ -476,7 +476,7 @@ export default function SettingsPage() {
                 </div>
               ))}
               {apiStatus.length === 0 && !loadingStatus && (
-                <p className="text-gray-500 text-center py-4">Brak danych o statusie API</p>
+                <p className="text-gray-500 dark:text-gray-400 text-center py-4">Brak danych o statusie API</p>
               )}
             </div>
           </CardContent>
@@ -498,7 +498,7 @@ export default function SettingsPage() {
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Cel dzienny (godziny)</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Cel dzienny (godziny)</label>
                     <Input
                       type="number"
                       min="1"
@@ -508,7 +508,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Cel tygodniowy (godziny)</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Cel tygodniowy (godziny)</label>
                     <Input
                       type="number"
                       min="1"
@@ -546,7 +546,7 @@ export default function SettingsPage() {
                     onChange={(e) => handleSaveTargets({ flexibleHours: e.target.checked })}
                     className="h-4 w-4"
                   />
-                  <label htmlFor="flexibleHours" className="text-sm text-gray-600">
+                  <label htmlFor="flexibleHours" className="text-sm text-gray-600 dark:text-gray-300">
                     Elastyczny czas pracy (nadgodziny kompensują braki)
                   </label>
                 </div>
@@ -568,8 +568,8 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Add Time Off */}
-            <div className="p-3 bg-gray-50 rounded-lg space-y-3">
-              <p className="font-medium text-sm">Dodaj urlop / wolne</p>
+            <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg space-y-3">
+              <p className="font-medium text-sm text-slate-900 dark:text-slate-100">Dodaj urlop / wolne</p>
               <div className="grid grid-cols-4 gap-2">
                 <Input
                   type="date"
@@ -604,14 +604,14 @@ export default function SettingsPage() {
             {/* Time Off List */}
             {timeOffs.length > 0 && (
               <div className="space-y-2">
-                <p className="font-medium text-sm text-gray-600">Zaplanowane wolne:</p>
+                <p className="font-medium text-sm text-gray-600 dark:text-gray-300">Zaplanowane wolne:</p>
                 {timeOffs.map((to) => (
-                  <div key={to.id} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                  <div key={to.id} className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
                     <div className="flex items-center gap-2">
                       <span>
                         {to.type === 'vacation' ? '🏖️' : to.type === 'sick' ? '🤒' : to.type === 'remote' ? '🏠' : '📅'}
                       </span>
-                      <span className="text-sm">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">
                         {to.startDate} — {to.endDate}
                       </span>
                     </div>
@@ -624,8 +624,8 @@ export default function SettingsPage() {
             )}
 
             {/* Add Holiday */}
-            <div className="p-3 bg-gray-50 rounded-lg space-y-3">
-              <p className="font-medium text-sm">Dodaj święto / dzień wolny</p>
+            <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg space-y-3">
+              <p className="font-medium text-sm text-slate-900 dark:text-slate-100">Dodaj święto / dzień wolny</p>
               <div className="grid grid-cols-3 gap-2">
                 <Input
                   type="date"
@@ -647,10 +647,10 @@ export default function SettingsPage() {
 
             {/* Holidays List */}
             <div className="space-y-2">
-              <p className="font-medium text-sm text-gray-600">Święta w tym roku:</p>
+              <p className="font-medium text-sm text-gray-600 dark:text-gray-300">Święta w tym roku:</p>
               <div className="flex flex-wrap gap-2">
                 {holidays.slice(0, 15).map((h, i) => (
-                  <Badge key={i} variant="outline" className="text-xs">
+                  <Badge key={i} variant="outline" className="text-xs dark:text-slate-200 dark:border-slate-600">
                     {h.isRecurring ? '🔄' : '📅'} {h.date.length === 5 ? h.date : h.date.slice(5)} - {h.name}
                     {!h.isRecurring && (
                       <button
@@ -693,7 +693,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             {/* Test Results */}
             {Object.keys(testResults).length > 0 && (
-              <div className="p-4 bg-gray-50 rounded-lg space-y-2">
+              <div className="p-4 bg-gray-50 dark:bg-slate-800 rounded-lg space-y-2">
                 <p className="font-medium text-sm mb-2">Wyniki testów:</p>
                 {Object.entries(testResults).map(([key, result]) => (
                   <div key={key} className="flex items-center gap-2 text-sm">
@@ -713,31 +713,31 @@ export default function SettingsPage() {
 
             {/* Tempo Configuration */}
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                 Tempo API
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-gray-500 mb-1 block">API Token</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">API Token</label>
                   <Input
                     type="password"
                     placeholder="Tempo API Token"
                     value={apiConfig.tempoApiToken}
                     onChange={(e) => setApiConfig({ ...apiConfig, tempoApiToken: e.target.value })}
                   />
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                     Pobierz z: tempo.io → Settings → API Integration
                   </p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 mb-1 block">Account ID</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Account ID</label>
                   <Input
                     placeholder="712020:xxxxxxxx-xxxx-xxxx-xxxx"
                     value={apiConfig.tempoAccountId}
                     onChange={(e) => setApiConfig({ ...apiConfig, tempoAccountId: e.target.value })}
                   />
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                     Twoje Atlassian Account ID
                   </p>
                 </div>
@@ -746,13 +746,13 @@ export default function SettingsPage() {
 
             {/* Jira Configuration */}
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                 Jira API
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-sm text-gray-500 mb-1 block">Base URL</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Base URL</label>
                   <Input
                     placeholder="https://company.atlassian.net"
                     value={apiConfig.jiraBaseUrl}
@@ -760,7 +760,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 mb-1 block">Email</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Email</label>
                   <Input
                     type="email"
                     placeholder="email@company.com"
@@ -769,7 +769,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 mb-1 block">API Token</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">API Token</label>
                   <Input
                     type="password"
                     placeholder="Jira API Token"
@@ -778,25 +778,25 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
                 Utwórz token: id.atlassian.com/manage/api-tokens
               </p>
             </div>
 
             {/* ActivityWatch Configuration */}
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
                 ActivityWatch
               </h3>
               <div>
-                <label className="text-sm text-gray-500 mb-1 block">Server URL</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Server URL</label>
                 <Input
                   placeholder="http://localhost:5600"
                   value={apiConfig.activityWatchUrl}
                   onChange={(e) => setApiConfig({ ...apiConfig, activityWatchUrl: e.target.value })}
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   Domyślnie: http://localhost:5600 (ActivityWatch musi być uruchomiony)
                 </p>
               </div>
@@ -804,19 +804,19 @@ export default function SettingsPage() {
 
             {/* Slack Configuration */}
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-fuchsia-500 rounded-full"></span>
                 Slack (opcjonalne)
               </h3>
               <div>
-                <label className="text-sm text-gray-500 mb-1 block">User Token (xoxp-)</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">User Token (xoxp-)</label>
                 <Input
                   type="password"
                   placeholder="xoxp-..."
                   value={apiConfig.slackUserToken}
                   onChange={(e) => setApiConfig({ ...apiConfig, slackUserToken: e.target.value })}
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   Utwórz w: api.slack.com/apps &rarr; OAuth &amp; Permissions. Wymagane scopes: channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read
                 </p>
               </div>
@@ -824,12 +824,12 @@ export default function SettingsPage() {
 
             {/* AI Provider Configuration */}
             <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 flex items-center gap-2">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
                 AI / LLM
               </h3>
               <div>
-                <label className="text-sm text-gray-500 mb-1 block">Provider</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Provider</label>
                 <Select
                   value={apiConfig.aiProvider}
                   onValueChange={(value: 'gemini' | 'openrouter') => {
@@ -850,19 +850,19 @@ export default function SettingsPage() {
               {apiConfig.aiProvider === 'gemini' && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Gemini API Key</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Gemini API Key</label>
                     <Input
                       type="password"
                       placeholder="Gemini API Key"
                       value={apiConfig.geminiApiKey}
                       onChange={e => setApiConfig({ ...apiConfig, geminiApiKey: e.target.value })}
                     />
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       Pobierz z: aistudio.google.com/apikey
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Model Gemini</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model Gemini</label>
                     <Select
                       value={apiConfig.llmModel}
                       onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
@@ -888,17 +888,17 @@ export default function SettingsPage() {
               {apiConfig.aiProvider === 'openrouter' && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">OpenRouter API Key</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">OpenRouter API Key</label>
                     <Input
                       type="password"
                       placeholder="OpenRouter API Key"
                       value={apiConfig.openRouterApiKey}
                       onChange={e => setApiConfig({ ...apiConfig, openRouterApiKey: e.target.value })}
                     />
-                    <p className="text-xs text-gray-400 mt-1">Pobierz z: openrouter.ai/keys</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Pobierz z: openrouter.ai/keys</p>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-500 mb-1 block">Model LLM</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model LLM</label>
                     <Select
                       value={apiConfig.llmModel}
                       onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
@@ -928,7 +928,7 @@ export default function SettingsPage() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                       Automatyczny fallback do innych modeli jeśli wybrany zawiedzie
                     </p>
                   </div>
@@ -953,7 +953,7 @@ export default function SettingsPage() {
             {/* Add new mapping */}
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <label className="text-sm text-gray-500 mb-1 block">Nazwa projektu</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Nazwa projektu</label>
                 <Input
                   placeholder="np. timetracker"
                   value={newProject}
@@ -961,7 +961,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-sm text-gray-500 mb-1 block">Task Jira</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Task Jira</label>
                 <Select value={newTaskKey} onValueChange={setNewTaskKey}>
                   <SelectTrigger>
                     <SelectValue placeholder="Wybierz task" />
@@ -997,20 +997,20 @@ export default function SettingsPage() {
             {/* Existing mappings */}
             <div className="space-y-2">
               {projectMappings.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
+                <p className="text-gray-500 dark:text-gray-400 text-center py-4">
                   Brak mapowań. Dodaj pierwsze mapowanie powyżej.
                 </p>
               ) : (
                 projectMappings.map((mapping) => (
                   <div
                     key={mapping.project}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
                       <Badge variant="outline">{mapping.project}</Badge>
-                      <span className="text-gray-400">→</span>
+                      <span className="text-gray-400 dark:text-gray-500">→</span>
                       <span className="font-mono text-sm">{mapping.taskKey}</span>
-                      <span className="text-gray-500 text-sm truncate max-w-xs">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm truncate max-w-xs">
                         {mapping.taskName}
                       </span>
                     </div>
@@ -1057,37 +1057,37 @@ export default function SettingsPage() {
             {feedbackStats && feedbackStats.total > 0 ? (
               <>
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg text-center">
                     <div className="text-2xl font-bold">{feedbackStats.total}</div>
-                    <div className="text-xs text-gray-500">Wszystkie</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Wszystkie</div>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg text-center">
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-green-600 flex items-center justify-center gap-1">
                       <ThumbsUp className="h-4 w-4" />
                       {feedbackStats.positive}
                     </div>
-                    <div className="text-xs text-gray-500">Dobre</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Dobre</div>
                   </div>
-                  <div className="p-3 bg-red-50 rounded-lg text-center">
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-red-600 flex items-center justify-center gap-1">
                       <ThumbsDown className="h-4 w-4" />
                       {feedbackStats.negative}
                     </div>
-                    <div className="text-xs text-gray-500">Złe</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Złe</div>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-lg text-center">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-blue-600 flex items-center justify-center gap-1">
                       <TrendingUp className="h-4 w-4" />
                       {Math.round(feedbackStats.accuracy * 100)}%
                     </div>
-                    <div className="text-xs text-gray-500">Trafność</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Trafność</div>
                   </div>
                 </div>
 
                 {/* By Source Breakdown */}
                 {Object.keys(feedbackStats.bySource).length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-600">Wg źródła:</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Wg źródła:</p>
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(feedbackStats.bySource).map(([source, stats]) => (
                         <Badge key={source} variant="outline" className="text-xs">
@@ -1103,10 +1103,10 @@ export default function SettingsPage() {
                 {/* Bad Suggestions */}
                 {badSuggestions.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-600">Często odrzucane sugestie:</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Często odrzucane sugestie:</p>
                     <div className="space-y-1">
                       {badSuggestions.slice(0, 5).map((bad, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs p-2 bg-red-50 rounded">
+                        <div key={i} className="flex items-center justify-between text-xs p-2 bg-red-50 dark:bg-red-900/20 rounded">
                           <span className="truncate flex-1" title={bad.pattern}>
                             {bad.pattern.split(':')[0]} → <span className="font-mono">{bad.suggestedTicket}</span>
                           </span>
@@ -1116,14 +1116,14 @@ export default function SettingsPage() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
                       Te sugestie nie będą już proponowane dla podobnych aktywności.
                     </p>
                   </div>
                 )}
               </>
             ) : (
-              <p className="text-gray-500 text-center py-4">
+              <p className="text-gray-500 dark:text-gray-400 text-center py-4">
                 Brak feedbacku. Używaj 👍/👎 przy sugestiach aby AI się uczyło.
               </p>
             )}
@@ -1160,37 +1160,37 @@ export default function SettingsPage() {
               <>
                 {/* Summary Stats */}
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg text-center">
                     <div className="text-2xl font-bold">{auditStats.totalEntries}</div>
-                    <div className="text-xs text-gray-500">Wszystkie wpisy</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Wszystkie wpisy</div>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg text-center">
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-green-600">{auditStats.byAction.accepted}</div>
-                    <div className="text-xs text-gray-500">Zaakceptowane</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Zaakceptowane</div>
                   </div>
-                  <div className="p-3 bg-yellow-50 rounded-lg text-center">
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-yellow-600">{auditStats.byAction.modified}</div>
-                    <div className="text-xs text-gray-500">Zmodyfikowane</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Zmodyfikowane</div>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-lg text-center">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
                     <div className="text-2xl font-bold text-blue-600">{auditStats.byAction.manual}</div>
-                    <div className="text-xs text-gray-500">Ręczne</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Ręczne</div>
                   </div>
                 </div>
 
                 {/* Accuracy by Source */}
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-600">Trafność wg źródła:</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Trafność wg źródła:</p>
                   <div className="grid grid-cols-3 gap-3">
                     {Object.entries(auditStats.bySource).map(([source, data]) => (
                       <div key={source} className="p-2 border rounded text-center">
-                        <div className="text-xs text-gray-500 mb-1">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                           {source === 'llm' ? '🤖 LLM' : source === 'history' ? '📚 Historia' : '📁 Mapping'}
                         </div>
                         <div className="text-lg font-bold">
                           {Math.round(data.accuracy * 100)}%
                         </div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-gray-400 dark:text-gray-500">
                           {data.accepted}/{data.total}
                         </div>
                       </div>
@@ -1200,23 +1200,23 @@ export default function SettingsPage() {
 
                 {/* Recent Trend */}
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-600">Trend:</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Trend:</p>
                   <div className="flex gap-4">
-                    <div className="flex-1 p-2 bg-gray-50 rounded">
-                      <div className="text-xs text-gray-500">Ostatnie 7 dni</div>
+                    <div className="flex-1 p-2 bg-gray-50 dark:bg-slate-800 rounded">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Ostatnie 7 dni</div>
                       <div className="font-bold">
                         {Math.round((auditStats.recentTrend.last7days.accuracy || 0) * 100)}% trafność
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
                         {auditStats.recentTrend.last7days.total} wpisów
                       </div>
                     </div>
-                    <div className="flex-1 p-2 bg-gray-50 rounded">
-                      <div className="text-xs text-gray-500">Ostatnie 30 dni</div>
+                    <div className="flex-1 p-2 bg-gray-50 dark:bg-slate-800 rounded">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Ostatnie 30 dni</div>
                       <div className="font-bold">
                         {Math.round((auditStats.recentTrend.last30days.accuracy || 0) * 100)}% trafność
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
                         {auditStats.recentTrend.last30days.total} wpisów
                       </div>
                     </div>
@@ -1226,7 +1226,7 @@ export default function SettingsPage() {
                 {/* Top Accepted Tickets */}
                 {auditStats.topAcceptedTickets.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-600">Najczęściej akceptowane:</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Najczęściej akceptowane:</p>
                     <div className="flex flex-wrap gap-2">
                       {auditStats.topAcceptedTickets.map(({ ticket, count }) => (
                         <Badge key={ticket} variant="outline" className="text-xs">
@@ -1240,10 +1240,10 @@ export default function SettingsPage() {
                 {/* Top Rejected (Modified) */}
                 {auditStats.topRejectedSuggestions.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-gray-600">Często korygowane:</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Często korygowane:</p>
                     <div className="space-y-1">
                       {auditStats.topRejectedSuggestions.slice(0, 3).map(({ suggested, actual, count }, i) => (
-                        <div key={i} className="text-xs p-2 bg-yellow-50 rounded flex justify-between">
+                        <div key={i} className="text-xs p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded flex justify-between">
                           <span>
                             <span className="line-through text-gray-400">{suggested}</span>
                             {' → '}
@@ -1257,7 +1257,7 @@ export default function SettingsPage() {
                 )}
               </>
             ) : (
-              <p className="text-gray-500 text-center py-4">
+              <p className="text-gray-500 dark:text-gray-400 text-center py-4">
                 Brak danych w audit trail. Dane będą zbierane podczas logowania czasu.
               </p>
             )}
@@ -1285,11 +1285,11 @@ export default function SettingsPage() {
               {taskHistory.slice(0, 20).map((task) => (
                 <div
                   key={task.key}
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded"
+                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-slate-800 rounded"
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm">{task.key}</span>
-                    <span className="text-gray-500 text-sm truncate max-w-xs">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm truncate max-w-xs">
                       {task.name}
                     </span>
                   </div>
@@ -1301,7 +1301,7 @@ export default function SettingsPage() {
                 </div>
               ))}
               {taskHistory.length === 0 && (
-                <p className="text-gray-500 text-center py-4">
+                <p className="text-gray-500 dark:text-gray-400 text-center py-4">
                   Brak historii. Historia będzie się budować podczas logowania czasu.
                 </p>
               )}
@@ -1333,7 +1333,7 @@ export default function SettingsPage() {
                 </Badge>
               ))}
               {jiraProjects.length === 0 && !loadingJira && (
-                <p className="text-gray-500">Brak projektów lub błąd połączenia z Jira</p>
+                <p className="text-gray-500 dark:text-gray-400">Brak projektów lub błąd połączenia z Jira</p>
               )}
             </div>
           </CardContent>

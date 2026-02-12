@@ -102,6 +102,8 @@ export default function TimesheetPage() {
   const [issueFilter, setIssueFilter] = useState<'all' | 'in_progress' | 'assigned' | 'recent'>('all');
   const [awStatus, setAwStatus] = useState<'connected' | 'error' | 'checking'>('checking');
   const [showPrivate, setShowPrivate] = useState(true); // Show private activities by default
+  const [slackSummary, setSlackSummary] = useState<{ totalMinutes: number; conversationCount: number; huddleCount: number } | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'aw' | 'slack'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>(() => {
     // Load from localStorage if available
     if (typeof window !== 'undefined') {
@@ -151,6 +153,24 @@ export default function TimesheetPage() {
       });
     } finally {
       setLoading(false);
+    }
+  }, [dateStr]);
+
+  // Fetch Slack summary
+  const fetchSlackSummary = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl(`/api/slack/activities?date=${dateStr}`));
+      if (res.ok) {
+        const data = await res.json();
+        const activities = data.activities || [];
+        const totalMinutes = Math.round(activities.reduce((sum: number, a: { totalSeconds: number }) => sum + a.totalSeconds, 0) / 60);
+        const conversationCount = activities.filter((a: { isMeeting?: boolean }) => !a.isMeeting).length;
+        const huddleCount = activities.filter((a: { isMeeting?: boolean }) => a.isMeeting).length;
+        setSlackSummary({ totalMinutes, conversationCount, huddleCount });
+      }
+    } catch {
+      // Slack not configured or error - silently ignore
+      setSlackSummary(null);
     }
   }, [dateStr]);
 
@@ -771,7 +791,8 @@ export default function TimesheetPage() {
   useEffect(() => {
     fetchActivities();
     fetchWorklogs();
-  }, [fetchActivities, fetchWorklogs]);
+    fetchSlackSummary();
+  }, [fetchActivities, fetchWorklogs, fetchSlackSummary]);
 
   // Persist loggedIds to localStorage przy każdej zmianie
   useEffect(() => {
@@ -840,10 +861,14 @@ export default function TimesheetPage() {
     }
   }, [tempoWorklogs, activities]);
 
-  // Filter activities based on showPrivate toggle
-  const filteredActivities = showPrivate
-    ? activities
-    : activities.filter(a => !a.isPrivate);
+  // Filter activities based on showPrivate toggle and source filter
+  const filteredActivities = activities
+    .filter(a => showPrivate || !a.isPrivate)
+    .filter(a => {
+      if (sourceFilter === 'all') return true;
+      if (sourceFilter === 'slack') return a.source === 'slack' || a.source === 'merged';
+      return a.source === 'aw' || !a.source;
+    });
 
   const privateCount = activities.filter(a => a.isPrivate).length;
   const unloggedSeconds = (summary?.totalSeconds || 0) - loggedSeconds;
@@ -858,7 +883,7 @@ export default function TimesheetPage() {
       </div>
 
       {/* Date picker + Comparison Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className={`grid grid-cols-1 ${slackSummary ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4 mb-6`}>
           {/* Data */}
           <Card>
             <CardHeader className="pb-2">
@@ -928,6 +953,23 @@ export default function TimesheetPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Slack */}
+          {slackSummary && (
+            <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-purple-600">💬 Slack</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-700">
+                  {Math.floor(slackSummary.totalMinutes / 60)}h {slackSummary.totalMinutes % 60}m
+                </div>
+                <div className="text-xs text-purple-600">
+                  {slackSummary.conversationCount} rozmów{slackSummary.huddleCount > 0 ? `, ${slackSummary.huddleCount} huddle` : ''}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Search tickets & Filter */}
@@ -1055,6 +1097,21 @@ export default function TimesheetPage() {
               Scal zaznaczone ({selectedIds.size})
             </Button>
           )}
+
+          {/* Source filter */}
+          <div className="flex items-center gap-1 border-l pl-4">
+            {(['all', 'aw', 'slack'] as const).map(src => (
+              <Button
+                key={src}
+                variant={sourceFilter === src ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSourceFilter(src)}
+                className={sourceFilter === src ? (src === 'slack' ? 'bg-purple-600 hover:bg-purple-700' : '') : ''}
+              >
+                {src === 'all' ? 'All' : src === 'aw' ? '🖥 AW' : '💬 Slack'}
+              </Button>
+            ))}
+          </div>
 
           {/* Private activities toggle */}
           <div className="flex items-center gap-2 ml-auto border-l pl-4">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWorklogsForDate } from '@/lib/tempo';
 import { getAllEvents, groupActivities, AWEvent } from '@/lib/activitywatch';
+import { getSlackActivitiesForDateSafe } from '@/lib/mergeActivities';
 
 const MY_ACCOUNT = process.env.TEMPO_ACCOUNT_ID || '';
 
@@ -147,31 +148,125 @@ function getWorkdaysInRange(start: Date, end: Date): string[] {
 }
 
 export async function GET(request: NextRequest) {
+  try {
   const searchParams = request.nextUrl.searchParams;
   const period = searchParams.get('period') || '7d';
 
   const { start, end, prevStart, prevEnd } = getDateRange(period);
   const workdays = getWorkdaysInRange(start, end);
   const prevWorkdays = getWorkdaysInRange(prevStart, prevEnd);
+  // Limit previous period to max 10 workdays to avoid timeout
+  const limitedPrevWorkdays = prevWorkdays.slice(-10);
 
-  // Fetch data for all days
-  const dailyData: Array<{
-    date: string;
-    dayName: string;
-    awSeconds: number;
-    tempoSeconds: number;
-    worklogsCount: number;
-    hourlyAW: number[];
-    hourlyTempo: number[];
-    apps: Record<string, number>;
-    productive: number;
-    neutral: number;
-    distracting: number;
-  }> = [];
+  const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+
+  // Fetch current period IN PARALLEL
+  const dailyResults = await Promise.all(
+    workdays.map(async (dateStr) => {
+      try {
+        const [awEvents, worklogs, slackActivities] = await Promise.all([
+          getAllEvents(dateStr),
+          getWorklogsForDate(dateStr),
+          getSlackActivitiesForDateSafe(dateStr),
+        ]);
+
+        const awSeconds = calculateAccurateAWTime(awEvents);
+        const hourlyAW = calculateHourlyDistribution(awEvents);
+        const apps = calculateAppBreakdown(awEvents);
+
+        // Slack metrics
+        const slackSeconds = slackActivities.reduce((sum, a) => sum + a.totalSeconds, 0);
+        const slackConversations = slackActivities.filter(a => !a.isMeeting).length;
+        const slackHuddles = slackActivities.filter(a => a.isMeeting).length;
+
+        // Productivity breakdown
+        let productive = 0, neutral = 0, distracting = 0;
+        for (const [app, seconds] of Object.entries(apps)) {
+          const category = getProductivityCategory(app);
+          if (category === 'productive') productive += seconds;
+          else if (category === 'distracting') distracting += seconds;
+          else neutral += seconds;
+        }
+
+        const myWorklogs = worklogs.filter(
+          (w: { author?: { accountId?: string } }) => w.author?.accountId === MY_ACCOUNT
+        );
+        const tempoSeconds = myWorklogs.reduce(
+          (sum: number, w: { timeSpentSeconds: number }) => sum + w.timeSpentSeconds, 0
+        );
+
+        // Hourly tempo distribution
+        const hourlyTempo = new Array(24).fill(0);
+        for (const worklog of myWorklogs) {
+          if (worklog.startTime) {
+            const hour = parseInt(worklog.startTime.split(':')[0], 10);
+            let remaining = worklog.timeSpentSeconds;
+            let h = hour;
+            while (remaining > 0 && h < 24) {
+              const inHour = Math.min(remaining, 3600);
+              hourlyTempo[h] += inHour;
+              remaining -= inHour;
+              h++;
+            }
+          }
+        }
+
+        const date = new Date(dateStr);
+
+        return {
+          date: dateStr,
+          dayName: dayNames[date.getDay()],
+          awSeconds,
+          tempoSeconds,
+          slackSeconds,
+          slackConversations,
+          slackHuddles,
+          worklogsCount: myWorklogs.length,
+          hourlyAW,
+          hourlyTempo,
+          apps,
+          productive,
+          neutral,
+          distracting
+        };
+      } catch (error) {
+        console.error(`Error fetching ${dateStr}:`, error);
+        return null;
+      }
+    })
+  );
+
+  // Fetch previous period IN PARALLEL
+  const prevResults = await Promise.all(
+    limitedPrevWorkdays.map(async (dateStr) => {
+      try {
+        const [awEvents, worklogs] = await Promise.all([
+          getAllEvents(dateStr),
+          getWorklogsForDate(dateStr),
+        ]);
+        const awSeconds = calculateAccurateAWTime(awEvents);
+        const myWorklogs = worklogs.filter(
+          (w: { author?: { accountId?: string } }) => w.author?.accountId === MY_ACCOUNT
+        );
+        const tempoSeconds = myWorklogs.reduce(
+          (sum: number, w: { timeSpentSeconds: number }) => sum + w.timeSpentSeconds, 0
+        );
+        return { awSeconds, tempoSeconds };
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  // Aggregate current period
+  const dailyData = dailyResults.filter((d): d is NonNullable<typeof d> => d !== null);
 
   let totalAW = 0;
   let totalTempo = 0;
   let totalWorklogs = 0;
+  let totalSlack = 0;
+  let totalSlackConversations = 0;
+  let totalSlackHuddles = 0;
   const allApps: Record<string, number> = {};
   const hourlyTotalsAW = new Array(24).fill(0);
   const hourlyTotalsTempo = new Array(24).fill(0);
@@ -179,101 +274,30 @@ export async function GET(request: NextRequest) {
   let totalNeutral = 0;
   let totalDistracting = 0;
 
-  // Current period data
-  for (const dateStr of workdays) {
-    try {
-      // ActivityWatch
-      const awEvents = await getAllEvents(dateStr);
-      const awSeconds = calculateAccurateAWTime(awEvents);
-      const hourlyAW = calculateHourlyDistribution(awEvents);
-      const apps = calculateAppBreakdown(awEvents);
-
-      // Productivity breakdown
-      let productive = 0, neutral = 0, distracting = 0;
-      for (const [app, seconds] of Object.entries(apps)) {
-        const category = getProductivityCategory(app);
-        if (category === 'productive') productive += seconds;
-        else if (category === 'distracting') distracting += seconds;
-        else neutral += seconds;
-
-        allApps[app] = (allApps[app] || 0) + seconds;
-      }
-
-      // Tempo
-      const worklogs = await getWorklogsForDate(dateStr);
-      const myWorklogs = worklogs.filter(
-        (w: { author?: { accountId?: string } }) => w.author?.accountId === MY_ACCOUNT
-      );
-      const tempoSeconds = myWorklogs.reduce(
-        (sum: number, w: { timeSpentSeconds: number }) => sum + w.timeSpentSeconds, 0
-      );
-
-      // Hourly tempo distribution
-      const hourlyTempo = new Array(24).fill(0);
-      for (const worklog of myWorklogs) {
-        if (worklog.startTime) {
-          const hour = parseInt(worklog.startTime.split(':')[0], 10);
-          let remaining = worklog.timeSpentSeconds;
-          let h = hour;
-          while (remaining > 0 && h < 24) {
-            const inHour = Math.min(remaining, 3600);
-            hourlyTempo[h] += inHour;
-            remaining -= inHour;
-            h++;
-          }
-        }
-      }
-
-      const date = new Date(dateStr);
-      const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
-
-      dailyData.push({
-        date: dateStr,
-        dayName: dayNames[date.getDay()],
-        awSeconds,
-        tempoSeconds,
-        worklogsCount: myWorklogs.length,
-        hourlyAW,
-        hourlyTempo,
-        apps,
-        productive,
-        neutral,
-        distracting
-      });
-
-      totalAW += awSeconds;
-      totalTempo += tempoSeconds;
-      totalWorklogs += myWorklogs.length;
-      totalProductive += productive;
-      totalNeutral += neutral;
-      totalDistracting += distracting;
-
-      hourlyAW.forEach((v, i) => hourlyTotalsAW[i] += v);
-      hourlyTempo.forEach((v, i) => hourlyTotalsTempo[i] += v);
-
-    } catch (error) {
-      console.error(`Error fetching ${dateStr}:`, error);
+  for (const d of dailyData) {
+    totalAW += d.awSeconds;
+    totalTempo += d.tempoSeconds;
+    totalSlack += d.slackSeconds;
+    totalSlackConversations += d.slackConversations;
+    totalSlackHuddles += d.slackHuddles;
+    totalWorklogs += d.worklogsCount;
+    totalProductive += d.productive;
+    totalNeutral += d.neutral;
+    totalDistracting += d.distracting;
+    d.hourlyAW.forEach((v, i) => hourlyTotalsAW[i] += v);
+    d.hourlyTempo.forEach((v, i) => hourlyTotalsTempo[i] += v);
+    for (const [app, seconds] of Object.entries(d.apps)) {
+      allApps[app] = (allApps[app] || 0) + seconds;
     }
   }
 
-  // Previous period totals for comparison
+  // Aggregate previous period
   let prevTotalAW = 0;
   let prevTotalTempo = 0;
-
-  for (const dateStr of prevWorkdays) {
-    try {
-      const awEvents = await getAllEvents(dateStr);
-      prevTotalAW += calculateAccurateAWTime(awEvents);
-
-      const worklogs = await getWorklogsForDate(dateStr);
-      const myWorklogs = worklogs.filter(
-        (w: { author?: { accountId?: string } }) => w.author?.accountId === MY_ACCOUNT
-      );
-      prevTotalTempo += myWorklogs.reduce(
-        (sum: number, w: { timeSpentSeconds: number }) => sum + w.timeSpentSeconds, 0
-      );
-    } catch (error) {
-      // Skip errors for previous period
+  for (const r of prevResults) {
+    if (r) {
+      prevTotalAW += r.awSeconds;
+      prevTotalTempo += r.tempoSeconds;
     }
   }
 
@@ -381,7 +405,14 @@ export async function GET(request: NextRequest) {
       productivityScore,
       totalWorklogs,
       peakAWHour: `${peakAWHour}:00`,
-      peakTempoHour: `${peakTempoHour}:00`
+      peakTempoHour: `${peakTempoHour}:00`,
+      totalSlack: {
+        seconds: totalSlack,
+        formatted: formatDuration(totalSlack),
+        conversations: totalSlackConversations,
+        huddles: totalSlackHuddles
+      },
+      communicationRate: totalAW > 0 ? Math.round((totalSlack / totalAW) * 100) : 0
     },
     daysSummary: {
       total: workdays.length,
@@ -403,6 +434,9 @@ export async function GET(request: NextRequest) {
       tempoSeconds: d.tempoSeconds,
       tempoFormatted: formatDuration(d.tempoSeconds),
       worklogsCount: d.worklogsCount,
+      slackSeconds: d.slackSeconds,
+      slackFormatted: formatDuration(d.slackSeconds),
+      slackConversations: d.slackConversations,
       status: d.tempoSeconds >= 7 * 3600 ? 'ok' : d.tempoSeconds >= 4 * 3600 ? 'warning' : 'missing'
     })),
     hourlyChartData,
@@ -411,4 +445,11 @@ export async function GET(request: NextRequest) {
     dailyGaps,
     timestamp: new Date().toISOString()
   });
+  } catch (error) {
+    console.error('Analytics API error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch analytics data', message: String(error) },
+      { status: 500 }
+    );
+  }
 }
