@@ -345,8 +345,15 @@ jobs:
           "node\node.exe" "start-server.js" 2>> "logs\timetracker.log"
           echo [%date% %time%] Server exited (code: %errorlevel%) >> "logs\timetracker.log"
           echo.
-          echo   Server stopped. Restarting in 5 seconds... (close window to stop)
-          timeout /t 5 /nobreak >nul
+          if exist "%~dp0update.flag" (
+              del "%~dp0update.flag"
+              echo   Update in progress, waiting for installer to finish...
+              echo [%date% %time%] Waiting for installer... >> "logs\timetracker.log"
+              timeout /t 15 /nobreak >nul
+          ) else (
+              echo   Server stopped. Restarting in 5 seconds... (close window to stop)
+              timeout /t 5 /nobreak >nul
+          )
           goto start_server
           '@
 

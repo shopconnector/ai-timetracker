@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/admin/Sidebar";
 import { Header } from "@/components/admin/Header";
 import { MainContent } from "@/components/admin/MainContent";
 import { Toaster } from "@/components/ui/sonner";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,6 +37,7 @@ export default function RootLayout({
         <ThemeProvider>
           <SidebarProvider>
             <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+              <UpdateBanner />
               <Sidebar />
               <Header />
               <MainContent>{children}</MainContent>

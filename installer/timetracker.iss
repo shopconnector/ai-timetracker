@@ -102,9 +102,24 @@ var
   ResultCode: Integer;
 begin
   Result := True;
-  
+
   // Check if ActivityWatch API is accessible
   // We just show a warning, don't block installation
+end;
+
+// Stop running TimeTracker server before installing files
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssInstall then
+  begin
+    // Kill node.exe processes running TimeTracker
+    Exec('taskkill', '/F /IM node.exe /FI "WINDOWTITLE eq AI TimeTracker*"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    // Also try to kill by looking for our start-server.js
+    Exec('cmd.exe', '/c taskkill /F /IM node.exe 2>nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Sleep(2000);
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);

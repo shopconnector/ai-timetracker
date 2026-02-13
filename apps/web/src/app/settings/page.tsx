@@ -36,7 +36,9 @@ import {
   Clock,
   Umbrella,
   FileText,
-  BarChart3
+  BarChart3,
+  ExternalLink,
+  PackageCheck
 } from 'lucide-react';
 import {
   getProjectMappings,
@@ -115,6 +117,31 @@ export default function SettingsPage() {
   // Audit trail state
   const [auditStats, setAuditStats] = useState<AuditStats | null>(null);
 
+  // Version & update state
+  const [versionInfo, setVersionInfo] = useState<{
+    current: string;
+    latest: string;
+    hasUpdate: boolean;
+    downloadUrl: string | null;
+    releaseUrl: string;
+    releaseNotes: string;
+    publishedAt: string | null;
+    platform: string;
+    checkedAt: string;
+    error?: string;
+  } | null>(null);
+  const [checkingVersion, setCheckingVersion] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'downloading' | 'ready' | 'applying' | 'error'>('idle');
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Self-update state (macOS/Linux)
+  const [selfUpdateStatus, setSelfUpdateStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [selfUpdateStep, setSelfUpdateStep] = useState('');
+  const [selfUpdateSteps, setSelfUpdateSteps] = useState<{ name: string; status: string }[]>([]);
+  const [selfUpdateError, setSelfUpdateError] = useState<string | null>(null);
+
   // Targets state
   const [targets, setTargetsState] = useState<TimeTargets | null>(null);
   const [holidays, setHolidaysList] = useState<Holiday[]>([]);
@@ -155,6 +182,7 @@ export default function SettingsPage() {
   // Load data on mount
   useEffect(() => {
     loadAllData();
+    checkForUpdates();
   }, []);
 
   const loadAllData = useCallback(async () => {
@@ -209,6 +237,103 @@ export default function SettingsPage() {
     // Load Jira projects and issues
     loadJiraData();
   }, []);
+
+  const checkForUpdates = useCallback(async () => {
+    setCheckingVersion(true);
+    try {
+      const res = await fetch(apiUrl('/api/version'));
+      if (res.ok) {
+        const data = await res.json();
+        setVersionInfo(data);
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+    }
+    setCheckingVersion(false);
+  }, []);
+
+  const handleSelfUpdate = async () => {
+    setSelfUpdateStatus('running');
+    setSelfUpdateStep('Rozpoczynanie...');
+    setSelfUpdateSteps([]);
+    setSelfUpdateError(null);
+
+    try {
+      await fetch(apiUrl('/api/update?action=selfupdate'), { method: 'POST' });
+
+      const poll = async () => {
+        try {
+          const res = await fetch(apiUrl('/api/update?action=selfupdate-status'), { method: 'POST' });
+          if (!res.ok) return;
+          const data = await res.json();
+          setSelfUpdateStatus(data.status);
+          setSelfUpdateStep(data.step || '');
+          setSelfUpdateSteps(data.steps || []);
+          if (data.error) setSelfUpdateError(data.error);
+
+          if (data.status === 'running') {
+            setTimeout(poll, 1000);
+          } else if (data.status === 'done') {
+            setTimeout(() => window.location.reload(), 5000);
+          }
+        } catch {
+          // Server restarting — reload
+          setTimeout(() => window.location.reload(), 5000);
+        }
+      };
+      poll();
+    } catch {
+      setSelfUpdateStatus('error');
+      setSelfUpdateError('Nie udalo sie rozpoczac aktualizacji');
+    }
+  };
+
+  const handleDownloadUpdate = async () => {
+    if (!versionInfo?.platform || versionInfo.platform !== 'win32') {
+      handleSelfUpdate();
+      return;
+    }
+
+    setUpdateStatus('downloading');
+    setUpdateProgress(0);
+    setUpdateError(null);
+
+    try {
+      await fetch(apiUrl('/api/update?action=download'), { method: 'POST' });
+
+      // Poll for progress
+      const poll = async () => {
+        try {
+          const res = await fetch(apiUrl('/api/update?action=status'), { method: 'POST' });
+          if (!res.ok) return;
+          const data = await res.json();
+          setUpdateProgress(data.progress || 0);
+          setUpdateStatus(data.status);
+          if (data.error) setUpdateError(data.error);
+
+          if (data.status === 'downloading') {
+            setTimeout(poll, 500);
+          }
+        } catch {
+          // ignore
+        }
+      };
+      poll();
+    } catch {
+      setUpdateStatus('error');
+      setUpdateError('Nie udalo sie rozpoczac pobierania');
+    }
+  };
+
+  const handleApplyUpdate = async () => {
+    setUpdateStatus('applying');
+    try {
+      await fetch(apiUrl('/api/update?action=apply'), { method: 'POST' });
+    } catch {
+      setUpdateStatus('error');
+      setUpdateError('Nie udalo sie uruchomic instalatora');
+    }
+  };
 
   const handleSaveApiConfig = async () => {
     setSavingConfig(true);
@@ -446,6 +571,176 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Settings</h1>
         <p className="text-slate-500 dark:text-slate-400">Configure your TimeTracker integrations</p>
       </div>
+
+        {/* Version & Updates */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <PackageCheck className="h-5 w-5 text-emerald-600" />
+                <div>
+                  <CardTitle className="text-lg">Wersja i aktualizacje</CardTitle>
+                  <CardDescription>Sprawdz dostepnosc nowych wersji TimeTracker</CardDescription>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={checkingVersion}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${checkingVersion ? 'animate-spin' : ''}`} />
+                Sprawdz aktualizacje
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Aktualna wersja</div>
+                <div className="text-lg font-bold text-slate-900 dark:text-white">
+                  v{versionInfo?.current || process.env.NEXT_PUBLIC_APP_VERSION || '?'}
+                </div>
+              </div>
+              <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Status</div>
+                <div className="text-lg font-bold">
+                  {versionInfo?.hasUpdate ? (
+                    <span className="text-amber-600">Dostepna v{versionInfo.latest}</span>
+                  ) : versionInfo ? (
+                    <span className="text-green-600 flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5" />
+                      Aktualna
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {versionInfo?.hasUpdate && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-amber-800 dark:text-amber-200">
+                      Nowa wersja v{versionInfo.latest}
+                    </p>
+                    {versionInfo.publishedAt && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        Wydana: {new Date(versionInfo.publishedAt).toLocaleDateString('pl')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={versionInfo.releaseUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300 hover:underline"
+                    >
+                      Release notes
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Self-update progress (macOS/Linux) */}
+                {selfUpdateStatus === 'running' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 animate-spin text-amber-600" />
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        Aktualizacja: {selfUpdateStep}
+                      </p>
+                    </div>
+                    {selfUpdateSteps.length > 0 && (
+                      <div className="flex gap-2">
+                        {selfUpdateSteps.map((s, i) => (
+                          <span
+                            key={i}
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              s.status === 'done' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                              s.status === 'running' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 animate-pulse' :
+                              s.status === 'error' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                              'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                            }`}
+                          >
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selfUpdateStatus === 'done' && (
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Aktualizacja zakonczona. Restartowanie serwera...
+                  </p>
+                )}
+
+                {selfUpdateStatus === 'error' && selfUpdateError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{selfUpdateError}</p>
+                )}
+
+                {/* Download progress (Windows) */}
+                {updateStatus === 'downloading' && (
+                  <div className="space-y-1">
+                    <div className="w-full h-2 bg-amber-200 dark:bg-amber-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-300"
+                        style={{ width: `${updateProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Pobieranie... {updateProgress}%</p>
+                  </div>
+                )}
+
+                {updateStatus === 'applying' && (
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Instalowanie... Aplikacja zrestartuje sie automatycznie.
+                  </p>
+                )}
+
+                {updateStatus === 'error' && updateError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{updateError}</p>
+                )}
+
+                {updateStatus !== 'applying' && selfUpdateStatus !== 'running' && selfUpdateStatus !== 'done' && (
+                  <div className="flex gap-2">
+                    {versionInfo.platform === 'win32' ? (
+                      updateStatus === 'ready' ? (
+                        <Button size="sm" onClick={handleApplyUpdate}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Zainstaluj aktualizacje
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={handleDownloadUpdate}
+                          disabled={updateStatus === 'downloading'}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          {updateStatus === 'downloading' ? 'Pobieranie...' : 'Pobierz i zainstaluj'}
+                        </Button>
+                      )
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={handleSelfUpdate}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Aktualizuj
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {versionInfo?.checkedAt && (
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Ostatnie sprawdzenie: {new Date(versionInfo.checkedAt).toLocaleString('pl')}
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* API Status */}
         <Card>
