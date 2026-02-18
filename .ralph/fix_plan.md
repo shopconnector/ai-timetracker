@@ -14,7 +14,7 @@
 - [x] `mergeActivities.test.ts` — activity merging, dedup, AW+Slack correlation, edge cases (20 tests)
 - [x] `readiness.test.ts` — RC parsing from Jira comments (green/yellow/red), missing fields (29 tests)
 - [x] `cache.test.ts` — get/set/expiry/invalidation/size limits (33 tests)
-- [ ] `targets.test.ts` — target calculations, daily/weekly goals
+- [x] `targets.test.ts` — target calculations, daily/weekly goals (57 tests)
 - [ ] `versionCheck.test.ts` — semver comparison logic
 - [ ] `utils.test.ts` — all utility/helper functions
 
@@ -153,6 +153,7 @@
 - [x] **Loop 2**: Vitest infrastructure + cache.test.ts (33 tests passing)
 - [x] **Loop 3**: mergeActivities.test.ts (20 tests — correlation, tolerance, sorting, edge cases)
 - [x] **Loop 4**: readiness.test.ts (29 tests — emoji/text/Polish parsing, suggestions, findReadinessComment)
+- [x] **Loop 5**: targets.test.ts (57 tests — targets, holidays, time off, day status, calculations, import/export)
 
 ---
 
