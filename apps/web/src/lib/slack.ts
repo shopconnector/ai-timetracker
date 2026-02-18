@@ -71,9 +71,13 @@ const rateLimiter = new TokenBucketLimiter(40, 40);
 // CACHES — in-memory with TTL
 // ========================================
 
-const userCache = new Map<string, string>();
+// User cache with TTL
+const USER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const USER_CACHE_MAX_SIZE = 200;
+const userCache = new Map<string, { name: string; expiry: number }>();
 
 // Activities cache: date -> { data, expiry }
+const ACTIVITIES_CACHE_MAX_SIZE = 30; // ~30 days of data
 const activitiesCache = new Map<string, { data: GroupedActivity[]; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -83,6 +87,41 @@ const CONVERSATIONS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // In-flight dedup: prevent parallel fetches for same date
 const inFlight = new Map<string, Promise<GroupedActivity[]>>();
+
+// Evict expired entries from activitiesCache and enforce size cap
+function evictActivitiesCache() {
+  const now = Date.now();
+  for (const [key, entry] of activitiesCache) {
+    if (now >= entry.expiry) {
+      activitiesCache.delete(key);
+    }
+  }
+  // If still over cap, remove oldest entries (by expiry)
+  if (activitiesCache.size > ACTIVITIES_CACHE_MAX_SIZE) {
+    const sorted = [...activitiesCache.entries()].sort((a, b) => a[1].expiry - b[1].expiry);
+    const toRemove = sorted.length - ACTIVITIES_CACHE_MAX_SIZE;
+    for (let i = 0; i < toRemove; i++) {
+      activitiesCache.delete(sorted[i][0]);
+    }
+  }
+}
+
+// Evict expired entries from userCache and enforce size cap
+function evictUserCache() {
+  const now = Date.now();
+  for (const [key, entry] of userCache) {
+    if (now >= entry.expiry) {
+      userCache.delete(key);
+    }
+  }
+  if (userCache.size > USER_CACHE_MAX_SIZE) {
+    const sorted = [...userCache.entries()].sort((a, b) => a[1].expiry - b[1].expiry);
+    const toRemove = sorted.length - USER_CACHE_MAX_SIZE;
+    for (let i = 0; i < toRemove; i++) {
+      userCache.delete(sorted[i][0]);
+    }
+  }
+}
 
 // ========================================
 // SLACK API WITH RETRY
@@ -133,13 +172,11 @@ async function slackFetch(url: string, retries = 2): Promise<Response> {
 // ========================================
 
 async function getUserDisplayName(userId: string): Promise<string> {
-  // Evict cache if it grows too large (prevent unbounded memory growth)
-  if (userCache.size > 200) {
-    userCache.clear();
-  }
+  evictUserCache();
 
-  if (userCache.has(userId)) {
-    return userCache.get(userId)!;
+  const cached = userCache.get(userId);
+  if (cached && Date.now() < cached.expiry) {
+    return cached.name;
   }
 
   try {
@@ -147,14 +184,14 @@ async function getUserDisplayName(userId: string): Promise<string> {
     const data = await res.json();
     if (data.ok && data.user) {
       const name = data.user.real_name || data.user.name || userId;
-      userCache.set(userId, name);
+      userCache.set(userId, { name, expiry: Date.now() + USER_CACHE_TTL_MS });
       return name;
     }
   } catch (error) {
     console.error(`[Slack] Error fetching user ${userId}:`, error);
   }
 
-  userCache.set(userId, userId);
+  userCache.set(userId, { name: userId, expiry: Date.now() + USER_CACHE_TTL_MS });
   return userId;
 }
 
@@ -489,7 +526,8 @@ export async function getSlackActivitiesForDate(date: string): Promise<GroupedAc
 
   const promise = fetchSlackActivitiesForDate(date)
     .then(result => {
-      // Cache the result
+      // Cache the result (evict stale entries first)
+      evictActivitiesCache();
       activitiesCache.set(date, { data: result, expiry: Date.now() + CACHE_TTL_MS });
       inFlight.delete(date);
       return result;
@@ -581,6 +619,7 @@ async function fetchSlackActivitiesForRange(
   }
 
   // Sort each day's activities by totalSeconds descending
+  evictActivitiesCache();
   for (const [dateKey, activities] of dateActivitiesMap) {
     activities.sort((a, b) => b.totalSeconds - a.totalSeconds);
     // Cache each day individually

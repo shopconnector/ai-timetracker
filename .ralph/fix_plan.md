@@ -60,9 +60,9 @@
 
 ### 5. Slack cache TTL eviction
 **File:** `apps/web/src/lib/slack.ts`
-- [ ] Add TTL-based eviction to `activitiesCache` (already has expiry, but no cleanup loop)
-- [ ] Cap `activitiesCache` size to prevent unbounded growth
-- [ ] Add TTL to `userCache` (currently only evicts at 200 entries, no expiry)
+- [x] Add TTL-based eviction to `activitiesCache` (already has expiry, but no cleanup loop)
+- [x] Cap `activitiesCache` size to prevent unbounded growth
+- [x] Add TTL to `userCache` (currently only evicts at 200 entries, no expiry)
 
 ---
 
@@ -163,6 +163,7 @@
 - [x] **Loop 12**: gemini.test.ts (24 tests — extractJSON pure function, callGemini API with config merge/error handling, testGeminiConnection with timing)
 - [x] **Loop 13**: openrouter.test.ts (19 tests — project mapping priority/threshold/case, LLM API call/parse/clamp/defaults, keyword fallback categories, batching, mixed sources). T2 API client tests COMPLETE (216 total). Set up vitest in packages/ai.
 - [x] **Loop 14**: Error boundaries — added error.tsx (route-level, styled Card with reset) and global-error.tsx (root layout fallback with inline styles)
+- [x] **Loop 15**: Slack cache TTL eviction — userCache now has 30-min TTL, activitiesCache capped at 30 entries, lazy eviction on write for both caches
 
 ---
 
