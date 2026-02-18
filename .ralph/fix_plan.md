@@ -74,9 +74,9 @@
 - [x] Add min/max bounds for hours (1 min - 24h) across all logging paths
 
 ### 7. Remove hardcoded ticket IDs from Dashboard
-**File:** `apps/web/src/app/page.tsx` (lines 110-115)
-- [ ] Load QUICK_TICKETS from settings/API instead of hardcoded values
-- [ ] Fall back to empty if not configured
+**File:** `apps/web/src/app/page.tsx`
+- [x] Load QUICK_TICKETS from task history (getRecentTasks) instead of hardcoded values
+- [x] Fall back to empty with helpful message if no history yet
 
 ### 8. Date validation on API endpoints
 **Files:** `apps/web/src/app/api/activities/route.ts`, `api/dashboard/route.ts`, `api/analytics/route.ts`
@@ -165,6 +165,7 @@
 - [x] **Loop 14**: Error boundaries — added error.tsx (route-level, styled Card with reset) and global-error.tsx (root layout fallback with inline styles)
 - [x] **Loop 15**: Slack cache TTL eviction — userCache now has 30-min TTL, activitiesCache capped at 30 entries, lazy eviction on write for both caches
 - [x] **Loop 16**: Input validation for time logging — NaN/Infinity guard + 1min–24h bounds on EditableTimeInput, WorklogFormDialog, handleDialogSubmit, handleTableLog
+- [x] **Loop 17**: Remove hardcoded ticket IDs from Dashboard — replaced QUICK_TICKETS const with getRecentTasks(8), using issueKey instead of issueId, added parseFloat validation
 
 ---
 

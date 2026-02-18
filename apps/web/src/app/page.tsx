@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiUrl } from '@/lib/api';
+import { getRecentTasks, type TaskUsage } from '@/lib/taskHistory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -107,12 +108,6 @@ interface DetailedData {
   tempoWorklogs: TempoWorklog[];
 }
 
-const QUICK_TICKETS = [
-  { id: 38484, key: 'BCI-390', name: 'Discovery/Meetings' },
-  { id: 38482, key: 'BCI-395', name: 'Automation Ideas' },
-  { id: 38408, key: 'BCI-396', name: 'Consulting/Onboarding' },
-  { id: 13218, key: 'BCI-1', name: 'Daily Standup' },
-];
 
 export default function DashboardPage() {
   const [apis, setApis] = useState<ApiStatus[]>([]);
@@ -124,8 +119,14 @@ export default function DashboardPage() {
 
   const [slackSummary, setSlackSummary] = useState<SlackSummary | null>(null);
 
+  // Quick tickets from task history (most recently used)
+  const [quickTickets, setQuickTickets] = useState<TaskUsage[]>(() => getRecentTasks(8));
+
   // Quick log form state
-  const [quickLogTicket, setQuickLogTicket] = useState(QUICK_TICKETS[1].id);
+  const [quickLogTicket, setQuickLogTicket] = useState(() => {
+    const recent = getRecentTasks(8);
+    return recent.length > 0 ? recent[0].key : '';
+  });
   const [quickLogHours, setQuickLogHours] = useState('1');
   const [quickLogDesc, setQuickLogDesc] = useState('');
   const [quickLogLoading, setQuickLogLoading] = useState(false);
@@ -193,19 +194,24 @@ export default function DashboardPage() {
       return;
     }
 
+    const hours = parseFloat(quickLogHours);
+    if (!Number.isFinite(hours) || hours < 0.01 || hours > 24) {
+      setQuickLogMessage('Czas musi wynosić od 0.01 do 24 godzin');
+      return;
+    }
+
     setQuickLogLoading(true);
     setQuickLogMessage('');
 
     try {
       const now = new Date();
-      const hours = parseFloat(quickLogHours);
       const seconds = Math.round(hours * 3600);
 
       const response = await fetch(apiUrl('/api/tempo/worklogs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          issueId: quickLogTicket,
+          issueKey: quickLogTicket,
           timeSpentSeconds: seconds,
           startDate: now.toISOString().split('T')[0],
           startTime: `${String(now.getHours()).padStart(2, '0')}:00:00`,
@@ -218,6 +224,7 @@ export default function DashboardPage() {
       if (response.ok) {
         setQuickLogMessage(`✓ Zalogowano ${hours}h!`);
         setQuickLogDesc('');
+        setQuickTickets(getRecentTasks(8));
         fetchDashboard();
         fetchDetailed(selectedDate);
       } else {
@@ -292,55 +299,65 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex-1 min-w-48">
-                <label className="block text-sm text-blue-100 mb-1">Ticket</label>
-                <select
-                  value={quickLogTicket}
-                  onChange={(e) => setQuickLogTicket(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white backdrop-blur"
-                >
-                  {QUICK_TICKETS.map((t) => (
-                    <option key={t.id} value={t.id} className="text-slate-900">
-                      {t.key} - {t.name}
-                    </option>
-                  ))}
-                </select>
+            {quickTickets.length === 0 ? (
+              <div className="text-sm text-blue-100">
+                Brak ostatnio logowanych tasków. Zaloguj czas w{' '}
+                <a href="/timetracker/timesheet" className="underline text-white font-medium">Timesheet</a>,
+                a ostatnio używane tickety pojawią się tutaj.
               </div>
-              <div className="w-24">
-                <label className="block text-sm text-blue-100 mb-1">Hours</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  max="12"
-                  value={quickLogHours}
-                  onChange={(e) => setQuickLogHours(e.target.value)}
-                  className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white"
-                />
-              </div>
-              <div className="flex-1 min-w-64">
-                <label className="block text-sm text-blue-100 mb-1">Description</label>
-                <input
-                  type="text"
-                  value={quickLogDesc}
-                  onChange={(e) => setQuickLogDesc(e.target.value)}
-                  placeholder="What did you work on?"
-                  className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-blue-200"
-                />
-              </div>
-              <Button
-                onClick={handleQuickLog}
-                disabled={quickLogLoading}
-                className="bg-white text-blue-600 hover:bg-blue-50 font-semibold px-6"
-              >
-                {quickLogLoading ? 'Logging...' : 'Log Now'}
-              </Button>
-            </div>
-            {quickLogMessage && (
-              <div className={`mt-3 text-sm font-medium ${quickLogMessage.startsWith('✓') ? 'text-green-200' : 'text-red-200'}`}>
-                {quickLogMessage}
-              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div className="flex-1 min-w-48">
+                    <label className="block text-sm text-blue-100 mb-1">Ticket</label>
+                    <select
+                      value={quickLogTicket}
+                      onChange={(e) => setQuickLogTicket(e.target.value)}
+                      className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white backdrop-blur"
+                    >
+                      {quickTickets.map((t) => (
+                        <option key={t.key} value={t.key} className="text-slate-900">
+                          {t.key} - {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-sm text-blue-100 mb-1">Hours</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="12"
+                      value={quickLogHours}
+                      onChange={(e) => setQuickLogHours(e.target.value)}
+                      className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-64">
+                    <label className="block text-sm text-blue-100 mb-1">Description</label>
+                    <input
+                      type="text"
+                      value={quickLogDesc}
+                      onChange={(e) => setQuickLogDesc(e.target.value)}
+                      placeholder="What did you work on?"
+                      className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-blue-200"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleQuickLog}
+                    disabled={quickLogLoading || quickTickets.length === 0}
+                    className="bg-white text-blue-600 hover:bg-blue-50 font-semibold px-6"
+                  >
+                    {quickLogLoading ? 'Logging...' : 'Log Now'}
+                  </Button>
+                </div>
+                {quickLogMessage && (
+                  <div className={`mt-3 text-sm font-medium ${quickLogMessage.startsWith('✓') ? 'text-green-200' : 'text-red-200'}`}>
+                    {quickLogMessage}
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
