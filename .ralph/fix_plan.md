@@ -20,7 +20,7 @@
 
 ### T2. API client tests (mock fetch)
 - [x] `jira.test.ts` — ADF parsing, issue formatting, hierarchy grouping, auth, API calls (35 tests)
-- [ ] `tempo.test.ts` — worklog CRUD, overlap check, error responses
+- [x] `tempo.test.ts` — worklog CRUD, overlap check, error responses (32 tests)
 - [ ] `activitywatch.test.ts` — bucket detection, event fetching, browser variants
 - [ ] `slack.test.ts` — rate limiting, session detection, caching, TTL
 - [ ] `gemini.test.ts` — prompt building, response parsing
@@ -157,6 +157,7 @@
 - [x] **Loop 6**: versionCheck.test.ts (27 tests — semver compare, getCurrentVersion, getDownloadUrl, fetchLatestRelease with cache TTL)
 - [x] **Loop 7**: utils.test.ts (10 tests — cn class merging, apiUrl base path). T1 pure logic tests COMPLETE (176 total)
 - [x] **Loop 8**: jira.test.ts (35 tests — ADF parser, formatIssue, groupByParent, isSubtask, searchIssues, getIssue, auth, batch key lookup)
+- [x] **Loop 9**: tempo.test.ts (32 tests — roundToMinutes, calculateEndTime, createWorklog, getWorklogs, overlap check, time ranges, error responses)
 
 ---
 
