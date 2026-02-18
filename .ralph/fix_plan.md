@@ -12,7 +12,7 @@
 
 ### T1. Pure logic tests (no mocking needed)
 - [x] `mergeActivities.test.ts` — activity merging, dedup, AW+Slack correlation, edge cases (20 tests)
-- [ ] `readiness.test.ts` — RC parsing from Jira comments (green/yellow/red), missing fields
+- [x] `readiness.test.ts` — RC parsing from Jira comments (green/yellow/red), missing fields (29 tests)
 - [x] `cache.test.ts` — get/set/expiry/invalidation/size limits (33 tests)
 - [ ] `targets.test.ts` — target calculations, daily/weekly goals
 - [ ] `versionCheck.test.ts` — semver comparison logic
@@ -152,6 +152,7 @@
 - [x] **Loop 1**: Parallel AW+Tempo fetch in dashboard/detailed with independent failure handling
 - [x] **Loop 2**: Vitest infrastructure + cache.test.ts (33 tests passing)
 - [x] **Loop 3**: mergeActivities.test.ts (20 tests — correlation, tolerance, sorting, edge cases)
+- [x] **Loop 4**: readiness.test.ts (29 tests — emoji/text/Polish parsing, suggestions, findReadinessComment)
 
 ---
 
