@@ -102,7 +102,7 @@
 ### 11. ActivityWatch bucket detection
 **File:** `apps/web/src/lib/activitywatch.ts`
 - [x] Dynamic bucket detection already in place (no hardcoded MacBook-Pro)
-- [ ] Add more browser variants (Arc, Vivaldi, Opera) to detection
+- [x] Add more browser variants (Arc, Vivaldi, Opera, Brave) to bucket detection, categorization, and app derivation
 
 ### 12. Analytics partial failure handling
 **File:** `apps/web/src/app/api/analytics/route.ts`
@@ -168,6 +168,7 @@
 - [x] **Loop 17**: Remove hardcoded ticket IDs from Dashboard — replaced QUICK_TICKETS const with getRecentTasks(8), using issueKey instead of issueId, added parseFloat validation
 - [x] **Loop 18**: Analytics date validation — added VALID_PERIODS whitelist for period parameter, returns 400 on invalid values
 - [x] **Loop 19**: Duplicate logging prevention — added loggingAll state to disable Log All button during operation, early return guard, spinner feedback
+- [x] **Loop 20**: Browser variants — added Vivaldi+Opera bucket detection, app name derivation from bucket for Arc/Brave/Vivaldi/Opera, extended categorizeActivity and Slack-in-browser detection
 
 ---
 

@@ -47,7 +47,7 @@ async function getAvailableBuckets(): Promise<AllBuckets> {
       b.startsWith('aw-watcher-window_')
     );
 
-    // WSZYSTKIE buckety przeglądarek (Chrome, Firefox, Safari, Edge, Arc, Brave)
+    // WSZYSTKIE buckety przeglądarek (Chrome, Firefox, Safari, Edge, Arc, Brave, Vivaldi, Opera)
     const browserBuckets = allBucketIds.filter(b =>
       b.startsWith('aw-watcher-web-chrome') ||
       b.startsWith('aw-watcher-web-firefox') ||
@@ -55,6 +55,8 @@ async function getAvailableBuckets(): Promise<AllBuckets> {
       b.startsWith('aw-watcher-web-edge') ||
       b.startsWith('aw-watcher-web-arc') ||
       b.startsWith('aw-watcher-web-brave') ||
+      b.startsWith('aw-watcher-web-vivaldi') ||
+      b.startsWith('aw-watcher-web-opera') ||
       b.includes('web-browser')
     );
 
@@ -393,7 +395,7 @@ export function extractCommunicationInfo(title: string, app: string): Communicat
   }
 
   // Slack w przeglądarce
-  if (titleLower.includes('slack') && (appLower.includes('chrome') || appLower.includes('firefox') || appLower.includes('safari'))) {
+  if (titleLower.includes('slack') && (appLower.includes('chrome') || appLower.includes('firefox') || appLower.includes('safari') || appLower.includes('edge') || appLower.includes('arc') || appLower.includes('brave') || appLower.includes('vivaldi') || appLower.includes('opera'))) {
     const slackMatch = title.match(/^(.+?)\s*\|\s*(.+?)\s*\|\s*Slack/i);
     return {
       isCommunication: true,
@@ -476,7 +478,7 @@ export function categorizeActivity(
   if (isCommunication) return 'communication';
 
   const appLower = app.toLowerCase();
-  if (appLower.includes('chrome') || appLower.includes('firefox') || appLower.includes('safari') || appLower.includes('edge')) {
+  if (appLower.includes('chrome') || appLower.includes('firefox') || appLower.includes('safari') || appLower.includes('edge') || appLower.includes('arc') || appLower.includes('brave') || appLower.includes('vivaldi') || appLower.includes('opera')) {
     return 'browser';
   }
   if (appLower.includes('figma') || appLower.includes('sketch') || appLower.includes('photoshop') || appLower.includes('illustrator')) {
@@ -1018,7 +1020,7 @@ export function groupActivities(events: AWEvent[]): GroupedActivity[] {
     let app: string;
     if (event.data.app) {
       app = event.data.app;
-    } else if (event.data.url || event._sourceBucket?.includes('web-chrome') || event._sourceBucket?.includes('web-firefox')) {
+    } else if (event.data.url || event._sourceBucket?.includes('web-')) {
       // Browser event - derive app name from bucket
       if (event._sourceBucket?.includes('firefox')) {
         app = 'Firefox';
@@ -1028,6 +1030,14 @@ export function groupActivities(events: AWEvent[]): GroupedActivity[] {
         app = 'Safari';
       } else if (event._sourceBucket?.includes('edge')) {
         app = 'Edge';
+      } else if (event._sourceBucket?.includes('arc')) {
+        app = 'Arc';
+      } else if (event._sourceBucket?.includes('brave')) {
+        app = 'Brave';
+      } else if (event._sourceBucket?.includes('vivaldi')) {
+        app = 'Vivaldi';
+      } else if (event._sourceBucket?.includes('opera')) {
+        app = 'Opera';
       } else {
         app = 'Browser';
       }
