@@ -19,7 +19,7 @@
 - [x] `utils.test.ts` — cn() class merge + apiUrl() base path (10 tests)
 
 ### T2. API client tests (mock fetch)
-- [ ] `jira.test.ts` — API calls, response parsing, error handling, timeout
+- [x] `jira.test.ts` — ADF parsing, issue formatting, hierarchy grouping, auth, API calls (35 tests)
 - [ ] `tempo.test.ts` — worklog CRUD, overlap check, error responses
 - [ ] `activitywatch.test.ts` — bucket detection, event fetching, browser variants
 - [ ] `slack.test.ts` — rate limiting, session detection, caching, TTL
@@ -156,6 +156,7 @@
 - [x] **Loop 5**: targets.test.ts (57 tests — targets, holidays, time off, day status, calculations, import/export)
 - [x] **Loop 6**: versionCheck.test.ts (27 tests — semver compare, getCurrentVersion, getDownloadUrl, fetchLatestRelease with cache TTL)
 - [x] **Loop 7**: utils.test.ts (10 tests — cn class merging, apiUrl base path). T1 pure logic tests COMPLETE (176 total)
+- [x] **Loop 8**: jira.test.ts (35 tests — ADF parser, formatIssue, groupByParent, isSubtask, searchIssues, getIssue, auth, batch key lookup)
 
 ---
 
