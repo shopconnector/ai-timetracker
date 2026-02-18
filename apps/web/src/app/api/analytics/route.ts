@@ -170,9 +170,14 @@ export async function GET(request: NextRequest) {
   const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
 
   // Batch-fetch Slack for entire range first (65 calls instead of 65*N_days)
-  const firstDay = workdays[0] || start.toISOString().split('T')[0];
-  const lastDay = workdays[workdays.length - 1] || end.toISOString().split('T')[0];
-  const slackByDate = await getSlackActivitiesForDateRangeSafe(firstDay, lastDay);
+  let slackByDate: Awaited<ReturnType<typeof getSlackActivitiesForDateRangeSafe>> = new Map();
+  try {
+    const firstDay = workdays[0] || start.toISOString().split('T')[0];
+    const lastDay = workdays[workdays.length - 1] || end.toISOString().split('T')[0];
+    slackByDate = await getSlackActivitiesForDateRangeSafe(firstDay, lastDay);
+  } catch (error) {
+    console.error('Slack analytics fetch failed, continuing without Slack data:', error);
+  }
 
   // Fetch current period IN PARALLEL (AW + Tempo only, Slack already fetched)
   const dailyResults = await Promise.all(

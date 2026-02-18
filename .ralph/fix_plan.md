@@ -106,7 +106,7 @@
 
 ### 12. Analytics partial failure handling
 **File:** `apps/web/src/app/api/analytics/route.ts`
-- [ ] Catch per-day errors, return partial aggregates instead of complete failure
+- [x] Catch per-day errors, return partial aggregates instead of complete failure (per-day try-catch already existed; added Slack batch-fetch try-catch)
 
 ### 13. Consistent API URL usage
 **File:** `apps/web/src/app/my-issues/page.tsx`
@@ -169,6 +169,7 @@
 - [x] **Loop 18**: Analytics date validation — added VALID_PERIODS whitelist for period parameter, returns 400 on invalid values
 - [x] **Loop 19**: Duplicate logging prevention — added loggingAll state to disable Log All button during operation, early return guard, spinner feedback
 - [x] **Loop 20**: Browser variants — added Vivaldi+Opera bucket detection, app name derivation from bucket for Arc/Brave/Vivaldi/Opera, extended categorizeActivity and Slack-in-browser detection
+- [x] **Loop 21**: Analytics partial failure — wrapped Slack batch-fetch in try-catch to prevent full route failure; per-day AW+Tempo already had independent error handling
 
 ---
 
