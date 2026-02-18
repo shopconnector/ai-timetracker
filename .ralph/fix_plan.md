@@ -45,7 +45,7 @@
 ### 2. Dashboard frontend error handling
 **File:** `apps/web/src/app/page.tsx`
 - [x] Individual fetch functions already have try-catch (reviewed - not needed)
-- [ ] Add error boundary for dashboard components
+- [x] Add error boundary for dashboard components (error.tsx + global-error.tsx)
 
 ### 3. Tempo API response validation
 **File:** `apps/web/src/lib/tempo.ts`
@@ -162,6 +162,7 @@
 - [x] **Loop 11**: slack.test.ts (22 tests — auth, connection test, activities fetch with cache isolation, DM/channel/mpim/huddle detection, session time estimation, session cap, rate limit retry, conversation errors, cache hit)
 - [x] **Loop 12**: gemini.test.ts (24 tests — extractJSON pure function, callGemini API with config merge/error handling, testGeminiConnection with timing)
 - [x] **Loop 13**: openrouter.test.ts (19 tests — project mapping priority/threshold/case, LLM API call/parse/clamp/defaults, keyword fallback categories, batching, mixed sources). T2 API client tests COMPLETE (216 total). Set up vitest in packages/ai.
+- [x] **Loop 14**: Error boundaries — added error.tsx (route-level, styled Card with reset) and global-error.tsx (root layout fallback with inline styles)
 
 ---
 
