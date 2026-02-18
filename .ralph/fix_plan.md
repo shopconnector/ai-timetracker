@@ -23,7 +23,7 @@
 - [x] `tempo.test.ts` — worklog CRUD, overlap check, error responses (32 tests)
 - [x] `activitywatch.test.ts` — bucket detection, event fetching, browser variants (84 tests)
 - [x] `slack.test.ts` — rate limiting, session detection, caching, TTL (22 tests)
-- [ ] `gemini.test.ts` — prompt building, response parsing
+- [x] `gemini.test.ts` — prompt building, response parsing (24 tests)
 - [ ] `openrouter.test.ts` — fallback logic, model selection
 
 ### T3. API route tests
@@ -160,6 +160,7 @@
 - [x] **Loop 9**: tempo.test.ts (32 tests — roundToMinutes, calculateEndTime, createWorklog, getWorklogs, overlap check, time ranges, error responses)
 - [x] **Loop 10**: activitywatch.test.ts (84 tests — meeting/comm/terminal/editor detection, categorization, groupActivities, session splitting, bucket API with caching)
 - [x] **Loop 11**: slack.test.ts (22 tests — auth, connection test, activities fetch with cache isolation, DM/channel/mpim/huddle detection, session time estimation, session cap, rate limit retry, conversation errors, cache hit)
+- [x] **Loop 12**: gemini.test.ts (24 tests — extractJSON pure function, callGemini API with config merge/error handling, testGeminiConnection with timing)
 
 ---
 
