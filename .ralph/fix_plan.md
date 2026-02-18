@@ -92,8 +92,8 @@
 
 ### 10. Duplicate logging prevention
 **File:** `apps/web/src/app/timesheet/page.tsx`
-- [ ] Disable "Log All" button during logging operation
-- [ ] Add debounce or loading state to prevent double-clicks
+- [x] Disable "Log All" button during logging operation (loggingAll state)
+- [x] Add loading spinner state to prevent double-clicks
 
 ---
 
@@ -167,6 +167,7 @@
 - [x] **Loop 16**: Input validation for time logging — NaN/Infinity guard + 1min–24h bounds on EditableTimeInput, WorklogFormDialog, handleDialogSubmit, handleTableLog
 - [x] **Loop 17**: Remove hardcoded ticket IDs from Dashboard — replaced QUICK_TICKETS const with getRecentTasks(8), using issueKey instead of issueId, added parseFloat validation
 - [x] **Loop 18**: Analytics date validation — added VALID_PERIODS whitelist for period parameter, returns 400 on invalid values
+- [x] **Loop 19**: Duplicate logging prevention — added loggingAll state to disable Log All button during operation, early return guard, spinner feedback
 
 ---
 

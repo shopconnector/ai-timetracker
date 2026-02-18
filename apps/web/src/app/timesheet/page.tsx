@@ -577,13 +577,20 @@ export default function TimesheetPage() {
   };
 
   // Log all with suggestions
+  const [loggingAll, setLoggingAll] = useState(false);
   const handleLogAll = async () => {
-    for (const activity of activities) {
-      if (loggedIds.has(activity.id)) continue;
-      const ticket = activity.suggestedTicket || tickets[0]?.key;
-      if (ticket) {
-        await handleLog(activity.id, ticket);
+    if (loggingAll) return;
+    setLoggingAll(true);
+    try {
+      for (const activity of activities) {
+        if (loggedIds.has(activity.id)) continue;
+        const ticket = activity.suggestedTicket || tickets[0]?.key;
+        if (ticket) {
+          await handleLog(activity.id, ticket);
+        }
       }
+    } finally {
+      setLoggingAll(false);
     }
   };
 
@@ -1074,10 +1081,17 @@ export default function TimesheetPage() {
           </Button>
           <Button
             onClick={handleLogAll}
-            disabled={unloggedCount === 0}
+            disabled={unloggedCount === 0 || loggingAll}
             className="bg-green-600 hover:bg-green-700"
           >
-            ✅ Zaloguj wszystkie ({unloggedCount})
+            {loggingAll ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Logowanie...
+              </>
+            ) : (
+              <>✅ Zaloguj wszystkie ({unloggedCount})</>
+            )}
           </Button>
 
           {/* Merge mode toggle */}
