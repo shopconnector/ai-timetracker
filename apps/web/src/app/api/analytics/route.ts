@@ -147,10 +147,19 @@ function getWorkdaysInRange(start: Date, end: Date): string[] {
   return days;
 }
 
+const VALID_PERIODS = ['today', '7d', '30d', 'mtd', 'wtd'];
+
 export async function GET(request: NextRequest) {
   try {
   const searchParams = request.nextUrl.searchParams;
   const period = searchParams.get('period') || '7d';
+
+  if (!VALID_PERIODS.includes(period)) {
+    return NextResponse.json(
+      { error: `Invalid period: ${period}. Valid values: ${VALID_PERIODS.join(', ')}` },
+      { status: 400 }
+    );
+  }
 
   const { start, end, prevStart, prevEnd } = getDateRange(period);
   const workdays = getWorkdaysInRange(start, end);

@@ -82,7 +82,7 @@
 **Files:** `apps/web/src/app/api/activities/route.ts`, `api/dashboard/route.ts`, `api/analytics/route.ts`
 - [x] Validate `date` parameter format (YYYY-MM-DD regex) — activities, dashboard/detailed
 - [x] Clamp `days` parameter (1-90) — dashboard
-- [ ] Add validation to analytics route
+- [x] Add validation to analytics route (period parameter whitelist)
 
 ### 9. ActivityWatch timeout protection
 **File:** `apps/web/src/lib/activitywatch.ts`
@@ -166,6 +166,7 @@
 - [x] **Loop 15**: Slack cache TTL eviction — userCache now has 30-min TTL, activitiesCache capped at 30 entries, lazy eviction on write for both caches
 - [x] **Loop 16**: Input validation for time logging — NaN/Infinity guard + 1min–24h bounds on EditableTimeInput, WorklogFormDialog, handleDialogSubmit, handleTableLog
 - [x] **Loop 17**: Remove hardcoded ticket IDs from Dashboard — replaced QUICK_TICKETS const with getRecentTasks(8), using issueKey instead of issueId, added parseFloat validation
+- [x] **Loop 18**: Analytics date validation — added VALID_PERIODS whitelist for period parameter, returns 400 on invalid values
 
 ---
 
