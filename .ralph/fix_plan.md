@@ -21,7 +21,7 @@
 ### T2. API client tests (mock fetch)
 - [x] `jira.test.ts` — ADF parsing, issue formatting, hierarchy grouping, auth, API calls (35 tests)
 - [x] `tempo.test.ts` — worklog CRUD, overlap check, error responses (32 tests)
-- [ ] `activitywatch.test.ts` — bucket detection, event fetching, browser variants
+- [x] `activitywatch.test.ts` — bucket detection, event fetching, browser variants (84 tests)
 - [ ] `slack.test.ts` — rate limiting, session detection, caching, TTL
 - [ ] `gemini.test.ts` — prompt building, response parsing
 - [ ] `openrouter.test.ts` — fallback logic, model selection
@@ -158,6 +158,7 @@
 - [x] **Loop 7**: utils.test.ts (10 tests — cn class merging, apiUrl base path). T1 pure logic tests COMPLETE (176 total)
 - [x] **Loop 8**: jira.test.ts (35 tests — ADF parser, formatIssue, groupByParent, isSubtask, searchIssues, getIssue, auth, batch key lookup)
 - [x] **Loop 9**: tempo.test.ts (32 tests — roundToMinutes, calculateEndTime, createWorklog, getWorklogs, overlap check, time ranges, error responses)
+- [x] **Loop 10**: activitywatch.test.ts (84 tests — meeting/comm/terminal/editor detection, categorization, groupActivities, session splitting, bucket API with caching)
 
 ---
 
