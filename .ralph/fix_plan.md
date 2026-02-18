@@ -24,7 +24,7 @@
 - [x] `activitywatch.test.ts` — bucket detection, event fetching, browser variants (84 tests)
 - [x] `slack.test.ts` — rate limiting, session detection, caching, TTL (22 tests)
 - [x] `gemini.test.ts` — prompt building, response parsing (24 tests)
-- [ ] `openrouter.test.ts` — fallback logic, model selection
+- [x] `openrouter.test.ts` — fallback logic, model selection (19 tests)
 
 ### T3. API route tests
 - [ ] `/api/activities/` — response shape, date filtering, merged endpoint
@@ -161,6 +161,7 @@
 - [x] **Loop 10**: activitywatch.test.ts (84 tests — meeting/comm/terminal/editor detection, categorization, groupActivities, session splitting, bucket API with caching)
 - [x] **Loop 11**: slack.test.ts (22 tests — auth, connection test, activities fetch with cache isolation, DM/channel/mpim/huddle detection, session time estimation, session cap, rate limit retry, conversation errors, cache hit)
 - [x] **Loop 12**: gemini.test.ts (24 tests — extractJSON pure function, callGemini API with config merge/error handling, testGeminiConnection with timing)
+- [x] **Loop 13**: openrouter.test.ts (19 tests — project mapping priority/threshold/case, LLM API call/parse/clamp/defaults, keyword fallback categories, batching, mixed sources). T2 API client tests COMPLETE (216 total). Set up vitest in packages/ai.
 
 ---
 
