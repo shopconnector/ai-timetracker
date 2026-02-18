@@ -198,6 +198,10 @@ export function WorklogFormDialog({
     setSubmitting(true);
     try {
       const timeSpentSeconds = calculateDurationSeconds();
+      if (!Number.isFinite(timeSpentSeconds) || timeSpentSeconds < 60 || timeSpentSeconds > 86400) {
+        setSubmitting(false);
+        return;
+      }
       await onSubmit({
         ticketKey,
         description,
@@ -486,7 +490,7 @@ export function WorklogFormDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={submitting || !ticketKey}
+            disabled={submitting || !ticketKey || calculatedDuration < 60 || calculatedDuration > 86400}
             className={overlapWarnings.length > 0 ? 'bg-amber-600 hover:bg-amber-700' : ''}
           >
             {submitting ? 'Logowanie...' : overlapWarnings.length > 0 ? 'Zapisz mimo warning' : 'Zaloguj czas'}

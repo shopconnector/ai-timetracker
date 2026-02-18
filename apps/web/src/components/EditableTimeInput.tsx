@@ -93,7 +93,7 @@ export function EditableTimeInput({ value, onChange, className = '', disabled = 
   const handleBlur = () => {
     setIsEditing(false);
     const parsed = parseTimeToSeconds(inputValue);
-    if (parsed !== null && parsed > 0) {
+    if (parsed !== null && parsed > 0 && parsed <= 86400 && Number.isFinite(parsed)) {
       onChange(parsed);
       setInputValue(formatSecondsToTime(parsed));
     } else {

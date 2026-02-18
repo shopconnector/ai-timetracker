@@ -69,9 +69,9 @@
 ## High — Data Integrity & UX
 
 ### 6. Input validation for time logging
-**File:** `apps/web/src/app/timesheet/page.tsx`
-- [ ] Validate `parseFloat()` result for NaN/Infinity before logging
-- [ ] Add min/max bounds for hours (0.01 - 24)
+**Files:** `apps/web/src/app/timesheet/page.tsx`, `apps/web/src/components/WorklogFormDialog.tsx`, `apps/web/src/components/EditableTimeInput.tsx`
+- [x] Validate `parseFloat()` result for NaN/Infinity before logging
+- [x] Add min/max bounds for hours (1 min - 24h) across all logging paths
 
 ### 7. Remove hardcoded ticket IDs from Dashboard
 **File:** `apps/web/src/app/page.tsx` (lines 110-115)
@@ -164,6 +164,7 @@
 - [x] **Loop 13**: openrouter.test.ts (19 tests — project mapping priority/threshold/case, LLM API call/parse/clamp/defaults, keyword fallback categories, batching, mixed sources). T2 API client tests COMPLETE (216 total). Set up vitest in packages/ai.
 - [x] **Loop 14**: Error boundaries — added error.tsx (route-level, styled Card with reset) and global-error.tsx (root layout fallback with inline styles)
 - [x] **Loop 15**: Slack cache TTL eviction — userCache now has 30-min TTL, activitiesCache capped at 30 entries, lazy eviction on write for both caches
+- [x] **Loop 16**: Input validation for time logging — NaN/Infinity guard + 1min–24h bounds on EditableTimeInput, WorklogFormDialog, handleDialogSubmit, handleTableLog
 
 ---
 

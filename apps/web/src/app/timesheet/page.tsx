@@ -518,6 +518,14 @@ export default function TimesheetPage() {
   const handleDialogSubmit = async (data: WorklogFormData) => {
     if (!dialogActivity) return;
 
+    // Validate time spent
+    if (!Number.isFinite(data.timeSpentSeconds) || data.timeSpentSeconds < 60 || data.timeSpentSeconds > 86400) {
+      toast.error('Nieprawidłowy czas', {
+        description: 'Czas pracy musi wynosić od 1 minuty do 24 godzin'
+      });
+      return;
+    }
+
     setLoggingIds(prev => new Set(prev).add(dialogActivity.id));
 
     try {
@@ -746,6 +754,10 @@ export default function TimesheetPage() {
   const handleTableLog = async (row: TimesheetRow) => {
     if (!row.selectedTicket) {
       throw new Error('Brak przypisanego ticketa');
+    }
+
+    if (!Number.isFinite(row.duration) || row.duration < 60 || row.duration > 86400) {
+      throw new Error('Czas pracy musi wynosić od 1 minuty do 24 godzin');
     }
 
     // Get issue ID from tickets
