@@ -11,7 +11,7 @@
 - [x] Verify `pnpm test` runs successfully
 
 ### T1. Pure logic tests (no mocking needed)
-- [ ] `mergeActivities.test.ts` — activity merging, dedup, AW+Slack correlation, edge cases
+- [x] `mergeActivities.test.ts` — activity merging, dedup, AW+Slack correlation, edge cases (20 tests)
 - [ ] `readiness.test.ts` — RC parsing from Jira comments (green/yellow/red), missing fields
 - [x] `cache.test.ts` — get/set/expiry/invalidation/size limits (33 tests)
 - [ ] `targets.test.ts` — target calculations, daily/weekly goals
@@ -151,6 +151,7 @@
 - [x] **Loop 1**: Date validation on activities & dashboard/detailed API routes
 - [x] **Loop 1**: Parallel AW+Tempo fetch in dashboard/detailed with independent failure handling
 - [x] **Loop 2**: Vitest infrastructure + cache.test.ts (33 tests passing)
+- [x] **Loop 3**: mergeActivities.test.ts (20 tests — correlation, tolerance, sorting, edge cases)
 
 ---
 
