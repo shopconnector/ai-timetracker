@@ -16,7 +16,7 @@
 - [x] `cache.test.ts` — get/set/expiry/invalidation/size limits (33 tests)
 - [x] `targets.test.ts` — target calculations, daily/weekly goals (57 tests)
 - [x] `versionCheck.test.ts` — semver comparison, download URL, fetch caching (27 tests)
-- [ ] `utils.test.ts` — all utility/helper functions
+- [x] `utils.test.ts` — cn() class merge + apiUrl() base path (10 tests)
 
 ### T2. API client tests (mock fetch)
 - [ ] `jira.test.ts` — API calls, response parsing, error handling, timeout
@@ -155,6 +155,7 @@
 - [x] **Loop 4**: readiness.test.ts (29 tests — emoji/text/Polish parsing, suggestions, findReadinessComment)
 - [x] **Loop 5**: targets.test.ts (57 tests — targets, holidays, time off, day status, calculations, import/export)
 - [x] **Loop 6**: versionCheck.test.ts (27 tests — semver compare, getCurrentVersion, getDownloadUrl, fetchLatestRelease with cache TTL)
+- [x] **Loop 7**: utils.test.ts (10 tests — cn class merging, apiUrl base path). T1 pure logic tests COMPLETE (176 total)
 
 ---
 
