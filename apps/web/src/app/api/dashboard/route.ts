@@ -28,7 +28,7 @@ function getDayName(date: Date): string {
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const days = parseInt(searchParams.get('days') || '7');
+  const days = Math.min(Math.max(parseInt(searchParams.get('days') || '7') || 7, 1), 90);
 
   const stats: DayStats[] = [];
   const today = new Date();

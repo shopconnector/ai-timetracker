@@ -100,7 +100,8 @@ export async function createWorklog(worklog: WorklogCreate): Promise<Worklog> {
   const response = await fetch(`${TEMPO_URL}/worklogs`, {
     method: 'POST',
     headers: getAuthHeader(),
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000)
   });
 
   if (!response.ok) {
@@ -140,7 +141,8 @@ export async function createWorklog(worklog: WorklogCreate): Promise<Worklog> {
 // Get available work attributes from Tempo
 export async function getWorkAttributes(): Promise<WorkAttribute[]> {
   const response = await fetch(`${TEMPO_URL}/work-attributes`, {
-    headers: getAuthHeader()
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
@@ -156,7 +158,7 @@ export async function getWorkAttributes(): Promise<WorkAttribute[]> {
 export async function getWorklogs(from: string, to: string): Promise<Worklog[]> {
   const response = await fetch(
     `${TEMPO_URL}/worklogs?from=${from}&to=${to}&limit=1000`,
-    { headers: getAuthHeader() }
+    { headers: getAuthHeader(), signal: AbortSignal.timeout(15000) }
   );
 
   if (!response.ok) {
@@ -187,7 +189,7 @@ export async function getRecentWorklogsForIssue(
 
   const response = await fetch(
     `${TEMPO_URL}/worklogs/issue/${issueKey}?from=${from}&to=${to}&limit=${limit}`,
-    { headers: getAuthHeader() }
+    { headers: getAuthHeader(), signal: AbortSignal.timeout(15000) }
   );
 
   if (!response.ok) {

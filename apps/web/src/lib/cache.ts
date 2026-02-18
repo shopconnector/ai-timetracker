@@ -12,13 +12,24 @@ class MemoryCache {
   private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Cleanup expired entries every minute
-    if (typeof window !== 'undefined') {
+    // Cleanup expired entries every minute (works on both client and server)
+    if (typeof setInterval !== 'undefined') {
       this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
     }
   }
 
   set<T>(key: string, data: T, ttlMs: number = 300000): void {
+    // Evict expired entries if cache grows too large
+    if (this.cache.size > 500) {
+      this.cleanup();
+      // Force evict oldest entries if still over limit
+      if (this.cache.size > 400) {
+        const keys = Array.from(this.cache.keys()).slice(0, 100);
+        for (const k of keys) {
+          this.cache.delete(k);
+        }
+      }
+    }
     this.cache.set(key, {
       data,
       timestamp: Date.now(),

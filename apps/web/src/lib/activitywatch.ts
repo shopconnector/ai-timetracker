@@ -37,7 +37,7 @@ async function getAvailableBuckets(): Promise<AllBuckets> {
   }
 
   try {
-    const res = await fetch(`${AW_URL}/api/0/buckets/`, { redirect: 'follow' });
+    const res = await fetch(`${AW_URL}/api/0/buckets/`, { redirect: 'follow', signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error('Failed to fetch buckets');
     const buckets = await res.json();
     const allBucketIds = Object.keys(buckets);
@@ -738,7 +738,7 @@ async function fetchBucketEvents(bucket: string, start: string, end: string): Pr
   // Note: /events does NOT need trailing slash, but /buckets/ does
   const url = `${AW_URL}/api/0/buckets/${bucket}/events?start=${start}&end=${end}&limit=20000`;
   try {
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
     if (!response.ok) return [];
     const events: AWEvent[] = await response.json();
     // Mark events with source bucket for proper app detection

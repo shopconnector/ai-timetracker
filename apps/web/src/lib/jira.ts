@@ -206,6 +206,7 @@ export async function searchIssues(
       maxResults,
       fields,
     }),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -240,7 +241,8 @@ export async function searchIssuesPaginated(
   const response = await fetch(url, {
     method: 'POST',
     headers: getAuthHeader(),
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -326,7 +328,8 @@ export async function getIssue(issueKey: string): Promise<JiraIssue> {
   const url = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader()
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -371,7 +374,8 @@ export async function getIssueKeyById(issueId: number | string): Promise<string>
   const url = `${JIRA_BASE_URL}/rest/api/3/issue/${issueId}?fields=key`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader()
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -414,7 +418,8 @@ export async function getCurrentUser(): Promise<JiraUser> {
   const url = `${JIRA_BASE_URL}/rest/api/3/myself`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader()
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -429,7 +434,8 @@ export async function getAllProjects(): Promise<JiraProject[]> {
   const url = `${JIRA_BASE_URL}/rest/api/3/project/search?maxResults=100&orderBy=name`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader()
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {

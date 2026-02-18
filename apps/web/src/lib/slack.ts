@@ -133,6 +133,11 @@ async function slackFetch(url: string, retries = 2): Promise<Response> {
 // ========================================
 
 async function getUserDisplayName(userId: string): Promise<string> {
+  // Evict cache if it grows too large (prevent unbounded memory growth)
+  if (userCache.size > 200) {
+    userCache.clear();
+  }
+
   if (userCache.has(userId)) {
     return userCache.get(userId)!;
   }

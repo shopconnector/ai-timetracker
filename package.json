@@ -1,6 +1,6 @@
 {
   "name": "timetracker",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -11,6 +11,8 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
+    "test": "turbo test",
+    "test:coverage": "turbo test:coverage",
     "clean": "turbo clean && rm -rf node_modules",
     "build:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/build-bundle.ps1",
     "test:windows": "pwsh -ExecutionPolicy Bypass -File scripts/windows/test-bundle.ps1"
