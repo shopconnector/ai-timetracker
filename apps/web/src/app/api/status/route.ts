@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { awFetch } from '@/lib/activitywatch';
 
 interface ApiStatus {
   name: string;
@@ -14,9 +15,7 @@ async function checkActivityWatch(): Promise<ApiStatus> {
   }
 
   try {
-    const response = await fetch(`${url}/api/0/info`, {
-      signal: AbortSignal.timeout(5000)
-    });
+    const response = await awFetch('/api/0/info');
     if (response.ok) {
       return { name: 'ActivityWatch', configured: true, status: 'ok', message: url };
     }

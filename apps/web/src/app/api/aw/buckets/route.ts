@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-
-const AW_URL = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
+import { awFetch } from '@/lib/activitywatch';
 
 interface BucketInfo {
   id: string;
@@ -13,7 +12,7 @@ interface BucketInfo {
 
 export async function GET() {
   try {
-    const res = await fetch(`${AW_URL}/api/0/buckets`);
+    const res = await awFetch('/api/0/buckets/');
 
     if (!res.ok) {
       return NextResponse.json(

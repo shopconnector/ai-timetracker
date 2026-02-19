@@ -1,6 +1,36 @@
 // ActivityWatch API Client - Cross-platform (macOS, Windows, Linux)
 
+import http from 'http';
+
 const AW_URL = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
+
+// AW validates the Host header — when running in Docker (host.docker.internal),
+// we must send Host: localhost:5600 so AW accepts the request.
+export async function awFetch(path: string, options?: { signal?: AbortSignal }): Promise<Response> {
+  const url = new URL(path, AW_URL);
+  const needsHostOverride = url.hostname !== 'localhost' && url.hostname !== '127.0.0.1';
+
+  if (!needsHostOverride) {
+    return fetch(url.toString(), { redirect: 'follow', signal: options?.signal ?? AbortSignal.timeout(10000) });
+  }
+
+  // Use Node http module to override Host header (fetch doesn't allow it)
+  return new Promise((resolve, reject) => {
+    const timeoutMs = 10000;
+    const timer = setTimeout(() => { req.destroy(); reject(new Error('AW request timeout')); }, timeoutMs);
+    const req = http.get(url.toString(), { headers: { 'Host': `localhost:${url.port || '5600'}` } }, (res) => {
+      clearTimeout(timer);
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks).toString();
+        resolve(new Response(body, { status: res.statusCode ?? 200, headers: res.headers as Record<string, string> }));
+      });
+    });
+    req.on('error', (e) => { clearTimeout(timer); reject(e); });
+    options?.signal?.addEventListener('abort', () => { req.destroy(); reject(new Error('Aborted')); });
+  });
+}
 
 // ========================================
 // DYNAMIC BUCKET DETECTION
@@ -37,7 +67,7 @@ async function getAvailableBuckets(): Promise<AllBuckets> {
   }
 
   try {
-    const res = await fetch(`${AW_URL}/api/0/buckets/`, { redirect: 'follow', signal: AbortSignal.timeout(10000) });
+    const res = await awFetch('/api/0/buckets/');
     if (!res.ok) throw new Error('Failed to fetch buckets');
     const buckets = await res.json();
     const allBucketIds = Object.keys(buckets);
@@ -738,9 +768,8 @@ export function extractProjectInfo(title: string, app: string): { project?: stri
 // Fetch events from ActivityWatch bucket
 async function fetchBucketEvents(bucket: string, start: string, end: string): Promise<AWEvent[]> {
   // Note: /events does NOT need trailing slash, but /buckets/ does
-  const url = `${AW_URL}/api/0/buckets/${bucket}/events?start=${start}&end=${end}&limit=20000`;
   try {
-    const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(30000) });
+    const response = await awFetch(`/api/0/buckets/${bucket}/events?start=${start}&end=${end}&limit=20000`);
     if (!response.ok) return [];
     const events: AWEvent[] = await response.json();
     // Mark events with source bucket for proper app detection

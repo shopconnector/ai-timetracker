@@ -112,11 +112,9 @@ export async function POST(request: Request) {
 
     // Test ActivityWatch
     if (testType === 'activitywatch' || testType === 'all') {
-      const awUrl = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
+      const { awFetch } = await import('@/lib/activitywatch');
       try {
-        const res = await fetch(`${awUrl}/api/0/info`, {
-          signal: AbortSignal.timeout(5000),
-        });
+        const res = await awFetch('/api/0/info');
         if (res.ok) {
           const data = await res.json();
           results.activitywatch = {
