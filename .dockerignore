@@ -1,0 +1,9 @@
+node_modules
+.next
+.turbo
+.git
+.ralph
+*.log
+releases
+installer
+scripts/windows

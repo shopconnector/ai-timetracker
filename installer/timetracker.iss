@@ -47,8 +47,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
 
 [Messages]
-english.WelcomeLabel2=This will install [name/ver] on your computer.%n%nAI TimeTracker helps you automatically track your work time using ActivityWatch and log it to Tempo/Jira.%n%nRequirements:%n• ActivityWatch (download from activitywatch.net)%n• Jira/Tempo API tokens%n%nNote: Windows Defender may show a warning because this installer is not code-signed. Click "More info" then "Run anyway" to proceed.
-polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI TimeTracker pomaga automatycznie śledzić czas pracy używając ActivityWatch i logować go do Tempo/Jira.%n%nWymagania:%n• ActivityWatch (pobierz z activitywatch.net)%n• Tokeny API Jira/Tempo%n%nUwaga: Windows Defender moze pokazac ostrzezenie, poniewaz instalator nie jest podpisany cyfrowo. Kliknij "Wiecej informacji", a nastepnie "Uruchom mimo to".
+english.WelcomeLabel2=This will install [name/ver] on your computer.%n%nAI TimeTracker helps you automatically track your work time using ActivityWatch and log it to Tempo/Jira.%n%nActivityWatch is included and will be installed automatically.%n%nRequirements:%n• Jira/Tempo API tokens%n%nNote: Windows Defender may show a warning because this installer is not code-signed. Click "More info" then "Run anyway" to proceed.
+polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI TimeTracker pomaga automatycznie śledzić czas pracy używając ActivityWatch i logować go do Tempo/Jira.%n%nActivityWatch jest dołączony i zostanie zainstalowany automatycznie.%n%nWymagania:%n• Tokeny API Jira/Tempo%n%nUwaga: Windows Defender moze pokazac ostrzezenie, poniewaz instalator nie jest podpisany cyfrowo. Kliknij "Wiecej informacji", a nastepnie "Uruchom mimo to".
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -57,6 +57,9 @@ Name: "autostart"; Description: "Start with Windows (silent, no console window)"
 [Files]
 ; Node.js runtime
 Source: "..\dist\windows\node\*"; DestDir: "{app}\node"; Flags: ignoreversion recursesubdirs
+
+; ActivityWatch (bundled)
+Source: "..\dist\windows\activitywatch\*"; DestDir: "{app}\activitywatch"; Flags: ignoreversion recursesubdirs
 
 ; Application
 Source: "..\dist\windows\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs
@@ -77,6 +80,7 @@ Source: "..\scripts\windows\install-service-standalone.bat"; DestDir: "{app}"; F
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{group}\ActivityWatch"; Filename: "{app}\activitywatch\aw-qt.exe"; WorkingDir: "{app}\activitywatch"
 Name: "{group}\Configuration"; Filename: "notepad.exe"; Parameters: """{app}\data\.env.local"""; WorkingDir: "{app}"
 Name: "{group}\Install as Service"; Filename: "{app}\install-service-standalone.bat"; WorkingDir: "{app}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
@@ -85,7 +89,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 [Registry]
 ; Autostart entries (if selected)
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AITimeTracker"; ValueData: """wscript.exe"" ""{app}\TimeTrackerSilent.vbs"""; Flags: uninsdeletevalue; Tasks: autostart
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ActivityWatch"; ValueData: """{localappdata}\activitywatch\aw-qt.exe"""; Flags: uninsdeletevalue createvalueifdoesntexist; Tasks: autostart
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ActivityWatch"; ValueData: """{app}\activitywatch\aw-qt.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 ; Show readme / open app after install

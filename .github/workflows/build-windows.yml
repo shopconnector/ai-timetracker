@@ -17,6 +17,7 @@ on:
 env:
   NODE_VERSION: '20.18.1'
   PNPM_VERSION: '9.15.0'
+  ACTIVITYWATCH_VERSION: '0.13.2'
 
 jobs:
   build-windows:
@@ -98,6 +99,35 @@ jobs:
           
           Remove-Item -Recurse -Force "node-extract", $NodeZip
           Write-Host "Node.js runtime ready"
+
+      - name: Download ActivityWatch
+        shell: pwsh
+        run: |
+          $AwVersion = "${{ env.ACTIVITYWATCH_VERSION }}"
+          $AwUrl = "https://github.com/ActivityWatch/activitywatch/releases/download/v$AwVersion/activitywatch-v$AwVersion-windows-x86_64.zip"
+          $AwZip = "activitywatch.zip"
+
+          Write-Host "Downloading ActivityWatch v$AwVersion..."
+          Invoke-WebRequest -Uri $AwUrl -OutFile $AwZip
+
+          Write-Host "Extracting..."
+          Expand-Archive -Path $AwZip -DestinationPath "aw-extract"
+
+          # AW zip contains activitywatch/ directory with aw-qt.exe, aw-server, watchers etc.
+          New-Item -ItemType Directory -Path "dist/windows/activitywatch" -Force | Out-Null
+          Copy-Item -Recurse "aw-extract/activitywatch/*" "dist/windows/activitywatch/"
+
+          Remove-Item -Recurse -Force "aw-extract", $AwZip
+          Write-Host "ActivityWatch v$AwVersion ready"
+
+          # Verify aw-qt.exe exists
+          if (Test-Path "dist/windows/activitywatch/aw-qt.exe") {
+            Write-Host "✓ aw-qt.exe found"
+          } else {
+            Write-Error "aw-qt.exe not found in extracted archive!"
+            Get-ChildItem "dist/windows/activitywatch" -Recurse | Select-Object -First 20
+            exit 1
+          }
 
       - name: Prepare bundle
         shell: pwsh
@@ -294,18 +324,24 @@ jobs:
           echo ═══════════════════════════════════════════════════════════════════
           echo.
 
-          :: Check ActivityWatch
+          :: Check and start ActivityWatch
           echo Checking ActivityWatch...
           curl -s -o nul -w "" %AW_URL%/api/0/info >nul 2>&1
           if %errorlevel% neq 0 (
-              echo.
-              echo   WARNING: ActivityWatch is not running!
-              echo   Download from: https://activitywatch.net/downloads/
-              echo.
-              if exist "%LOCALAPPDATA%\activitywatch\aw-qt.exe" (
-                  echo   Found ActivityWatch, attempting to start...
+              echo   ActivityWatch not running, starting...
+              if exist "%~dp0activitywatch\aw-qt.exe" (
+                  echo   Starting bundled ActivityWatch...
+                  start "" "%~dp0activitywatch\aw-qt.exe"
+                  timeout /t 5 /nobreak >nul
+              ) else if exist "%LOCALAPPDATA%\activitywatch\aw-qt.exe" (
+                  echo   Starting system ActivityWatch...
                   start "" "%LOCALAPPDATA%\activitywatch\aw-qt.exe"
                   timeout /t 5 /nobreak >nul
+              ) else (
+                  echo.
+                  echo   WARNING: ActivityWatch not found!
+                  echo   Download from: https://activitywatch.net/downloads/
+                  echo.
               )
           ) else (
               echo   OK - ActivityWatch running
@@ -376,26 +412,32 @@ jobs:
           Write-Host "AI TimeTracker - Starting..." -ForegroundColor Cyan
           Write-Host ""
 
-          # Check ActivityWatch
+          # Check and start ActivityWatch
           try {
               $null = Invoke-RestMethod -Uri "$AwUrl/api/0/info" -TimeoutSec 2
               Write-Host "[OK] ActivityWatch running" -ForegroundColor Green
           } catch {
-              Write-Host "[!] ActivityWatch not running!" -ForegroundColor Yellow
-              Write-Host "    Download: https://activitywatch.net/downloads/" -ForegroundColor Gray
+              Write-Host "[!] ActivityWatch not running, starting..." -ForegroundColor Yellow
 
-              # Try to start
+              # Try bundled first, then system install
               $awPaths = @(
+                  "$ScriptDir\activitywatch\aw-qt.exe",
                   "$env:LOCALAPPDATA\activitywatch\aw-qt.exe",
                   "$env:LOCALAPPDATA\Programs\activitywatch\aw-qt.exe"
               )
+              $started = $false
               foreach ($path in $awPaths) {
                   if (Test-Path $path) {
-                      Write-Host "    Starting ActivityWatch..." -ForegroundColor Gray
+                      Write-Host "    Starting: $path" -ForegroundColor Gray
                       Start-Process $path
                       Start-Sleep -Seconds 5
+                      $started = $true
                       break
                   }
+              }
+              if (-not $started) {
+                  Write-Host "    ActivityWatch not found!" -ForegroundColor Red
+                  Write-Host "    Download: https://activitywatch.net/downloads/" -ForegroundColor Gray
               }
           }
 
@@ -588,8 +630,10 @@ jobs:
           2. Run installer
           3. Launch "AI TimeTracker" from Start Menu
 
+          ## Included
+          - **ActivityWatch** v${{ env.ACTIVITYWATCH_VERSION }} (starts automatically with TimeTracker)
+
           ## Requirements
-          - **ActivityWatch** - Download from [activitywatch.net](https://activitywatch.net/downloads/)
           - Jira/Tempo API tokens (configure in Settings after first launch)
           EOF
           )"

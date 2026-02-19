@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5666:5666"
+    env_file:
+      - apps/web/.env.local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ACTIVITYWATCH_URL=http://host.docker.internal:5600
