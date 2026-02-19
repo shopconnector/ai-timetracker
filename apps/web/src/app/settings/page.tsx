@@ -71,6 +71,15 @@ import {
   type TimeOff
 } from '@/lib/targets';
 import {
+  getLoggingRules,
+  setLoggingRules,
+  resetLoggingRules,
+  DEFAULT_LOGGING_RULES,
+  DEFAULT_ROUNDING_TIERS,
+  type LoggingRules,
+  type RoundingTier,
+} from '@/lib/loggingRules';
+import {
   getAuditStats,
   clearAuditTrail,
   exportAuditTrail,
@@ -142,6 +151,9 @@ export default function SettingsPage() {
   const [selfUpdateSteps, setSelfUpdateSteps] = useState<{ name: string; status: string }[]>([]);
   const [selfUpdateError, setSelfUpdateError] = useState<string | null>(null);
 
+  // Logging rules state
+  const [loggingRules, setLoggingRulesState] = useState<LoggingRules | null>(null);
+
   // Targets state
   const [targets, setTargetsState] = useState<TimeTargets | null>(null);
   const [holidays, setHolidaysList] = useState<Holiday[]>([]);
@@ -191,6 +203,9 @@ export default function SettingsPage() {
     setTaskHistoryList(getTaskHistory());
     setFeedbackStats(getFeedbackStats());
     setBadSuggestions(getBadSuggestions());
+
+    // Load logging rules
+    setLoggingRulesState(getLoggingRules());
 
     // Load targets data
     setTargetsState(getTimeTargets());
@@ -439,6 +454,17 @@ export default function SettingsPage() {
     a.download = `timetracker-audit-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Logging rules handlers
+  const handleSaveLoggingRules = (updates: Partial<LoggingRules>) => {
+    setLoggingRules(updates);
+    setLoggingRulesState(getLoggingRules());
+  };
+
+  const handleResetLoggingRules = () => {
+    resetLoggingRules();
+    setLoggingRulesState(getLoggingRules());
   };
 
   // Targets handlers
@@ -844,6 +870,165 @@ export default function SettingsPage() {
                   <label htmlFor="flexibleHours" className="text-sm text-gray-600 dark:text-gray-300">
                     Elastyczny czas pracy (nadgodziny kompensują braki)
                   </label>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Logging Rules (TODO-1, TODO-2, TODO-3) */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Settings className="h-5 w-5 text-orange-600" />
+                <div>
+                  <CardTitle className="text-lg">Reguly logowania</CardTitle>
+                  <CardDescription>Minimalne czasy, zaokraglanie i agregacja krotkich taskow</CardDescription>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleResetLoggingRules}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {loggingRules && (
+              <>
+                {/* Minimum Activity Duration */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Minimalny czas aktywnosci
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">
+                        Min. czas aktywnosci (minuty)
+                      </label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={loggingRules.minActivityDurationMinutes}
+                        onChange={(e) => handleSaveLoggingRules({
+                          minActivityDurationMinutes: parseInt(e.target.value) || 5
+                        })}
+                      />
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Aktywnosci krotsze niz ten czas beda ignorowane lub agregowane
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">
+                        Min. czas eventu AW (sekundy)
+                      </label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={loggingRules.minEventDurationSeconds}
+                        onChange={(e) => handleSaveLoggingRules({
+                          minEventDurationSeconds: parseInt(e.target.value) || 10
+                        })}
+                      />
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Pojedyncze eventy z ActivityWatch krotsze niz ten czas beda odfiltrowane
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Smart Rounding */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    Smart rounding
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="smartRounding"
+                      checked={loggingRules.smartRoundingEnabled}
+                      onChange={(e) => handleSaveLoggingRules({ smartRoundingEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="smartRounding" className="text-sm text-gray-600 dark:text-gray-300">
+                      Zaokraglaj logi wg tierow (np. 5min→10min, 21min→30min)
+                    </label>
+                  </div>
+
+                  {loggingRules.smartRoundingEnabled && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Tiery zaokraglania:</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {loggingRules.roundingTiers.map((tier, idx) => (
+                          <div key={idx} className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-slate-800 rounded text-xs">
+                            <span className="text-gray-500">{tier.minMinutes}-{tier.maxMinutes}min</span>
+                            <span className="text-gray-400">→</span>
+                            <span className="font-medium">{tier.roundTo}min</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-500 dark:text-gray-400">
+                          Powyzej 60min, zaokraglaj co:
+                        </label>
+                        <Input
+                          type="number"
+                          min="5"
+                          max="60"
+                          className="w-20 h-7 text-xs"
+                          value={loggingRules.roundingAbove60Interval}
+                          onChange={(e) => handleSaveLoggingRules({
+                            roundingAbove60Interval: parseInt(e.target.value) || 15
+                          })}
+                        />
+                        <span className="text-xs text-gray-500">min</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Short Task Aggregation */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                    Agregacja krotkich taskow
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="aggregateShortTasks"
+                      checked={loggingRules.aggregateShortTasks}
+                      onChange={(e) => handleSaveLoggingRules({ aggregateShortTasks: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="aggregateShortTasks" className="text-sm text-gray-600 dark:text-gray-300">
+                      Agreguj krotkie taski z tego samego projektu
+                    </label>
+                  </div>
+                  {loggingRules.aggregateShortTasks && (
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">
+                        Prog agregacji (minuty)
+                      </label>
+                      <Input
+                        type="number"
+                        min="5"
+                        max="60"
+                        className="w-32"
+                        value={loggingRules.aggregationThresholdMinutes}
+                        onChange={(e) => handleSaveLoggingRules({
+                          aggregationThresholdMinutes: parseInt(e.target.value) || 15
+                        })}
+                      />
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Jesli suma odrzuconych krotkich taskow z jednego projektu przekroczy ten prog, zostaną zagregowane w jeden wpis
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             )}

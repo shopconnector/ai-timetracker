@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
+import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -151,8 +152,8 @@ export default function MyIssuesPage() {
     try {
       // Ładuj dane z Jira i Tempo równolegle
       const [issuesRes, tempoRes] = await Promise.all([
-        fetch('/timetracker/api/jira/my-issues?filter=assigned&limit=200'),
-        fetch('/timetracker/api/tempo/worklogs-by-issue'),
+        fetch(apiUrl('/api/jira/my-issues?filter=assigned&limit=200')),
+        fetch(apiUrl('/api/tempo/worklogs-by-issue')),
       ]);
 
       if (!issuesRes.ok) throw new Error('Nie udało się pobrać zadań z Jiry');
@@ -172,7 +173,7 @@ export default function MyIssuesPage() {
       // Fetch Slack summary for today
       try {
         const today = new Date().toISOString().split('T')[0];
-        const slackRes = await fetch(`/timetracker/api/slack/activities?date=${today}`);
+        const slackRes = await fetch(apiUrl(`/api/slack/activities?date=${today}`));
         if (slackRes.ok) {
           const slackData = await slackRes.json();
           const activities = slackData.activities || [];

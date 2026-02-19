@@ -980,12 +980,31 @@ function getSessionSpanHours(events: AWEvent[]): number {
   return (lastEnd - firstStart) / (1000 * 60 * 60);
 }
 
+// Options for groupActivities — allows configurable thresholds
+export interface GroupActivityOptions {
+  /** Minimum event duration in seconds (default: 10) */
+  minEventDurationSeconds?: number;
+  /** Minimum activity duration in seconds for inclusion (default: 10) */
+  minActivityDurationSeconds?: number;
+  /** Aggregate short tasks below min duration when same project (default: true) */
+  aggregateShortTasks?: boolean;
+  /** If sum of rejected short tasks exceeds this (seconds), aggregate them (default: 900 = 15min) */
+  aggregationThresholdSeconds?: number;
+}
+
 // Group similar activities together
-export function groupActivities(events: AWEvent[]): GroupedActivity[] {
+export function groupActivities(events: AWEvent[], options: GroupActivityOptions = {}): GroupedActivity[] {
+  const {
+    minEventDurationSeconds = 10,
+    minActivityDurationSeconds = 10,
+    aggregateShortTasks = true,
+    aggregationThresholdSeconds = 900,
+  } = options;
+
   // Filter out system apps and very short events (cross-platform)
   const filtered = events.filter(e => {
     const app = e.data.app || '';
-    return !isSystemApp(app) && e.duration > 10;
+    return !isSystemApp(app) && e.duration > minEventDurationSeconds;
   });
 
   // Group by normalized title + app (lub projekt dla edytorów kodu/terminali)
@@ -1141,7 +1160,7 @@ export function groupActivities(events: AWEvent[]): GroupedActivity[] {
   const activities: GroupedActivity[] = [];
 
   for (const [, group] of groups) {
-    if (group.totalSeconds < 10) continue; // Skip < 10 seconds
+    if (group.totalSeconds < minActivityDurationSeconds) continue;
 
     // Split group events into sessions (gaps > 30 min = new session)
     const sessions = splitIntoSessions(group.events);
@@ -1150,7 +1169,7 @@ export function groupActivities(events: AWEvent[]): GroupedActivity[] {
       const sessionEvents = sessions[sessionIdx];
       const sessionTotalSeconds = sessionEvents.reduce((sum, e) => sum + e.duration, 0);
 
-      if (sessionTotalSeconds < 10) continue; // Skip very short sessions
+      if (sessionTotalSeconds < minActivityDurationSeconds) continue;
 
       const timestamps = sessionEvents.map(e => e.timestamp);
       const firstSeen = timestamps.reduce((a, b) => a < b ? a : b);
@@ -1215,6 +1234,76 @@ export function groupActivities(events: AWEvent[]): GroupedActivity[] {
         isCommunication: group.isCommunication,
         channel: group.channel
       });
+    }
+  }
+
+  // TODO-3: Intelligent short task aggregation
+  // If many activities are below min duration but same project → aggregate
+  if (aggregateShortTasks) {
+    // Re-scan groups for short tasks that were excluded from activities
+    const shortTasksByProject = new Map<string, {
+      totalSeconds: number;
+      events: AWEvent[];
+      app: string;
+      category?: ActivityCategory;
+      project?: string;
+      firstSeen: string;
+      lastSeen: string;
+    }>();
+
+    for (const [, group] of groups) {
+      const sessions = splitIntoSessions(group.events);
+      for (const sessionEvents of sessions) {
+        const sessionTotalSeconds = sessionEvents.reduce((sum, e) => sum + e.duration, 0);
+        // Only aggregate sessions that were too short to include
+        if (sessionTotalSeconds >= minActivityDurationSeconds || sessionTotalSeconds <= 0) continue;
+
+        const projectKey = group.project || group.app || 'misc';
+        const existing = shortTasksByProject.get(projectKey);
+        const timestamps = sessionEvents.map(e => e.timestamp);
+        const sessionFirstSeen = timestamps.reduce((a, b) => a < b ? a : b);
+        const sessionLastSeen = timestamps.reduce((a, b) => a > b ? a : b);
+
+        if (existing) {
+          existing.totalSeconds += sessionTotalSeconds;
+          existing.events.push(...sessionEvents);
+          if (sessionFirstSeen < existing.firstSeen) existing.firstSeen = sessionFirstSeen;
+          if (sessionLastSeen > existing.lastSeen) existing.lastSeen = sessionLastSeen;
+        } else {
+          shortTasksByProject.set(projectKey, {
+            totalSeconds: sessionTotalSeconds,
+            events: [...sessionEvents],
+            app: group.app,
+            category: group.category,
+            project: group.project,
+            firstSeen: sessionFirstSeen,
+            lastSeen: sessionLastSeen,
+          });
+        }
+      }
+    }
+
+    // Create aggregated entries for short tasks that exceed the threshold
+    for (const [projectKey, shortGroup] of shortTasksByProject) {
+      if (shortGroup.totalSeconds >= aggregationThresholdSeconds) {
+        const displayTitle = shortGroup.project
+          ? `[${shortGroup.project}] mikro-taski`
+          : `${shortGroup.app} mikro-taski`;
+
+        activities.push({
+          id: generateActivityId(`micro:${projectKey}`, shortGroup.app),
+          title: displayTitle,
+          app: shortGroup.app,
+          totalSeconds: Math.round(shortGroup.totalSeconds),
+          events: shortGroup.events.length,
+          rawEvents: shortGroup.events,
+          firstSeen: shortGroup.firstSeen,
+          lastSeen: shortGroup.lastSeen,
+          category: shortGroup.category,
+          isPrivate: false,
+          project: shortGroup.project,
+        });
+      }
     }
   }
 

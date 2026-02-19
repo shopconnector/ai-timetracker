@@ -580,6 +580,122 @@ describe('groupActivities', () => {
   it('should handle empty events array', () => {
     expect(groupActivities([])).toEqual([]);
   });
+
+  // --- Configurable thresholds (TODO-1) ---
+
+  it('should respect custom minEventDurationSeconds', () => {
+    const events: AWEvent[] = [
+      makeEvent({ duration: 25, data: { app: 'Cursor', title: 'short.ts — proj — Cursor' } }),
+      makeEvent({ duration: 60, data: { app: 'Cursor', title: 'long.ts — proj — Cursor' } }),
+    ];
+    // With default (10s), both pass; with 30s, only the 60s one passes
+    const result = groupActivities(events, { minEventDurationSeconds: 30 });
+    expect(result.length).toBe(1);
+    expect(result[0].totalSeconds).toBe(60);
+  });
+
+  it('should respect custom minActivityDurationSeconds', () => {
+    const events: AWEvent[] = [
+      makeEvent({
+        timestamp: '2024-01-15T10:00:00Z',
+        duration: 120,
+        data: { app: 'Cursor', title: 'a.ts — projA — Cursor' },
+      }),
+      makeEvent({
+        timestamp: '2024-01-15T10:05:00Z',
+        duration: 20, // This passes event filter but grouped total is 20s
+        data: { app: 'Chrome', title: 'Short Page - Google Chrome' },
+      }),
+    ];
+    // With minActivityDurationSeconds=60, the 20s Chrome group is excluded
+    const result = groupActivities(events, { minActivityDurationSeconds: 60 });
+    expect(result.length).toBe(1);
+    expect(result[0].project).toBe('projA');
+  });
+
+  // --- Short task aggregation (TODO-3) ---
+
+  it('should aggregate short tasks from same project when sum exceeds threshold', () => {
+    // 3 short sessions (each 4 min = 240s) for same project, below 5 min threshold
+    // But total = 12 min = 720s
+    const events: AWEvent[] = [
+      makeEvent({
+        timestamp: '2024-01-15T10:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'a.ts — myproject — Cursor' },
+      }),
+      // 2-hour gap -> new session
+      makeEvent({
+        timestamp: '2024-01-15T12:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'b.ts — myproject — Cursor' },
+      }),
+      // 2-hour gap -> new session
+      makeEvent({
+        timestamp: '2024-01-15T14:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'c.ts — myproject — Cursor' },
+      }),
+    ];
+
+    // minActivityDurationSeconds=300 (5min) means each 4-min session is rejected
+    // aggregationThresholdSeconds=600 (10min), sum=720s > 600s → aggregated
+    const result = groupActivities(events, {
+      minActivityDurationSeconds: 300,
+      aggregateShortTasks: true,
+      aggregationThresholdSeconds: 600,
+    });
+
+    expect(result.length).toBe(1);
+    expect(result[0].title).toContain('mikro-taski');
+    expect(result[0].totalSeconds).toBe(720);
+  });
+
+  it('should NOT aggregate short tasks when sum is below threshold', () => {
+    const events: AWEvent[] = [
+      makeEvent({
+        timestamp: '2024-01-15T10:00:00Z',
+        duration: 120, // 2 min
+        data: { app: 'Cursor', title: 'a.ts — smallproj — Cursor' },
+      }),
+    ];
+
+    // 120s < aggregationThresholdSeconds (900s default) — no aggregation
+    const result = groupActivities(events, {
+      minActivityDurationSeconds: 300, // 5 min → rejects 2 min activity
+      aggregateShortTasks: true,
+    });
+
+    expect(result.length).toBe(0); // No aggregation, activity too short
+  });
+
+  it('should not aggregate when aggregateShortTasks is disabled', () => {
+    const events: AWEvent[] = [
+      makeEvent({
+        timestamp: '2024-01-15T10:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'a.ts — proj — Cursor' },
+      }),
+      makeEvent({
+        timestamp: '2024-01-15T12:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'b.ts — proj — Cursor' },
+      }),
+      makeEvent({
+        timestamp: '2024-01-15T14:00:00Z',
+        duration: 240,
+        data: { app: 'Cursor', title: 'c.ts — proj — Cursor' },
+      }),
+    ];
+
+    const result = groupActivities(events, {
+      minActivityDurationSeconds: 300,
+      aggregateShortTasks: false,
+    });
+
+    // All sessions are < 5 min and aggregation is off
+    expect(result.length).toBe(0);
+  });
 });
 
 // ========================================

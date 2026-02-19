@@ -26,6 +26,7 @@ import {
   Wand2,
   History,
 } from 'lucide-react';
+import { getLoggingRules } from '@/lib/loggingRules';
 
 interface JiraIssueItem {
   id: string;
@@ -153,10 +154,16 @@ export default function DailyLoggerSection({ issues }: Props) {
     setGenerateInfo(null);
 
     try {
+      const rules = getLoggingRules();
       const res = await fetch('/timetracker/api/llm/generate-note', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, startHour, endHour }),
+        body: JSON.stringify({
+          date,
+          startHour,
+          endHour,
+          minActivityDurationSeconds: rules.minActivityDurationMinutes * 60,
+        }),
       });
 
       if (res.ok) {
@@ -418,13 +425,20 @@ export default function DailyLoggerSection({ issues }: Props) {
       }
 
       try {
-        const requestBody = {
+        const rules = getLoggingRules();
+        const requestBody: Record<string, unknown> = {
           issueKey: entry.suggestedTicket,
           timeSpentSeconds: entry.durationMinutes * 60,
           startDate: date,
           startTime: `${entry.startTime}:00`,
           description: entry.description,
         };
+        // Pass smart rounding options if enabled
+        if (rules.smartRoundingEnabled) {
+          requestBody.smartRounding = true;
+          requestBody.roundingTiers = rules.roundingTiers;
+          requestBody.roundingAbove60Interval = rules.roundingAbove60Interval;
+        }
         console.log(`[DailyLogger] Logging entry ${i}:`, requestBody);
 
         const res = await fetch('/timetracker/api/tempo/worklogs', {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createWorklog, getWorklogsForDate, roundToMinutes, COMMON_TICKETS, Worklog } from '@/lib/tempo';
+import { smartRoundSeconds, type RoundingTier } from '@/lib/loggingRules';
 import { getIssueId, getCurrentUser, getIssueKeysByIds } from '@/lib/jira';
 
 // GET - fetch worklogs for a date
@@ -110,7 +111,11 @@ export async function POST(request: NextRequest) {
       description,
       billableSeconds,
       attributes,
-      authorAccountId
+      authorAccountId,
+      // Smart rounding options (passed from client)
+      smartRounding,
+      roundingTiers,
+      roundingAbove60Interval,
     } = body;
 
     // Basic required fields check
@@ -145,8 +150,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Round to minutes (Tempo requirement)
-    const roundedSeconds = roundToMinutes(timeSpentSeconds);
+    // Round to minutes — use smart rounding if enabled, otherwise standard ceil
+    let roundedSeconds: number;
+    if (smartRounding) {
+      roundedSeconds = smartRoundSeconds(
+        timeSpentSeconds,
+        roundingTiers as RoundingTier[] | undefined,
+        roundingAbove60Interval as number | undefined
+      );
+      // Ensure minimum 60 seconds (Tempo requires at least 1 minute)
+      if (roundedSeconds > 0 && roundedSeconds < 60) roundedSeconds = 60;
+    } else {
+      roundedSeconds = roundToMinutes(timeSpentSeconds);
+    }
 
     // Auto-fetch issueId from Jira if not provided
     let resolvedIssueId = issueId;

@@ -42,9 +42,9 @@ function fmt(d: Date): string {
 }
 
 // Pre-aggregate activities to reduce token count
-function aggregateActivities(activities: GroupedActivity[]): AggregatedSlot[] {
+function aggregateActivities(activities: GroupedActivity[], minDurationSeconds: number = 120): AggregatedSlot[] {
   const sorted = activities
-    .filter(a => a.totalSeconds >= 120) // drop < 2min
+    .filter(a => a.totalSeconds >= minDurationSeconds)
     .sort((a, b) => new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime());
 
   if (sorted.length === 0) return [];
@@ -145,9 +145,9 @@ function formatCompact(slots: AggregatedSlot[]): string {
 }
 
 // Fallback: generate plain text note without AI
-function generatePlainTextNote(activities: GroupedActivity[]): string {
+function generatePlainTextNote(activities: GroupedActivity[], minDurationSeconds: number = 120): string {
   const sorted = activities
-    .filter(a => !a.isPrivate && a.totalSeconds >= 120)
+    .filter(a => !a.isPrivate && a.totalSeconds >= minDurationSeconds)
     .sort((a, b) => new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime());
 
   if (sorted.length === 0) return '';
@@ -182,7 +182,7 @@ function generatePlainTextNote(activities: GroupedActivity[]): string {
 
 export async function POST(request: Request) {
   try {
-    const { date, startHour, endHour } = await request.json();
+    const { date, startHour, endHour, minActivityDurationSeconds } = await request.json();
 
     if (!date) {
       return NextResponse.json({ error: 'Brak daty' }, { status: 400 });
@@ -220,7 +220,9 @@ export async function POST(request: Request) {
     );
 
     // 4. Pre-aggregate activities to reduce token count
-    let aggregated = aggregateActivities(activities);
+    // Use configurable min duration (from client) or default 120s (2 min)
+    const minDuration = minActivityDurationSeconds || 120;
+    let aggregated = aggregateActivities(activities, minDuration);
     const MAX_SLOTS = 30;
     let truncated = false;
     if (aggregated.length > MAX_SLOTS) {
@@ -286,7 +288,7 @@ ${activitiesText}`;
 
     // Fallback: plain text (no AI)
     if (!note) {
-      note = generatePlainTextNote(activities);
+      note = generatePlainTextNote(activities, minDuration);
     }
 
     return NextResponse.json({
