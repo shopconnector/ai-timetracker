@@ -21,6 +21,14 @@ export const DEFAULT_ROUNDING_TIERS: RoundingTier[] = [
   { minMinutes: 46, maxMinutes: 60, roundTo: 60 },
 ];
 
+// --- Value Multiplier per Project ---
+
+export interface ProjectValueMultiplier {
+  projectKey: string;   // Jira project key (e.g., 'BCI', 'AGRO')
+  multiplier: number;   // e.g., 1.5 = 1h work → 1.5h in log
+  label?: string;       // Optional display label
+}
+
 // --- Logging Rules ---
 
 export interface LoggingRules {
@@ -36,6 +44,20 @@ export interface LoggingRules {
   // TODO-3: Short task aggregation
   aggregateShortTasks: boolean;        // default: true
   aggregationThresholdMinutes: number; // if sum of rejected tasks > this, aggregate (default: 15)
+
+  // TODO-7: Thinking time estimation
+  thinkingTimeEnabled: boolean;           // default: false
+  thinkingTimeGapMinMin: number;          // min gap between same-project activities (default: 5)
+  thinkingTimeGapMaxMin: number;          // max gap to consider as thinking (default: 15)
+  thinkingTimeMultiplier: number;         // 0 = off, 0.5 = half, 1.0 = full gap time (default: 1.0)
+
+  // TODO-8: AI agent time tracking
+  aiAgentTrackingEnabled: boolean;        // default: false
+  aiAgentMultiplier: number;              // multiplier for AI agent time (default: 1.0)
+
+  // TODO-9: Value-based time adjustment
+  valueMultipliersEnabled: boolean;       // default: false
+  projectValueMultipliers: ProjectValueMultiplier[]; // per-project multipliers
 }
 
 export const DEFAULT_LOGGING_RULES: LoggingRules = {
@@ -46,6 +68,17 @@ export const DEFAULT_LOGGING_RULES: LoggingRules = {
   roundingAbove60Interval: 15,
   aggregateShortTasks: true,
   aggregationThresholdMinutes: 15,
+  // Thinking time
+  thinkingTimeEnabled: false,
+  thinkingTimeGapMinMin: 5,
+  thinkingTimeGapMaxMin: 15,
+  thinkingTimeMultiplier: 1.0,
+  // AI agent tracking
+  aiAgentTrackingEnabled: false,
+  aiAgentMultiplier: 1.0,
+  // Value multipliers
+  valueMultipliersEnabled: false,
+  projectValueMultipliers: [],
 };
 
 export function getLoggingRules(): LoggingRules {
@@ -115,4 +148,24 @@ export function smartRoundSeconds(
   const minutes = seconds / 60;
   const roundedMinutes = smartRound(minutes, tiers, above60Interval);
   return roundedMinutes * 60;
+}
+
+// --- TODO-9: Value Multiplier ---
+
+/**
+ * Apply value multiplier for a given project key.
+ * Returns adjusted seconds.
+ */
+export function applyValueMultiplier(
+  seconds: number,
+  issueKey: string,
+  multipliers: ProjectValueMultiplier[]
+): number {
+  if (seconds <= 0 || multipliers.length === 0) return seconds;
+
+  const projectKey = issueKey.split('-')[0];
+  const match = multipliers.find(m => m.projectKey === projectKey);
+  if (!match || match.multiplier === 1.0) return seconds;
+
+  return Math.round(seconds * match.multiplier);
 }

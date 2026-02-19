@@ -185,6 +185,8 @@ export default function SettingsPage() {
     llmModel: 'gemini-2.5-flash',
     geminiApiKey: '',
     slackUserToken: '',
+    slackBotToken: '',
+    slackNotifyUserId: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
   });
   const [savingConfig, setSavingConfig] = useState(false);
@@ -242,6 +244,8 @@ export default function SettingsPage() {
           llmModel: settings.llmModel || 'gemini-2.5-flash',
           geminiApiKey: settings.geminiApiKey || '',
           slackUserToken: settings.slackUserToken || '',
+          slackBotToken: settings.slackBotToken || '',
+          slackNotifyUserId: settings.slackNotifyUserId || '',
           aiProvider: settings.aiProvider || 'gemini',
         });
       }
@@ -531,6 +535,74 @@ export default function SettingsPage() {
         alert('Import zakończony pomyślnie!');
       } else {
         alert('Błąd importu - nieprawidłowy format pliku');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // TODO-10: Full config export/import (all settings in one file)
+  const handleExportFullConfig = () => {
+    const fullConfig = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      loggingRules: getLoggingRules(),
+      timeTargets: getTimeTargets(),
+      holidays: getHolidays(),
+      timeOffs: getTimeOffs(),
+      projectMappings: getProjectMappings(),
+      taskHistory: exportHistory(),
+    };
+    const blob = new Blob([JSON.stringify(fullConfig, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `timetracker-full-config-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFullConfig = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const config = JSON.parse(content);
+
+        if (config.loggingRules) {
+          setLoggingRules(config.loggingRules);
+          setLoggingRulesState(getLoggingRules());
+        }
+        if (config.timeTargets) {
+          setTimeTargets(config.timeTargets);
+          setTargetsState(getTimeTargets());
+        }
+        if (config.holidays) {
+          // Import holidays
+          for (const h of config.holidays) {
+            addHoliday(h);
+          }
+          setHolidaysList(getHolidays());
+        }
+        if (config.timeOffs) {
+          // Import time offs
+          for (const t of config.timeOffs) {
+            addTimeOff({ startDate: t.startDate, endDate: t.endDate, type: t.type, description: t.description });
+          }
+          setTimeOffsList(getTimeOffs());
+        }
+        if (config.taskHistory) {
+          importHistory(typeof config.taskHistory === 'string' ? config.taskHistory : JSON.stringify(config.taskHistory));
+          setProjectMappingsList(getProjectMappings());
+          setTaskHistoryList(getTaskHistory());
+        }
+
+        alert('Pelna konfiguracja zaimportowana pomyslnie!');
+      } catch (err) {
+        alert('Blad importu — nieprawidlowy format pliku');
+        console.error('Config import error:', err);
       }
     };
     reader.readAsText(file);
@@ -1030,6 +1102,223 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Thinking Time (TODO-7) */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+                    Thinking time (estymacja pracy intelektualnej)
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="thinkingTime"
+                      checked={loggingRules.thinkingTimeEnabled}
+                      onChange={(e) => handleSaveLoggingRules({ thinkingTimeEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="thinkingTime" className="text-sm text-gray-600 dark:text-gray-300">
+                      Wykrywaj luki miedzy aktywnosciami jako czas myslenia/review
+                    </label>
+                  </div>
+                  {loggingRules.thinkingTimeEnabled && (
+                    <div className="space-y-3 pl-6">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                            Min. luka (minuty)
+                          </label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="30"
+                            className="w-full h-8 text-sm"
+                            value={loggingRules.thinkingTimeGapMinMin}
+                            onChange={(e) => handleSaveLoggingRules({
+                              thinkingTimeGapMinMin: parseInt(e.target.value) || 5
+                            })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                            Max. luka (minuty)
+                          </label>
+                          <Input
+                            type="number"
+                            min="5"
+                            max="60"
+                            className="w-full h-8 text-sm"
+                            value={loggingRules.thinkingTimeGapMaxMin}
+                            onChange={(e) => handleSaveLoggingRules({
+                              thinkingTimeGapMaxMin: parseInt(e.target.value) || 15
+                            })}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                            Mnoznik czasu
+                          </label>
+                          <Select
+                            value={String(loggingRules.thinkingTimeMultiplier)}
+                            onValueChange={(v) => handleSaveLoggingRules({
+                              thinkingTimeMultiplier: parseFloat(v)
+                            })}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.5">0.5x (polowa)</SelectItem>
+                              <SelectItem value="1">1.0x (pelny czas)</SelectItem>
+                              <SelectItem value="1.5">1.5x</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Jesli miedzy dwoma aktywnosciami na tym samym projekcie jest luka 5-15 min,
+                        system zaproponuje ja jako &quot;thinking/review time&quot;
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Agent Tracking (TODO-8) */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                    AI Agent time tracking
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="aiAgentTracking"
+                      checked={loggingRules.aiAgentTrackingEnabled}
+                      onChange={(e) => handleSaveLoggingRules({ aiAgentTrackingEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="aiAgentTracking" className="text-sm text-gray-600 dark:text-gray-300">
+                      Wliczaj czas pracy agentow AI (Claude, GPT, Copilot)
+                    </label>
+                  </div>
+                  {loggingRules.aiAgentTrackingEnabled && (
+                    <div className="pl-6">
+                      <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                        Mnoznik czasu AI agenta
+                      </label>
+                      <Select
+                        value={String(loggingRules.aiAgentMultiplier)}
+                        onValueChange={(v) => handleSaveLoggingRules({
+                          aiAgentMultiplier: parseFloat(v)
+                        })}
+                      >
+                        <SelectTrigger className="w-40 h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0.5">0.5x (polowa)</SelectItem>
+                          <SelectItem value="1">1.0x (pelny czas)</SelectItem>
+                          <SelectItem value="1.5">1.5x</SelectItem>
+                          <SelectItem value="2">2.0x (podwojny)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Czas pracy AI agenta wykryty w terminalu bedzie pokazany osobno i wliczony do projektu z tym mnoznikiem
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Value Multipliers (TODO-9) */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-rose-500 rounded-full"></span>
+                    Value-based time adjustment
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="valueMultipliers"
+                      checked={loggingRules.valueMultipliersEnabled}
+                      onChange={(e) => handleSaveLoggingRules({ valueMultipliersEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="valueMultipliers" className="text-sm text-gray-600 dark:text-gray-300">
+                      Stosuj mnozniki wartosci per projekt
+                    </label>
+                  </div>
+                  {loggingRules.valueMultipliersEnabled && (
+                    <div className="space-y-2 pl-6">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Mnoznik jest stosowany PRZED zaokragleniem. Np. 1h pracy z AI x 1.5 = 1.5h w logu.
+                      </p>
+                      {loggingRules.projectValueMultipliers.map((m, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            value={m.projectKey}
+                            onChange={(e) => {
+                              const updated = [...loggingRules.projectValueMultipliers];
+                              updated[idx] = { ...updated[idx], projectKey: e.target.value.toUpperCase() };
+                              handleSaveLoggingRules({ projectValueMultipliers: updated });
+                            }}
+                            placeholder="Projekt (np. BCI)"
+                            className="w-24 h-7 text-xs"
+                          />
+                          <Input
+                            type="number"
+                            min="0.1"
+                            max="5"
+                            step="0.1"
+                            value={m.multiplier}
+                            onChange={(e) => {
+                              const updated = [...loggingRules.projectValueMultipliers];
+                              updated[idx] = { ...updated[idx], multiplier: parseFloat(e.target.value) || 1 };
+                              handleSaveLoggingRules({ projectValueMultipliers: updated });
+                            }}
+                            className="w-20 h-7 text-xs"
+                          />
+                          <span className="text-xs text-gray-400">x</span>
+                          <Input
+                            value={m.label || ''}
+                            onChange={(e) => {
+                              const updated = [...loggingRules.projectValueMultipliers];
+                              updated[idx] = { ...updated[idx], label: e.target.value };
+                              handleSaveLoggingRules({ projectValueMultipliers: updated });
+                            }}
+                            placeholder="Opis"
+                            className="w-32 h-7 text-xs"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const updated = loggingRules.projectValueMultipliers.filter((_, i) => i !== idx);
+                              handleSaveLoggingRules({ projectValueMultipliers: updated });
+                            }}
+                            className="h-7 w-7 p-0"
+                          >
+                            <Trash2 className="h-3 w-3 text-red-400" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const updated = [
+                            ...loggingRules.projectValueMultipliers,
+                            { projectKey: '', multiplier: 1.5, label: '' }
+                          ];
+                          handleSaveLoggingRules({ projectValueMultipliers: updated });
+                        }}
+                        className="text-xs h-7"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Dodaj mnoznik
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </CardContent>
@@ -1289,7 +1578,7 @@ export default function SettingsPage() {
                 Slack (opcjonalne)
               </h3>
               <div>
-                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">User Token (xoxp-)</label>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">User Token (xoxp-) — odczyt aktywnosci</label>
                 <Input
                   type="password"
                   placeholder="xoxp-..."
@@ -1298,6 +1587,31 @@ export default function SettingsPage() {
                 />
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   Utwórz w: api.slack.com/apps &rarr; OAuth &amp; Permissions. Wymagane scopes: channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read
+                </p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Bot Token (xoxb-) — powiadomienia outgoing</label>
+                <Input
+                  type="password"
+                  placeholder="xoxb-..."
+                  value={apiConfig.slackBotToken || ''}
+                  onChange={(e) => setApiConfig({ ...apiConfig, slackBotToken: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Bot Token do wysylania powiadomien (propozycje logow, real-time prompty).
+                  Wymagane scopes: chat:write, im:write, users:read
+                </p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">ID uzytkownika Slack (powiadomienia DM)</label>
+                <Input
+                  placeholder="U0123456789"
+                  value={apiConfig.slackNotifyUserId || ''}
+                  onChange={(e) => setApiConfig({ ...apiConfig, slackNotifyUserId: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Twoje Slack User ID — bot bedzie wysylal DM do tego uzytkownika.
+                  Znajdziesz w: Slack Profile &rarr; More &rarr; Copy member ID
                 </p>
               </div>
             </div>
@@ -1824,32 +2138,63 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="text-lg">Backup danych</CardTitle>
             <CardDescription>
-              Eksportuj lub importuj historię i mapowania
+              Eksportuj lub importuj historię, mapowania i pelna konfiguracje
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-4">
-              <Button variant="outline" onClick={handleExport}>
-                <Download className="h-4 w-4 mr-2" />
-                Eksportuj dane
-              </Button>
-              <div>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handleImport}
-                  className="hidden"
-                  id="import-file"
-                />
-                <Button variant="outline" onClick={() => document.getElementById('import-file')?.click()}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Importuj dane
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Historia i mapowania</p>
+              <div className="flex gap-4">
+                <Button variant="outline" onClick={handleExport}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Eksportuj dane
+                </Button>
+                <div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImport}
+                    className="hidden"
+                    id="import-file"
+                  />
+                  <Button variant="outline" onClick={() => document.getElementById('import-file')?.click()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importuj dane
+                  </Button>
+                </div>
+                <Button variant="destructive" onClick={handleClearMappings}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Wyczysc mapowania
                 </Button>
               </div>
-              <Button variant="destructive" onClick={handleClearMappings}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Wyczyść mapowania
-              </Button>
+            </div>
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Pelna konfiguracja (reguly, targety, urlopy, mapowania, historia)
+              </p>
+              <div className="flex gap-4">
+                <Button variant="outline" onClick={handleExportFullConfig}>
+                  <PackageCheck className="h-4 w-4 mr-2" />
+                  Eksportuj pelna konfiguracje
+                </Button>
+                <div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportFullConfig}
+                    className="hidden"
+                    id="import-full-config"
+                  />
+                  <Button variant="outline" onClick={() => document.getElementById('import-full-config')?.click()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Importuj pelna konfiguracje
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                Eksportuje/importuje WSZYSTKIE ustawienia w jednym pliku JSON.
+                Przydatne do klonowania konfiguracji miedzy maszynami lub tworzenia presetow organizacyjnych.
+              </p>
             </div>
           </CardContent>
         </Card>

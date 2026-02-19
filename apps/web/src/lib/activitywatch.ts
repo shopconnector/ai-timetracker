@@ -1340,6 +1340,136 @@ export function groupActivities(events: AWEvent[], options: GroupActivityOptions
   return activities.sort((a, b) => b.totalSeconds - a.totalSeconds);
 }
 
+// ========================================
+// TODO-7: THINKING TIME DETECTION
+// ========================================
+
+export interface ThinkingTimeEntry {
+  project: string;
+  gapSeconds: number;
+  adjustedSeconds: number; // gapSeconds * multiplier
+  beforeActivity: string;  // title of activity before the gap
+  afterActivity: string;   // title of activity after the gap
+  gapStart: string;        // ISO timestamp
+  gapEnd: string;          // ISO timestamp
+}
+
+/**
+ * Detect "thinking time" gaps between activities on the same project.
+ * If two activities on the same project are separated by a gap of
+ * gapMinMin..gapMaxMin minutes, the gap is proposed as thinking time.
+ */
+export function detectThinkingTime(
+  activities: GroupedActivity[],
+  options: {
+    gapMinMinutes?: number;   // default: 5
+    gapMaxMinutes?: number;   // default: 15
+    multiplier?: number;      // default: 1.0
+  } = {}
+): ThinkingTimeEntry[] {
+  const {
+    gapMinMinutes = 5,
+    gapMaxMinutes = 15,
+    multiplier = 1.0,
+  } = options;
+
+  if (multiplier <= 0) return [];
+
+  const gapMinMs = gapMinMinutes * 60 * 1000;
+  const gapMaxMs = gapMaxMinutes * 60 * 1000;
+
+  // Sort all activities by firstSeen
+  const sorted = [...activities]
+    .filter(a => !a.isPrivate && a.project)
+    .sort((a, b) => new Date(a.firstSeen).getTime() - new Date(b.firstSeen).getTime());
+
+  const entries: ThinkingTimeEntry[] = [];
+
+  // Group by project, then find gaps between consecutive activities
+  const byProject = new Map<string, GroupedActivity[]>();
+  for (const a of sorted) {
+    const key = a.project!;
+    if (!byProject.has(key)) byProject.set(key, []);
+    byProject.get(key)!.push(a);
+  }
+
+  for (const [project, projectActivities] of byProject) {
+    if (projectActivities.length < 2) continue;
+
+    for (let i = 1; i < projectActivities.length; i++) {
+      const prev = projectActivities[i - 1];
+      const curr = projectActivities[i];
+
+      const prevEnd = new Date(prev.lastSeen).getTime();
+      const currStart = new Date(curr.firstSeen).getTime();
+      const gap = currStart - prevEnd;
+
+      if (gap >= gapMinMs && gap <= gapMaxMs) {
+        const gapSeconds = Math.round(gap / 1000);
+        entries.push({
+          project,
+          gapSeconds,
+          adjustedSeconds: Math.round(gapSeconds * multiplier),
+          beforeActivity: prev.title,
+          afterActivity: curr.title,
+          gapStart: new Date(prevEnd).toISOString(),
+          gapEnd: new Date(currStart).toISOString(),
+        });
+      }
+    }
+  }
+
+  return entries;
+}
+
+// ========================================
+// TODO-8: AI AGENT DETECTION
+// ========================================
+
+// Known AI agent process names and patterns
+const AI_AGENT_PATTERNS = [
+  // Claude
+  /\bclaude\b/i,
+  /\bclaude-code\b/i,
+  /\banthropic\b/i,
+  // GPT / OpenAI
+  /\bgpt\b/i,
+  /\bchatgpt\b/i,
+  /\bopenai\b/i,
+  // Copilot
+  /\bcopilot\b/i,
+  /\bgithub copilot\b/i,
+  // AI tools
+  /\bcursor\s+(ai|composer|chat)\b/i,
+  /\baider\b/i,
+  /\bcody\b/i,
+  /\btabby\b/i,
+  /\bcontinue\.dev\b/i,
+  // Build/CI processes that may indicate AI-driven work
+  /\bralph\b/i,        // ralph autonomous dev loop
+];
+
+/**
+ * Check if a terminal activity title suggests AI agent work.
+ */
+export function isAIAgentActivity(title: string, app: string): boolean {
+  const combined = `${app} ${title}`.toLowerCase();
+  return AI_AGENT_PATTERNS.some(pattern => pattern.test(combined));
+}
+
+/**
+ * Tag activities as AI agent work based on terminal process detection.
+ * Returns the activities with isAIAgent flag set.
+ */
+export function tagAIAgentActivities(
+  activities: GroupedActivity[]
+): (GroupedActivity & { isAIAgent?: boolean })[] {
+  return activities.map(a => {
+    const isAI = a.isTerminal && isAIAgentActivity(a.title, a.app);
+    return isAI ? { ...a, isAIAgent: true } : a;
+  });
+}
+
 // Get all activities for a date (window + browser + editor combined from ALL buckets)
 export async function getActivitiesForDate(date: string): Promise<GroupedActivity[]> {
   // Fetch ALL event types in parallel

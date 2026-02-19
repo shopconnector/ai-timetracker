@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   smartRound,
   smartRoundSeconds,
+  applyValueMultiplier,
   getLoggingRules,
   setLoggingRules,
   resetLoggingRules,
   DEFAULT_LOGGING_RULES,
   DEFAULT_ROUNDING_TIERS,
   type RoundingTier,
+  type ProjectValueMultiplier,
 } from './loggingRules';
 
 // --- smartRound ---
@@ -155,5 +157,63 @@ describe('loggingRules persistence', () => {
     mockStorage.set('timetracker_logging_rules', 'not-json');
     const rules = getLoggingRules();
     expect(rules).toEqual(DEFAULT_LOGGING_RULES);
+  });
+
+  it('should persist new fields (thinkingTime, aiAgent, valueMultipliers)', () => {
+    setLoggingRules({
+      thinkingTimeEnabled: true,
+      thinkingTimeMultiplier: 0.5,
+      aiAgentTrackingEnabled: true,
+      aiAgentMultiplier: 1.5,
+      valueMultipliersEnabled: true,
+      projectValueMultipliers: [
+        { projectKey: 'BCI', multiplier: 1.5, label: 'AI work' },
+      ],
+    });
+    const rules = getLoggingRules();
+    expect(rules.thinkingTimeEnabled).toBe(true);
+    expect(rules.thinkingTimeMultiplier).toBe(0.5);
+    expect(rules.aiAgentTrackingEnabled).toBe(true);
+    expect(rules.aiAgentMultiplier).toBe(1.5);
+    expect(rules.valueMultipliersEnabled).toBe(true);
+    expect(rules.projectValueMultipliers).toHaveLength(1);
+    expect(rules.projectValueMultipliers[0].projectKey).toBe('BCI');
+  });
+});
+
+// --- applyValueMultiplier (TODO-9) ---
+
+describe('applyValueMultiplier', () => {
+  const multipliers: ProjectValueMultiplier[] = [
+    { projectKey: 'BCI', multiplier: 1.5 },
+    { projectKey: 'AGRO', multiplier: 2.0 },
+  ];
+
+  it('should return original seconds when no multipliers', () => {
+    expect(applyValueMultiplier(3600, 'BCI-123', [])).toBe(3600);
+  });
+
+  it('should return original seconds when project not in multipliers', () => {
+    expect(applyValueMultiplier(3600, 'SAND-1', multipliers)).toBe(3600);
+  });
+
+  it('should apply 1.5x multiplier for BCI', () => {
+    expect(applyValueMultiplier(3600, 'BCI-123', multipliers)).toBe(5400); // 3600 * 1.5
+  });
+
+  it('should apply 2.0x multiplier for AGRO', () => {
+    expect(applyValueMultiplier(1800, 'AGRO-5', multipliers)).toBe(3600); // 1800 * 2.0
+  });
+
+  it('should return 0 for 0 or negative seconds', () => {
+    expect(applyValueMultiplier(0, 'BCI-1', multipliers)).toBe(0);
+    expect(applyValueMultiplier(-100, 'BCI-1', multipliers)).toBe(-100);
+  });
+
+  it('should round the result to nearest second', () => {
+    // 100s * 1.5 = 150s (exact)
+    expect(applyValueMultiplier(100, 'BCI-1', multipliers)).toBe(150);
+    // 101s * 1.5 = 151.5 → rounds to 152
+    expect(applyValueMultiplier(101, 'BCI-1', multipliers)).toBe(152);
   });
 });

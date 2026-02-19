@@ -132,6 +132,22 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================================================
+// Activity Categories (TODO-8: includes AI agent work)
+// ============================================================================
+
+export type ActivityCategory =
+  | 'coding'
+  | 'terminal'
+  | 'meeting'
+  | 'communication'
+  | 'browser'
+  | 'docs'
+  | 'design'
+  | 'ai-agent-work'    // AI agent processes (Claude, GPT, Copilot, etc.)
+  | 'thinking'         // Estimated thinking/review time (TODO-7)
+  | 'other';
+
+// ============================================================================
 // Constants
 // ============================================================================
 

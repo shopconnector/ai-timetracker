@@ -7,6 +7,9 @@ import {
   extractProjectInfo,
   formatDuration,
   groupActivities,
+  detectThinkingTime,
+  isAIAgentActivity,
+  tagAIAgentActivities,
   getBuckets,
   clearBucketCache,
   getWindowEvents,
@@ -14,6 +17,7 @@ import {
   getEditorEvents,
   getAllEvents,
   type AWEvent,
+  type GroupedActivity,
 } from './activitywatch';
 
 // ========================================
@@ -695,6 +699,252 @@ describe('groupActivities', () => {
 
     // All sessions are < 5 min and aggregation is off
     expect(result.length).toBe(0);
+  });
+});
+
+// ========================================
+// TODO-7: THINKING TIME DETECTION
+// ========================================
+
+describe('detectThinkingTime', () => {
+  function makeActivity(overrides: Partial<GroupedActivity> & { id: string; firstSeen: string; lastSeen: string }): GroupedActivity {
+    return {
+      title: 'test',
+      app: 'Cursor',
+      totalSeconds: 600,
+      events: 1,
+      category: 'coding',
+      ...overrides,
+    };
+  }
+
+  it('should detect gap between same-project activities', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'timetracker',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'timetracker',
+        firstSeen: '2024-01-15T09:40:00Z',
+        lastSeen: '2024-01-15T10:10:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities, {
+      gapMinMinutes: 5,
+      gapMaxMinutes: 15,
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].project).toBe('timetracker');
+    expect(result[0].gapSeconds).toBe(600); // 10 min gap
+  });
+
+  it('should not detect gap if too short', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:32:00Z', // only 2 min gap
+        lastSeen: '2024-01-15T10:00:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities, { gapMinMinutes: 5 });
+    expect(result).toHaveLength(0);
+  });
+
+  it('should not detect gap if too long', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'proj',
+        firstSeen: '2024-01-15T10:00:00Z', // 30 min gap
+        lastSeen: '2024-01-15T10:30:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities, { gapMaxMinutes: 15 });
+    expect(result).toHaveLength(0);
+  });
+
+  it('should not detect gap between different projects', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'project-a',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'project-b',
+        firstSeen: '2024-01-15T09:40:00Z',
+        lastSeen: '2024-01-15T10:10:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities);
+    expect(result).toHaveLength(0);
+  });
+
+  it('should apply multiplier to adjusted time', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:40:00Z',
+        lastSeen: '2024-01-15T10:00:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities, { multiplier: 0.5 });
+    expect(result).toHaveLength(1);
+    expect(result[0].gapSeconds).toBe(600);
+    expect(result[0].adjustedSeconds).toBe(300); // 600 * 0.5
+  });
+
+  it('should return empty when multiplier is 0', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+      }),
+      makeActivity({
+        id: '2',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:40:00Z',
+        lastSeen: '2024-01-15T10:00:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities, { multiplier: 0 });
+    expect(result).toHaveLength(0);
+  });
+
+  it('should skip private activities', () => {
+    const activities: GroupedActivity[] = [
+      makeActivity({
+        id: '1',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:00:00Z',
+        lastSeen: '2024-01-15T09:30:00Z',
+        isPrivate: true,
+      }),
+      makeActivity({
+        id: '2',
+        project: 'proj',
+        firstSeen: '2024-01-15T09:40:00Z',
+        lastSeen: '2024-01-15T10:00:00Z',
+      }),
+    ];
+
+    const result = detectThinkingTime(activities);
+    expect(result).toHaveLength(0);
+  });
+});
+
+// ========================================
+// TODO-8: AI AGENT DETECTION
+// ========================================
+
+describe('isAIAgentActivity', () => {
+  it('should detect Claude in terminal title', () => {
+    expect(isAIAgentActivity('gaca — timetracker — claude — Terminal', 'Terminal')).toBe(true);
+  });
+
+  it('should detect claude-code', () => {
+    expect(isAIAgentActivity('claude-code TERM_PROGRAM=Apple_Terminal', 'Terminal')).toBe(true);
+  });
+
+  it('should detect GPT in title', () => {
+    expect(isAIAgentActivity('gpt-4 generating code', 'iTerm')).toBe(true);
+  });
+
+  it('should detect Copilot', () => {
+    expect(isAIAgentActivity('GitHub Copilot suggestions', 'Cursor')).toBe(true);
+  });
+
+  it('should detect aider', () => {
+    expect(isAIAgentActivity('aider --model gpt-4', 'Terminal')).toBe(true);
+  });
+
+  it('should detect ralph', () => {
+    expect(isAIAgentActivity('ralph run --auto', 'Terminal')).toBe(true);
+  });
+
+  it('should not match regular terminal work', () => {
+    expect(isAIAgentActivity('npm run dev', 'Terminal')).toBe(false);
+    expect(isAIAgentActivity('git push origin main', 'Terminal')).toBe(false);
+  });
+
+  it('should not match regular editor', () => {
+    expect(isAIAgentActivity('index.ts — timetracker — Cursor', 'Cursor')).toBe(false);
+  });
+});
+
+describe('tagAIAgentActivities', () => {
+  function makeActivity(overrides: Partial<GroupedActivity>): GroupedActivity {
+    return {
+      id: '1',
+      title: 'test',
+      app: 'Terminal',
+      totalSeconds: 600,
+      events: 1,
+      firstSeen: '2024-01-15T09:00:00Z',
+      lastSeen: '2024-01-15T09:10:00Z',
+      category: 'terminal',
+      isTerminal: true,
+      ...overrides,
+    };
+  }
+
+  it('should tag terminal activity with claude as AI agent', () => {
+    const activities = [
+      makeActivity({ title: 'claude-code session', isTerminal: true }),
+    ];
+    const tagged = tagAIAgentActivities(activities);
+    expect((tagged[0] as GroupedActivity & { isAIAgent?: boolean }).isAIAgent).toBe(true);
+  });
+
+  it('should not tag non-terminal activities', () => {
+    const activities = [
+      makeActivity({ title: 'claude discussion', isTerminal: false, app: 'Chrome' }),
+    ];
+    const tagged = tagAIAgentActivities(activities);
+    expect((tagged[0] as GroupedActivity & { isAIAgent?: boolean }).isAIAgent).toBeUndefined();
+  });
+
+  it('should not tag regular terminal work', () => {
+    const activities = [
+      makeActivity({ title: 'npm run build', isTerminal: true }),
+    ];
+    const tagged = tagAIAgentActivities(activities);
+    expect((tagged[0] as GroupedActivity & { isAIAgent?: boolean }).isAIAgent).toBeUndefined();
   });
 });
 

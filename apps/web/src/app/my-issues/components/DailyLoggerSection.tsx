@@ -25,6 +25,7 @@ import {
   FileText,
   Wand2,
   History,
+  Bell,
 } from 'lucide-react';
 import { getLoggingRules } from '@/lib/loggingRules';
 
@@ -403,7 +404,7 @@ export default function DailyLoggerSection({ issues }: Props) {
     setEntries(prev => prev.map(e => ({ ...e, selected: checked })));
   };
 
-  // Log selected entries to Tempo
+  // Log selected entries to Tempo (sequential, one by one)
   const handleLogAll = async () => {
     const selected = entries.filter(e => e.selected && e.suggestedTicket);
     if (selected.length === 0) {
@@ -439,6 +440,11 @@ export default function DailyLoggerSection({ issues }: Props) {
           requestBody.roundingTiers = rules.roundingTiers;
           requestBody.roundingAbove60Interval = rules.roundingAbove60Interval;
         }
+        // Pass value multiplier options if enabled (TODO-9)
+        if (rules.valueMultipliersEnabled && rules.projectValueMultipliers.length > 0) {
+          requestBody.valueMultipliersEnabled = true;
+          requestBody.projectValueMultipliers = rules.projectValueMultipliers;
+        }
         console.log(`[DailyLogger] Logging entry ${i}:`, requestBody);
 
         const res = await fetch('/timetracker/api/tempo/worklogs', {
@@ -472,6 +478,110 @@ export default function DailyLoggerSection({ issues }: Props) {
     setLogging(false);
 
     await fetchExistingWorklogs(date);
+  };
+
+  // Batch log all entries with tickets via single API call
+  const handleBatchApprove = async () => {
+    const selected = entries.filter(e => e.selected && e.suggestedTicket);
+    if (selected.length === 0) {
+      alert('Zaznacz wpisy z ticketami do zalogowania');
+      return;
+    }
+
+    setLogging(true);
+    setLogResults([]);
+
+    try {
+      const rules = getLoggingRules();
+      const batchEntries = selected.map(entry => ({
+        issueKey: entry.suggestedTicket,
+        timeSpentSeconds: entry.durationMinutes * 60,
+        startDate: date,
+        startTime: `${entry.startTime}:00`,
+        description: entry.description,
+      }));
+
+      const requestBody: Record<string, unknown> = { entries: batchEntries };
+      if (rules.smartRoundingEnabled) {
+        requestBody.smartRounding = true;
+        requestBody.roundingTiers = rules.roundingTiers;
+        requestBody.roundingAbove60Interval = rules.roundingAbove60Interval;
+      }
+      if (rules.valueMultipliersEnabled && rules.projectValueMultipliers.length > 0) {
+        requestBody.valueMultipliersEnabled = true;
+        requestBody.projectValueMultipliers = rules.projectValueMultipliers;
+      }
+
+      const res = await fetch('/timetracker/api/tempo/batch-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Map batch results back to entry indices
+        const selectedIndices = entries
+          .map((e, i) => (e.selected && e.suggestedTicket ? i : -1))
+          .filter(i => i >= 0);
+
+        const results: LogResult[] = (data.results || []).map(
+          (r: { index: number; success: boolean; message: string }) => ({
+            index: selectedIndices[r.index] ?? r.index,
+            success: r.success,
+            message: r.message,
+          })
+        );
+        setLogResults(results);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Batch log failed' }));
+        alert(`Blad batch logowania: ${err.error}`);
+      }
+    } catch (error) {
+      alert(`Blad: ${error instanceof Error ? error.message : 'Nieznany blad'}`);
+    }
+
+    setLogging(false);
+    await fetchExistingWorklogs(date);
+  };
+
+  // Send daily log proposal to Slack
+  const handleSendToSlack = async () => {
+    const withTickets = entries.filter(e => e.suggestedTicket);
+    if (withTickets.length === 0) {
+      alert('Brak wpisow z ticketami do wyslania');
+      return;
+    }
+
+    try {
+      const res = await fetch('/timetracker/api/slack/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'daily_log',
+          date,
+          entries: withTickets.map(e => ({
+            issueKey: e.suggestedTicket,
+            description: e.description,
+            durationMinutes: e.durationMinutes,
+            startTime: e.startTime,
+            endTime: e.endTime,
+            confidence: e.ticketConfidence,
+          })),
+          totalMinutes: withTickets.reduce((s, e) => s + e.durationMinutes, 0),
+          alreadyLoggedMinutes: Math.round(alreadyLoggedTotal / 60),
+        }),
+      });
+
+      if (res.ok) {
+        alert('Propozycja wyslana na Slack!');
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Blad: ${err.error}`);
+      }
+    } catch (error) {
+      alert(`Blad: ${error instanceof Error ? error.message : 'Nieznany blad'}`);
+    }
   };
 
   // Stats
@@ -809,21 +919,44 @@ export default function DailyLoggerSection({ issues }: Props) {
               )}
             </div>
 
-            {/* Log button */}
+            {/* Log buttons */}
             <div className="flex items-center gap-3">
               <Button
+                onClick={handleBatchApprove}
+                disabled={
+                  logging || entries.filter(e => e.selected && e.suggestedTicket).length === 0
+                }
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {logging ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                )}
+                Approve All ({entries.filter(e => e.selected && e.suggestedTicket).length})
+              </Button>
+              <Button
+                variant="outline"
                 onClick={handleLogAll}
                 disabled={
                   logging || entries.filter(e => e.selected && e.suggestedTicket).length === 0
                 }
-                className="bg-indigo-600 hover:bg-indigo-700"
               >
                 {logging ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <Play className="mr-2 h-4 w-4" />
                 )}
-                Zaloguj zaznaczone do Tempo
+                Zaloguj sekwencyjnie
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSendToSlack}
+                disabled={logging || entries.filter(e => e.suggestedTicket).length === 0}
+                title="Wyslij propozycje logow na Slack"
+              >
+                <Bell className="mr-2 h-4 w-4" />
+                Slack
               </Button>
               {logging && <span className="text-sm text-gray-500">Logowanie...</span>}
             </div>
