@@ -318,6 +318,14 @@ jobs:
           set APP_URL=http://localhost:%PORT%/timetracker
           set AW_URL=http://localhost:5600
 
+          :: Kill any previous TimeTracker node processes
+          tasklist /FI "IMAGENAME eq node.exe" 2>nul | findstr /I "node.exe" >nul 2>&1
+          if %errorlevel% equ 0 (
+              echo   Stopping previous TimeTracker instance...
+              taskkill /F /IM node.exe >nul 2>&1
+              timeout /t 2 /nobreak >nul
+          )
+
           echo.
           echo ═══════════════════════════════════════════════════════════════════
           echo              AI TimeTracker v${{ steps.version.outputs.version }}
@@ -374,17 +382,16 @@ jobs:
           echo.
 
           start "" /min cmd /c "timeout /t 3 /nobreak >nul && start %APP_URL%"
-          if not exist "logs" mkdir logs
-          echo [%date% %time%] Starting TimeTracker... >> "logs\timetracker.log"
 
           :start_server
-          "node\node.exe" "start-server.js" 2>> "logs\timetracker.log"
-          echo [%date% %time%] Server exited (code: %errorlevel%) >> "logs\timetracker.log"
+          echo [%date% %time%] Starting server...
+          "node\node.exe" "start-server.js"
+          set EXIT_CODE=%errorlevel%
+          echo [%date% %time%] Server exited (code: %EXIT_CODE%)
           echo.
           if exist "%~dp0update.flag" (
               del "%~dp0update.flag"
               echo   Update in progress, waiting for installer to finish...
-              echo [%date% %time%] Waiting for installer... >> "logs\timetracker.log"
               timeout /t 15 /nobreak >nul
           ) else (
               echo   Server stopped. Restarting in 5 seconds... (close window to stop)
