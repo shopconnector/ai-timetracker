@@ -557,36 +557,64 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Testing server startup..."
-          
+
           # Set env vars
           $env:NODE_ENV = "production"
           $env:HOSTNAME = "localhost"
           $env:PORT = "5666"
           $env:ACTIVITYWATCH_URL = "http://localhost:5600"
-          
-          # Start server in background
-          $ServerProcess = Start-Process -FilePath "dist/windows/node/node.exe" `
-            -ArgumentList "dist/windows/start-server.js" `
-            -WorkingDirectory "dist/windows" `
-            -PassThru -NoNewWindow
-          
+
+          # Start server in background (use start-server.js relative, working dir = dist/windows)
+          Push-Location "dist/windows"
+          $ServerProcess = Start-Process -FilePath "node/node.exe" `
+            -ArgumentList "start-server.js" `
+            -PassThru -NoNewWindow -RedirectStandardError "server-stderr.log"
+          Pop-Location
+
           Start-Sleep -Seconds 10
-          
-          # Test health endpoint
-          try {
-            $Response = Invoke-WebRequest -Uri "http://localhost:5666/timetracker/api/status" -TimeoutSec 5
-            Write-Host "Server responded: $($Response.StatusCode)"
-            
-            if ($Response.StatusCode -eq 200) {
-              Write-Host "✓ Server health check PASSED"
+
+          # Show any server errors
+          $StderrLog = "dist/windows/server-stderr.log"
+          if (Test-Path $StderrLog) {
+            $Errors = Get-Content $StderrLog -ErrorAction SilentlyContinue
+            if ($Errors) {
+              Write-Host "Server stderr:" -ForegroundColor Yellow
+              $Errors | ForEach-Object { Write-Host "  $_" }
             }
-          } catch {
-            Write-Host "! Server responded with error (expected - no ActivityWatch)"
           }
-          
+
+          # Test endpoints
+          $TestUrls = @(
+            @{ Name = "API Status"; Url = "http://localhost:5666/timetracker/api/status" },
+            @{ Name = "Home Page"; Url = "http://localhost:5666/timetracker/" },
+            @{ Name = "Settings Page"; Url = "http://localhost:5666/timetracker/settings" },
+            @{ Name = "My Issues Page"; Url = "http://localhost:5666/timetracker/my-issues" }
+          )
+
+          $AllPassed = $true
+          foreach ($Test in $TestUrls) {
+            try {
+              $Response = Invoke-WebRequest -Uri $Test.Url -TimeoutSec 5 -UseBasicParsing
+              if ($Response.StatusCode -eq 200) {
+                Write-Host "✓ $($Test.Name): $($Response.StatusCode)" -ForegroundColor Green
+              } else {
+                Write-Host "✗ $($Test.Name): $($Response.StatusCode)" -ForegroundColor Red
+                $AllPassed = $false
+              }
+            } catch {
+              Write-Host "✗ $($Test.Name): FAILED - $($_.Exception.Message)" -ForegroundColor Red
+              $AllPassed = $false
+            }
+          }
+
           # Stop server
           Stop-Process -Id $ServerProcess.Id -Force -ErrorAction SilentlyContinue
-          Write-Host "Server test complete"
+
+          if (-not $AllPassed) {
+            Write-Error "Some endpoint tests failed!"
+            exit 1
+          }
+          Write-Host "All endpoint tests PASSED" -ForegroundColor Green
 
       - name: Upload portable zip
         uses: actions/upload-artifact@v4
