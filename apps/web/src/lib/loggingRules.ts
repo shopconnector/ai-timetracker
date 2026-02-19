@@ -58,6 +58,12 @@ export interface LoggingRules {
   // TODO-9: Value-based time adjustment
   valueMultipliersEnabled: boolean;       // default: false
   projectValueMultipliers: ProjectValueMultiplier[]; // per-project multipliers
+
+  // TODO-5: Real-time prompting (gap-based, not clock-based)
+  promptEnabled: boolean;                 // default: false
+  promptMinActivityMinutes: number;       // min activity duration before prompting (default: 15)
+  promptMinGapMinutes: number;            // min gap/break after activity to trigger prompt (default: 20)
+  promptMethod: 'slack' | 'browser';      // notification channel (default: 'slack')
 }
 
 export const DEFAULT_LOGGING_RULES: LoggingRules = {
@@ -79,6 +85,11 @@ export const DEFAULT_LOGGING_RULES: LoggingRules = {
   // Value multipliers
   valueMultipliersEnabled: false,
   projectValueMultipliers: [],
+  // Real-time prompting
+  promptEnabled: false,
+  promptMinActivityMinutes: 15,
+  promptMinGapMinutes: 20,
+  promptMethod: 'slack',
 };
 
 export function getLoggingRules(): LoggingRules {

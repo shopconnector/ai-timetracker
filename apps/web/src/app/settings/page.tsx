@@ -1319,6 +1319,87 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Real-time Prompting (TODO-5) */}
+                <div className="space-y-3">
+                  <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-cyan-500 rounded-full"></span>
+                    Real-time prompting (Slack)
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="promptEnabled"
+                      checked={loggingRules.promptEnabled}
+                      onChange={(e) => handleSaveLoggingRules({ promptEnabled: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    <label htmlFor="promptEnabled" className="text-sm text-gray-600 dark:text-gray-300">
+                      Proponuj logowanie po zakonczeniu sesji pracy (gap-based)
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Prompt na Slack TYLKO gdy: aktywnosc trwala dluzej niz minimum,
+                    A POTEM nastapila przerwa dluzsza niz prog. Krotkie przerwy (kawa) nie triggeruja promptu.
+                  </p>
+                  {loggingRules.promptEnabled && (
+                    <div className="space-y-3 pl-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                            Min. czas aktywnosci (min)
+                          </label>
+                          <Input
+                            type="number"
+                            min="5"
+                            max="120"
+                            className="w-full h-8 text-sm"
+                            value={loggingRules.promptMinActivityMinutes}
+                            onChange={(e) => handleSaveLoggingRules({
+                              promptMinActivityMinutes: parseInt(e.target.value) || 15
+                            })}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Aktywnosci krotsze nie beda promptowane</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                            Min. przerwa do triggera (min)
+                          </label>
+                          <Input
+                            type="number"
+                            min="5"
+                            max="120"
+                            className="w-full h-8 text-sm"
+                            value={loggingRules.promptMinGapMinutes}
+                            onChange={(e) => handleSaveLoggingRules({
+                              promptMinGapMinutes: parseInt(e.target.value) || 20
+                            })}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Przerwy krotsze (kawa) nie triggeruja</p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">
+                          Metoda powiadomienia
+                        </label>
+                        <Select
+                          value={loggingRules.promptMethod}
+                          onValueChange={(v) => handleSaveLoggingRules({
+                            promptMethod: v as 'slack' | 'browser'
+                          })}
+                        >
+                          <SelectTrigger className="h-8 text-sm w-48">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="slack">Slack DM</SelectItem>
+                            <SelectItem value="browser">Browser push</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
           </CardContent>

@@ -179,6 +179,28 @@ describe('loggingRules persistence', () => {
     expect(rules.projectValueMultipliers).toHaveLength(1);
     expect(rules.projectValueMultipliers[0].projectKey).toBe('BCI');
   });
+
+  it('should persist prompt settings (TODO-5 gap-based)', () => {
+    setLoggingRules({
+      promptEnabled: true,
+      promptMinActivityMinutes: 20,
+      promptMinGapMinutes: 30,
+      promptMethod: 'browser',
+    });
+    const rules = getLoggingRules();
+    expect(rules.promptEnabled).toBe(true);
+    expect(rules.promptMinActivityMinutes).toBe(20);
+    expect(rules.promptMinGapMinutes).toBe(30);
+    expect(rules.promptMethod).toBe('browser');
+  });
+
+  it('should have correct prompt defaults', () => {
+    const rules = getLoggingRules();
+    expect(rules.promptEnabled).toBe(false);
+    expect(rules.promptMinActivityMinutes).toBe(15);
+    expect(rules.promptMinGapMinutes).toBe(20);
+    expect(rules.promptMethod).toBe('slack');
+  });
 });
 
 // --- applyValueMultiplier (TODO-9) ---

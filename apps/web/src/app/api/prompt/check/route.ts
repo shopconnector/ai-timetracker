@@ -2,115 +2,168 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getActivitiesForDate, type GroupedActivity } from '@/lib/activitywatch';
 import { sendActivityPrompt, isSlackBotConfigured } from '@/lib/slackBot';
 
-// In-memory state for tracking prompted activities
-// Key: activity ID, Value: timestamp when prompted
-const promptedActivities = new Map<string, number>();
-const PROMPT_COOLDOWN_MS = 30 * 60 * 1000; // Don't re-prompt same activity within 30 min
+/**
+ * Gap-based real-time prompting (TODO-5 v2)
+ *
+ * Logic: prompt ONLY when a significant activity is followed by a long enough gap.
+ *
+ * Example:
+ *   - User works 2h on task A
+ *   - Takes 10 min coffee break → NO prompt (gap < minGapMinutes)
+ *   - Returns, continues task A for 2h
+ *   - Takes 45 min lunch → After returning, prompt to log the previous 2h session
+ *
+ * This avoids:
+ *   - Clock-based polling that interrupts deep work
+ *   - Fragmenting long tasks with unnecessary prompts
+ *   - Prompting during short breaks (coffee, bathroom)
+ */
 
-// Minimum activity duration to trigger a prompt (seconds)
-const MIN_PROMPT_DURATION_SECONDS = 15 * 60; // 15 minutes
+// In-memory: tracks which sessions have been prompted
+// Key: "activityId:lastSeen" → unique per completed session
+const promptedSessions = new Map<string, number>();
 
-// Cleanup old entries (older than 24h)
-function cleanupPromptedActivities() {
+// Cleanup entries older than 24h
+function cleanupSessions() {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  for (const [key, ts] of promptedActivities) {
-    if (ts < cutoff) promptedActivities.delete(key);
+  for (const [key, ts] of promptedSessions) {
+    if (ts < cutoff) promptedSessions.delete(key);
   }
 }
 
-// Find activities that are significant and haven't been prompted yet
-function findNewSignificantActivities(
+/**
+ * Detect completed work sessions that should be prompted.
+ *
+ * A session is "completed" when:
+ *   1. Activity lasted >= minActivityMinutes
+ *   2. Gap after activity >= minGapMinutes (break, lunch, context switch)
+ *   3. Session hasn't been prompted yet
+ *
+ * A session is NOT completed when:
+ *   - Activity is still ongoing (no gap yet)
+ *   - Gap is too short (coffee break — don't fragment)
+ *   - Activity is private
+ */
+function detectCompletedSessions(
   activities: GroupedActivity[],
-  minDurationSeconds: number
-): GroupedActivity[] {
-  cleanupPromptedActivities();
+  minActivityMinutes: number,
+  minGapMinutes: number,
+): Array<{ activity: GroupedActivity; gapMinutes: number }> {
+  cleanupSessions();
+
   const now = Date.now();
+  const minActivityMs = minActivityMinutes * 60 * 1000;
+  const minGapMs = minGapMinutes * 60 * 1000;
+  const results: Array<{ activity: GroupedActivity; gapMinutes: number }> = [];
 
-  return activities.filter(a => {
-    // Must be above minimum duration
-    if (a.totalSeconds < minDurationSeconds) return false;
+  // Sort by lastSeen descending (most recent first)
+  const sorted = [...activities]
+    .filter(a => !a.isPrivate && a.totalSeconds >= minActivityMinutes * 60)
+    .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
 
-    // Skip private activities
-    if (a.isPrivate) return false;
+  for (const activity of sorted) {
+    const lastSeenMs = new Date(activity.lastSeen).getTime();
+    const sessionKey = `${activity.id}:${activity.lastSeen}`;
 
-    // Check if already prompted recently
-    const lastPrompted = promptedActivities.get(a.id);
-    if (lastPrompted && (now - lastPrompted) < PROMPT_COOLDOWN_MS) return false;
+    // Already prompted this exact session
+    if (promptedSessions.has(sessionKey)) continue;
 
-    // Check if the activity is "fresh" — lastSeen within the last hour
-    const lastSeen = new Date(a.lastSeen).getTime();
-    if ((now - lastSeen) > 60 * 60 * 1000) return false;
+    // Calculate gap: time between activity's lastSeen and now
+    // In the future, we could also look at the next activity's firstSeen,
+    // but "now - lastSeen" is simpler and works for the return-from-break case.
+    const gapMs = now - lastSeenMs;
 
-    return true;
-  });
+    // Skip if gap is too short (user is on a short break or still working)
+    if (gapMs < minGapMs) continue;
+
+    // Skip if activity is too old (> 4h gap = probably end of day, not a break)
+    if (gapMs > 4 * 60 * 60 * 1000) continue;
+
+    // Activity is significant AND gap is long enough → completed session
+    results.push({
+      activity,
+      gapMinutes: Math.round(gapMs / 60000),
+    });
+  }
+
+  return results;
 }
 
-// POST /api/prompt/check — check for new activities and optionally send prompts
+// POST /api/prompt/check — detect completed sessions and optionally notify
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
       date,
-      minDurationSeconds = MIN_PROMPT_DURATION_SECONDS,
-      sendNotification = false, // If true, send Slack DM for each new activity
+      minActivityMinutes = 15,
+      minGapMinutes = 20,
+      sendNotification = false,
     } = body;
 
     const targetDate = date || new Date().toISOString().split('T')[0];
 
-    // Fetch current activities
+    // Fetch current activities from ActivityWatch
     const activities = await getActivitiesForDate(targetDate);
 
-    // Find new significant activities
-    const newActivities = findNewSignificantActivities(activities, minDurationSeconds);
+    // Detect completed sessions
+    const completedSessions = detectCompletedSessions(
+      activities,
+      minActivityMinutes,
+      minGapMinutes,
+    );
 
-    if (newActivities.length === 0) {
+    if (completedSessions.length === 0) {
       return NextResponse.json({
         found: 0,
-        message: 'Brak nowych znaczacych aktywnosci',
-        prompted: [],
+        message: 'Brak zakonczonych sesji do zalogowania',
+        sessions: [],
       });
     }
 
-    const prompted: Array<{
+    const sessions: Array<{
       id: string;
       title: string;
       durationMinutes: number;
+      gapMinutes: number;
+      suggestedTicket?: string;
       notificationSent: boolean;
     }> = [];
 
-    for (const activity of newActivities) {
-      // Mark as prompted
-      promptedActivities.set(activity.id, Date.now());
+    for (const { activity, gapMinutes } of completedSessions) {
+      const sessionKey = `${activity.id}:${activity.lastSeen}`;
+      promptedSessions.set(sessionKey, Date.now());
 
       const durationMinutes = Math.round(activity.totalSeconds / 60);
       let notificationSent = false;
 
-      // Optionally send Slack notification
+      // Send Slack notification if requested
       if (sendNotification && isSlackBotConfigured()) {
         const result = await sendActivityPrompt(
           {
             project: activity.project,
             app: activity.app,
             durationMinutes,
-            description: activity.title,
+            description: `${activity.title} (przerwa ${gapMinutes} min temu)`,
           },
           activity.suggestedTicket
         );
         notificationSent = result.ok;
       }
 
-      prompted.push({
+      sessions.push({
         id: activity.id,
         title: activity.title,
         durationMinutes,
+        gapMinutes,
+        suggestedTicket: activity.suggestedTicket,
         notificationSent,
       });
     }
 
     return NextResponse.json({
-      found: newActivities.length,
-      message: `Znaleziono ${newActivities.length} nowych aktywnosci`,
-      prompted,
+      found: completedSessions.length,
+      message: `Znaleziono ${completedSessions.length} zakonczonych sesji`,
+      sessions,
     });
   } catch (error) {
     console.error('[prompt/check] Error:', error);
@@ -121,12 +174,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/prompt/check — simple status check (how many activities are tracked)
+// GET /api/prompt/check — status + config info
 export async function GET() {
-  cleanupPromptedActivities();
+  cleanupSessions();
   return NextResponse.json({
-    trackedActivities: promptedActivities.size,
-    cooldownMinutes: PROMPT_COOLDOWN_MS / 60000,
-    minDurationMinutes: MIN_PROMPT_DURATION_SECONDS / 60,
+    mode: 'gap-based',
+    trackedSessions: promptedSessions.size,
+    description: 'Prompt only after significant activity followed by a long enough break',
   });
 }
