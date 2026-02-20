@@ -2,9 +2,11 @@
 
 **Intelligent time tracking system — Jira + Tempo + ActivityWatch + Slack + AI (Gemini)**
 
-## Download (Windows 11)
+## Download (Windows)
 
-**[Download TimeTracker-Setup-x64.exe](releases/TimeTracker-Setup-x64.exe)** — Windows Installer (~55 MB, bundled Node.js)
+**[Download TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest/download/TimeTracker-Setup-x64.exe)** — Windows Installer (~55 MB, bundled Node.js)
+
+> The app auto-updates itself. When a new version is available, you'll see a notification in the Settings page. One click to update.
 
 ---
 
@@ -12,8 +14,6 @@
 ActivityWatch + Slack ──> TimeTracker ──> Tempo/Jira
  (monitoring)   (chat)     (web UI)       (worklogs)
 ```
-
-**Live demo:** https://ai.beecommerce.pl/timetracker
 
 ---
 
@@ -129,55 +129,86 @@ ai-timetracker/
 git clone https://github.com/shopconnector/ai-timetracker.git
 cd ai-timetracker
 
-# 2. Copy the configuration template
-cp .env.example apps/web/.env.local
-
-# 3. Fill in API tokens in apps/web/.env.local (see instructions below)
-
-# 4. Install dependencies
+# 2. Install dependencies
 pnpm install
 
-# 5. Start the development server
+# 3. Start the development server
 pnpm dev
 ```
 
 The application will be available at: **http://localhost:5666/timetracker**
 
-### API Tokens
+Open **Settings** in the app and enter your API keys — see [API Keys Setup](#api-keys-setup-step-by-step) below.
 
-#### Jira API (required)
+### API Keys Setup (step by step)
 
-1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
-2. Click **Create API token** and name it "TimeTracker"
-3. Copy the token to `JIRA_API_KEY=` in `.env.local`
+After installing the app, open **Settings** (gear icon in the sidebar). You'll see fields for each API key. Fill them in one by one:
 
-#### Tempo API (required)
+#### 1. Jira API Key (required)
 
-1. In Jira, navigate to Apps > Tempo > Settings > API Integration
-2. Click **New Token** with permissions: Worklogs (View, Create, Edit)
-3. Copy the token to `TEMPO_API_TOKEN=` in `.env.local`
+You need this for TimeTracker to access your Jira issues.
 
-#### Gemini API (recommended — free tier available)
+1. Open this link in your browser: **https://id.atlassian.com/manage-profile/security/api-tokens**
+2. Log in with your Atlassian account (the same one you use for Jira)
+3. Click the blue **"Create API token"** button
+4. In the popup, type a label like `TimeTracker` and click **Create**
+5. **Copy the token** (click the copy icon — you won't be able to see it again!)
+6. Go back to TimeTracker **Settings** and paste it into the **Jira API Key** field
+7. Also fill in:
+   - **Jira Base URL** — your company's Jira address, e.g. `https://yourcompany.atlassian.net`
+   - **Jira Email** — the email you use to log into Jira
 
-1. Go to: https://aistudio.google.com/apikey
-2. Click **Create API key**
-3. Copy the key to `GEMINI_API_KEY=` in `.env.local`
+#### 2. Tempo API Token (required)
 
-> Gemini 2.5 Flash is free and sufficiently fast. Without a key, AI suggestions will not work, but the rest of the application will function normally (regex fallback).
+You need this for TimeTracker to read and create worklogs.
 
-#### OpenRouter (optional — fallback)
+1. Open **Jira** in your browser
+2. Click **Apps** in the top menu bar → click **Tempo** → click **Settings** (bottom-left gear icon)
+3. In the left sidebar, click **API Integration**
+4. Click **"New Token"**
+5. Give it a name like `TimeTracker`
+6. Select these permissions: **Worklogs: View, Create, Edit**
+7. Click **Create** and **copy the token**
+8. Go back to TimeTracker **Settings** and paste it into the **Tempo API Token** field
 
-1. Go to: https://openrouter.ai/keys
-2. Copy the key to `OPENROUTER_API_KEY=` in `.env.local`
+#### 3. Gemini API Key (recommended — it's free!)
 
-#### Slack Integration (optional)
+This powers AI features: automatic ticket matching, daily notes parsing, and smart suggestions.
 
-1. Create a Slack App: https://api.slack.com/apps > **Create New App** > From scratch
-2. Under **OAuth & Permissions**, add User Token Scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `users:read`
-3. Click **Install to Workspace** and copy the **User OAuth Token** (`xoxp-...`)
-4. Paste it into `SLACK_USER_TOKEN=` in `.env.local`
+1. Open: **https://aistudio.google.com/apikey**
+2. Sign in with any Google account
+3. Click **"Create API key"**
+4. Select any Google Cloud project (or create one — it's free)
+5. **Copy the key**
+6. Go back to TimeTracker **Settings** and paste it into the **Gemini API Key** field
 
-> The Slack integration correlates ActivityWatch activities (Slack window events) with Slack API data (channels, huddles). This eliminates duplicate time counting.
+> **No credit card needed.** Gemini 2.5 Flash is free and fast enough. Without this key, AI features won't work, but everything else (timesheet, calendar, worklogs) works fine with regex fallback.
+
+#### 4. OpenRouter API Key (optional — AI fallback)
+
+Only needed if Gemini doesn't work or you prefer other models (Claude, GPT-4, etc.)
+
+1. Open: **https://openrouter.ai/keys**
+2. Sign up or log in
+3. Create a key and **copy it**
+4. Paste into the **OpenRouter API Key** field in Settings
+
+#### 5. Slack Integration (optional)
+
+Adds Slack activity correlation — shows which Slack channels/huddles you were active in alongside your desktop activity.
+
+1. Open: **https://api.slack.com/apps** → click **"Create New App"** → choose **"From scratch"**
+2. Give it a name like `TimeTracker` and select your workspace
+3. In the left sidebar, click **"OAuth & Permissions"**
+4. Scroll to **"User Token Scopes"** and add these scopes (click "Add an OAuth Scope" for each):
+   - `channels:history`, `channels:read`
+   - `groups:history`, `groups:read`
+   - `im:history`, `im:read`
+   - `mpim:history`, `mpim:read`
+   - `users:read`
+5. Scroll back up and click **"Install to Workspace"** → click **Allow**
+6. Copy the **User OAuth Token** (starts with `xoxp-...`)
+7. Paste into the **Slack User Token** field in Settings
 
 ---
 
@@ -370,10 +401,11 @@ pnpm build:electron   # Build Electron app
 <details>
 <summary><strong>Windows (EXE Installer)</strong></summary>
 
-1. Install [ActivityWatch](https://github.com/ActivityWatch/activitywatch/releases)
-2. Download [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest)
-3. Run the installer — Node.js is bundled
-4. Launch "AI TimeTracker" from the Start menu
+1. Install [ActivityWatch](https://github.com/ActivityWatch/activitywatch/releases) (for desktop activity tracking)
+2. Download [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest/download/TimeTracker-Setup-x64.exe)
+3. Run the installer — Node.js is bundled, no extra software needed
+4. Launch **"AI TimeTracker"** from the Start menu
+5. Open **Settings** and enter your API keys (see [API Keys Setup](#api-keys-setup-step-by-step) above)
 
 </details>
 
