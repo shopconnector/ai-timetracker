@@ -1,10 +1,10 @@
 # AI TimeTracker
 
-**Inteligentny system logowania czasu pracy — Jira + Tempo + ActivityWatch + Slack + AI (Gemini)**
+**Intelligent time tracking system — Jira + Tempo + ActivityWatch + Slack + AI (Gemini)**
 
 ## Download (Windows 11)
 
-**[⬇ Pobierz TimeTracker-Setup-x64.exe](releases/TimeTracker-Setup-x64.exe)** — Installer Windows (~55MB, Node.js wbudowany)
+**[Download TimeTracker-Setup-x64.exe](releases/TimeTracker-Setup-x64.exe)** — Windows Installer (~55 MB, bundled Node.js)
 
 ---
 
@@ -17,34 +17,34 @@ ActivityWatch + Slack ──> TimeTracker ──> Tempo/Jira
 
 ---
 
-## Co to robi?
+## What Does It Do?
 
-AI TimeTracker automatyzuje logowanie czasu pracy do Tempo/Jira:
+AI TimeTracker automates time logging to Tempo/Jira:
 
-1. **ActivityWatch** zbiera dane o aktywnosciach (jakie okna, aplikacje, jak dlugo)
-2. **TimeTracker** wyswietla je w czytelnej tabeli i **AI dopasowuje tickety Jira**
-3. Jednym kliknieciem logujesz caly dzien do **Tempo**
+1. **ActivityWatch** collects activity data (active windows, applications, durations)
+2. **TimeTracker** displays activities in a clear table and **AI matches them to Jira tickets**
+3. Log an entire day to **Tempo** with a single click
 
-### Kluczowe funkcje
+### Key Features
 
-| Funkcja                | Opis                                                                                                                    |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **AI Daily Logger**    | Wklej surowe notatki z dnia — AI parsuje na tabelke z dopasowanymi ticketami Jira. Edytuj i zaloguj jednym kliknieciem. |
-| **AI Ticket Matching** | Automatyczne dopasowanie aktywnosci do ticketow Jira (Gemini / OpenRouter)                                              |
-| **Timesheet**          | Tygodniowy widok worklogow z edycja, drag & drop, hurtowym przypisywaniem                                               |
-| **Moje Zadania**       | Pelna lista zadan Jira z filtrami, sortowaniem, notatkami, Readiness Criteria                                           |
-| **Kalendarz**          | Tygodniowy widok worklogow + Google Calendar + Jira sprint events                                                       |
-| **Analityka**          | Wykresy: czas per projekt, per dzien, per typ aktywnosci, trendy                                                        |
-| **Porownanie**         | Zestawienie: czas ActivityWatch vs zalogowany w Tempo (diff per dzien)                                                  |
-| **KAGANIEC**           | Automatyczna blokada logowania do Stories/Epics — wymusza subtaski                                                      |
-| **Readiness Criteria** | Parsowanie oceny RC z komentarzy Jira (Automation for Jira)                                                             |
-| **Slack Integration**  | Korelacja AW+Slack: huddle, DM, kanaly — badge "AW+Slack", brak duplikatow                                             |
-| **Rules Engine**       | Reguly automatycznego dopasowywania ticketow (bez AI)                                                                   |
-| **Electron**           | Desktopowa aplikacja Windows z wbudowanym Node.js                                                                       |
+| Feature                | Description                                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **AI Daily Logger**    | Paste raw daily notes — AI parses them into a structured table with matched Jira tickets. Edit and log in one click. |
+| **AI Ticket Matching** | Automatic activity-to-ticket matching via Gemini / OpenRouter                                                        |
+| **Timesheet**          | Weekly worklog view with editing, drag & drop, and bulk assignment                                                   |
+| **My Issues**          | Full Jira issue list with filters, sorting, notes, and Readiness Criteria                                            |
+| **Calendar**           | Weekly worklog view + Google Calendar + Jira sprint events                                                           |
+| **Analytics**          | Charts: time per project, per day, per activity type, trends                                                         |
+| **Compare**            | Side-by-side comparison: ActivityWatch time vs. logged Tempo time (daily diff)                                        |
+| **Issue Type Guard**   | Automatic blocking of time logging to Stories/Epics — enforces subtasks                                              |
+| **Readiness Criteria** | Parses RC scores from Jira comments (Automation for Jira)                                                            |
+| **Slack Integration**  | AW + Slack correlation: huddles, DMs, channels — "AW+Slack" badge, no duplicate counting                            |
+| **Rules Engine**       | Rule-based automatic ticket matching (no AI required)                                                                |
+| **Electron**           | Desktop application for Windows with bundled Node.js                                                                 |
 
 ---
 
-## Architektura
+## Architecture
 
 ```
 ai-timetracker/
@@ -53,156 +53,156 @@ ai-timetracker/
 │       ├── src/
 │       │   ├── app/                  # Pages + API routes
 │       │   │   ├── page.tsx          # Dashboard
-│       │   │   ├── timesheet/        # Tygodniowy timesheet
-│       │   │   ├── my-issues/        # Zadania Jira + Daily Logger
-│       │   │   ├── calendar/         # Widok kalendarza
-│       │   │   ├── analytics/        # Wykresy i statystyki
-│       │   │   ├── compare/          # AW vs Tempo porownanie
-│       │   │   ├── tasks/            # Zarzadzanie taskami
-│       │   │   ├── connections/      # Status polaczen API
-│       │   │   ├── settings/         # Konfiguracja + Rules Engine
+│       │   │   ├── timesheet/        # Weekly timesheet
+│       │   │   ├── my-issues/        # Jira issues + Daily Logger
+│       │   │   ├── calendar/         # Calendar view
+│       │   │   ├── analytics/        # Charts and statistics
+│       │   │   ├── compare/          # AW vs Tempo comparison
+│       │   │   ├── tasks/            # Task management
+│       │   │   ├── connections/      # API connection status
+│       │   │   ├── settings/         # Configuration + Rules Engine
 │       │   │   └── api/
-│       │   │       ├── jira/         # Proxy do Jira REST API
-│       │   │       ├── tempo/        # Proxy do Tempo REST API
+│       │   │       ├── jira/         # Jira REST API proxy
+│       │   │       ├── tempo/        # Tempo REST API proxy
 │       │   │       ├── llm/          # AI endpoints (Gemini/OpenRouter)
-│       │   │       │   ├── parse-daily/    # Parsowanie notatek dnia
-│       │   │       │   ├── suggest/        # Sugestia ticketa
-│       │   │       │   └── suggest-worklog/# Sugestia workloga
+│       │   │       │   ├── parse-daily/    # Daily notes parsing
+│       │   │       │   ├── suggest/        # Ticket suggestion
+│       │   │       │   └── suggest-worklog/# Worklog suggestion
 │       │   │       ├── activities/   # ActivityWatch integration
 │       │   │       ├── dashboard/    # Dashboard aggregation
 │       │   │       ├── analytics/    # Analytics data
 │       │   │       └── settings/     # Settings + API tests
 │       │   ├── components/
-│       │   │   ├── ui/               # shadcn/ui (21 komponentow)
-│       │   │   ├── WorklogFormDialog  # Formularz workloga
-│       │   │   ├── TimesheetTable     # Tabela timesheet
+│       │   │   ├── ui/               # shadcn/ui (21 components)
+│       │   │   ├── WorklogFormDialog  # Worklog form dialog
+│       │   │   ├── TimesheetTable     # Timesheet table
 │       │   │   └── ...
 │       │   └── lib/
-│       │       ├── gemini.ts         # Natywny klient Google Gemini API
+│       │       ├── gemini.ts         # Native Google Gemini API client
 │       │       ├── openrouter.ts     # OpenRouter LLM client (fallback)
-│       │       ├── ai-config.ts      # Konfiguracja AI (modele, provider)
+│       │       ├── ai-config.ts      # AI configuration (models, provider)
 │       │       ├── jira.ts           # Jira REST API client
 │       │       ├── tempo.ts          # Tempo REST API client
 │       │       ├── activitywatch.ts  # ActivityWatch API client
 │       │       ├── slack.ts          # Slack User Token API client
-│       │       ├── mergeActivities.ts # AW+Slack korelacja
-│       │       ├── readiness.ts      # Parser Readiness Criteria
-│       │       ├── rules-engine.ts   # Silnik regul dopasowywania
+│       │       ├── mergeActivities.ts # AW + Slack correlation
+│       │       ├── readiness.ts      # Readiness Criteria parser
+│       │       ├── rules-engine.ts   # Rule-based matching engine
 │       │       ├── suggestion-service.ts  # Unified AI suggestion pipeline
 │       │       └── ...
-│       └── .env.local                # Konfiguracja (tokeny API)
+│       └── .env.local                # Configuration (API tokens)
 ├── packages/
-│   ├── shared/                       # Wspolne typy i narzedzia
-│   └── ai/                           # Pakiet AI utilities
+│   ├── shared/                       # Shared types and utilities
+│   └── ai/                           # AI utilities package
 ├── electron/                         # Electron wrapper (Windows desktop)
-├── scripts/windows/                  # Build scripts dla instalatora
+├── scripts/windows/                  # Build scripts for the installer
 └── turbo.json                        # Turborepo config
 ```
 
-### Stack technologiczny
+### Tech Stack
 
-| Warstwa  | Technologia                                        |
-| -------- | -------------------------------------------------- |
-| Frontend | Next.js 16, React 19, Tailwind CSS 4, shadcn/ui    |
+| Layer    | Technology                                        |
+| -------- | ------------------------------------------------- |
+| Frontend | Next.js 16, React 19, Tailwind CSS 4, shadcn/ui   |
 | Backend  | Next.js API Routes (server-side)                   |
-| AI/LLM   | Google Gemini API (natywny), OpenRouter (fallback) |
-| Monorepo | Turborepo + pnpm workspaces                        |
-| Testy    | Vitest + Testing Library                           |
+| AI/LLM   | Google Gemini API (native), OpenRouter (fallback) |
+| Monorepo | Turborepo + pnpm workspaces                       |
+| Testing  | Vitest + Testing Library                           |
 | Linting  | ESLint + Prettier + Husky + lint-staged            |
 | Desktop  | Electron (Windows)                                 |
-| Build    | Standalone output (deploy bez node_modules)        |
+| Build    | Standalone output (deploy without node_modules)    |
 
 ---
 
-## Szybki start
+## Quick Start
 
-### Wymagania
+### Prerequisites
 
 - **Node.js** >= 20
 - **pnpm** >= 9
-- **ActivityWatch** (opcjonalne — do monitorowania aktywnosci)
+- **ActivityWatch** (optional — for activity monitoring)
 
-### Instalacja
+### Installation
 
 ```bash
-# 1. Klonuj repo
+# 1. Clone the repository
 git clone https://github.com/shopconnector/ai-timetracker.git
 cd ai-timetracker
 
-# 2. Skopiuj konfiguracje
+# 2. Copy the configuration template
 cp .env.example apps/web/.env.local
 
-# 3. Uzupelnij tokeny w apps/web/.env.local (instrukcje nizej)
+# 3. Fill in API tokens in apps/web/.env.local (see instructions below)
 
-# 4. Zainstaluj zaleznosi
+# 4. Install dependencies
 pnpm install
 
-# 5. Uruchom
+# 5. Start the development server
 pnpm dev
 ```
 
-Aplikacja bedzie dostepna na: **http://localhost:5666/timetracker**
+The application will be available at: **http://localhost:5666/timetracker**
 
-### Tokeny API
+### API Tokens
 
-#### Jira API (wymagane)
+#### Jira API (required)
 
-1. Wejdz: https://id.atlassian.com/manage-profile/security/api-tokens
-2. **Create API token** > nazwij "TimeTracker"
-3. Skopiuj do `JIRA_API_KEY=` w `.env.local`
+1. Go to: https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click **Create API token** and name it "TimeTracker"
+3. Copy the token to `JIRA_API_KEY=` in `.env.local`
 
-#### Tempo API (wymagane)
+#### Tempo API (required)
 
-1. Jira > Apps > Tempo > Settings > API Integration
-2. **New Token** > uprawnienia: Worklogs (View, Create, Edit)
-3. Skopiuj do `TEMPO_API_TOKEN=` w `.env.local`
+1. In Jira, navigate to Apps > Tempo > Settings > API Integration
+2. Click **New Token** with permissions: Worklogs (View, Create, Edit)
+3. Copy the token to `TEMPO_API_TOKEN=` in `.env.local`
 
-#### Gemini API (zalecane — darmowe)
+#### Gemini API (recommended — free tier available)
 
-1. Wejdz: https://aistudio.google.com/apikey
-2. **Create API key**
-3. Skopiuj do `GEMINI_API_KEY=` w `.env.local`
+1. Go to: https://aistudio.google.com/apikey
+2. Click **Create API key**
+3. Copy the key to `GEMINI_API_KEY=` in `.env.local`
 
-> Gemini 2.5 Flash jest darmowy i wystarczajaco szybki. Bez klucza AI sugestie nie beda dzialac, ale reszta aplikacji tak (regex fallback).
+> Gemini 2.5 Flash is free and sufficiently fast. Without a key, AI suggestions will not work, but the rest of the application will function normally (regex fallback).
 
-#### OpenRouter (opcjonalne — fallback)
+#### OpenRouter (optional — fallback)
 
-1. Wejdz: https://openrouter.ai/keys
-2. Skopiuj do `OPENROUTER_API_KEY=` w `.env.local`
+1. Go to: https://openrouter.ai/keys
+2. Copy the key to `OPENROUTER_API_KEY=` in `.env.local`
 
-#### Slack Integration (opcjonalne)
+#### Slack Integration (optional)
 
-1. Stworz Slack App: https://api.slack.com/apps > **Create New App** > From scratch
-2. **OAuth & Permissions** > User Token Scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `users:read`
-3. **Install to Workspace** > skopiuj **User OAuth Token** (`xoxp-...`)
-4. Wklej do `SLACK_USER_TOKEN=` w `.env.local`
+1. Create a Slack App: https://api.slack.com/apps > **Create New App** > From scratch
+2. Under **OAuth & Permissions**, add User Token Scopes: `channels:history`, `channels:read`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `users:read`
+3. Click **Install to Workspace** and copy the **User OAuth Token** (`xoxp-...`)
+4. Paste it into `SLACK_USER_TOKEN=` in `.env.local`
 
-> Slack integration koreluje aktywnosci AW (okno Slack) z danymi Slack API (kanaly, huddle). Eliminuje podwojne liczenie czasu.
+> The Slack integration correlates ActivityWatch activities (Slack window events) with Slack API data (channels, huddles). This eliminates duplicate time counting.
 
 ---
 
-## Konfiguracja (.env.local)
+## Configuration (.env.local)
 
 ```env
-# Tempo API (wymagane)
-TEMPO_API_TOKEN=twoj_token
+# Tempo API (required)
+TEMPO_API_TOKEN=your_token
 
-# Jira API (wymagane)
-JIRA_BASE_URL=https://twoja-firma.atlassian.net
-JIRA_SERVICE_EMAIL=twoj.email@firma.com
-JIRA_API_KEY=twoj_token
+# Jira API (required)
+JIRA_BASE_URL=https://your-company.atlassian.net
+JIRA_SERVICE_EMAIL=your.email@company.com
+JIRA_API_KEY=your_token
 
-# Gemini API (zalecane — darmowe)
-GEMINI_API_KEY=twoj_klucz_gemini
-# GEMINI_MODEL=gemini-2.5-flash  # opcjonalnie
+# Gemini API (recommended — free tier available)
+GEMINI_API_KEY=your_gemini_key
+# GEMINI_MODEL=gemini-2.5-flash  # optional
 
-# ActivityWatch (opcjonalne)
+# ActivityWatch (optional)
 ACTIVITYWATCH_URL=http://localhost:5600
 
-# OpenRouter (opcjonalne — fallback)
+# OpenRouter (optional — fallback)
 OPENROUTER_API_KEY=
 
-# Slack (opcjonalne — korelacja z ActivityWatch)
+# Slack (optional — ActivityWatch correlation)
 SLACK_USER_TOKEN=xoxp-...
 ```
 
@@ -210,9 +210,9 @@ SLACK_USER_TOKEN=xoxp-...
 
 ## AI Daily Logger
 
-Glowna nowa funkcja — zamiast recznego logowania kazdego workloga osobno:
+The primary productivity feature — instead of manually logging each worklog individually:
 
-1. **Wklej surowe notatki** z dnia pracy:
+1. **Paste raw notes** from your workday:
 
    ```
    09:30-10:30 research Mike n8n workflow
@@ -222,60 +222,60 @@ Glowna nowa funkcja — zamiast recznego logowania kazdego workloga osobno:
    14:00-15:00 Mike prompty linkedin
    ```
 
-2. **AI parsuje** na strukturalna tabelke:
-   - Czas (edytowalny)
-   - Opis (edytowalny)
-   - Ticket Jira (dropdown z wszystkich zadan)
-   - Kategoria (meeting/dev/research/comm/infra)
-   - Czas trwania (edytowalny)
+2. **AI parses** the input into a structured table:
+   - Time (editable)
+   - Description (editable)
+   - Jira ticket (dropdown from all assigned issues)
+   - Category (meeting / dev / research / comm / infra)
+   - Duration (editable)
 
-3. **Edytuj** co trzeba — zmien ticket, skoryguj czas
+3. **Edit** as needed — change tickets, adjust times
 
-4. **Zaloguj jednym kliknieciem** — wszystkie zaznaczone wpisy do Tempo
+4. **Log with a single click** — all selected entries are sent to Tempo
 
-### Fallback bez AI
+### Fallback Without AI
 
-Bez klucza Gemini/OpenRouter dziala **regex parser**:
+Without a Gemini/OpenRouter key, the **regex parser** is used:
 
-- Rozpoznaje wzorce `HH:MM-HH:MM`
-- Dopasowuje tickety po slowach kluczowych
-- Wykrywa kategorie (meeting/dev/research)
+- Recognizes `HH:MM-HH:MM` patterns
+- Matches tickets by keywords
+- Detects categories (meeting / dev / research)
 
 ---
 
 ## AI Pipeline
 
-Kazde wywolanie AI probuje providerow w kolejnosci:
+Each AI invocation attempts providers in the following order:
 
 ```
-1. Gemini API (GEMINI_API_KEY) — natywne Google AI, darmowy tier
-   ↓ jesli blad
+1. Gemini API (GEMINI_API_KEY) — native Google AI, free tier
+   ↓ on error
 2. OpenRouter (OPENROUTER_API_KEY) — Claude, GPT-4, Llama, etc.
-   ↓ jesli blad
-3. Regex / keyword fallback — bez AI
+   ↓ on error
+3. Regex / keyword fallback — no AI required
 ```
 
-### Dostepne modele Gemini
+### Available Gemini Models
 
-| Model              | Cena            | Szybkosc | Jakosc            |
-| ------------------ | --------------- | -------- | ----------------- |
-| `gemini-2.5-flash` | Darmowy         | Szybki   | Wysoka (domyslny) |
-| `gemini-2.5-pro`   | $1.25/1k tokens | Sredni   | Najwyzsza         |
-| `gemini-2.0-flash` | Darmowy         | Szybki   | Wysoka            |
+| Model              | Price           | Speed  | Quality              |
+| ------------------ | --------------- | ------ | -------------------- |
+| `gemini-2.5-flash` | Free            | Fast   | High (default)       |
+| `gemini-2.5-pro`   | $1.25/1k tokens | Medium | Highest              |
+| `gemini-2.0-flash` | Free            | Fast   | High                 |
 
-Zmiana modelu: Settings > AI/LLM > Model Gemini
+To change the model: Settings > AI/LLM > Gemini Model
 
 ---
 
 ## Readiness Criteria
 
-Automatyczne parsowanie oceny "Readiness Criteria" z komentarzy Jira (dodawane przez Automation for Jira):
+Automatic parsing of "Readiness Criteria" scores from Jira comments (added via Automation for Jira):
 
-- **4 kolorowe kropki** w tabeli zadan (Completeness, Clarity, Auditability, Estimated)
-- **Pelna karta** w rozwinietym wierszu z sugestiami
-- **Stat card** — ile zadan ma pelne RC (4/4 zielone)
+- **4 colored dots** in the issues table (Completeness, Clarity, Auditability, Estimated)
+- **Full detail card** in the expanded row with improvement suggestions
+- **Stat card** — showing how many issues have full RC (4/4 green)
 
-Format rozpoznawany w komentarzach:
+Recognized format in comments:
 
 ```
 Completeness 🟢
@@ -286,78 +286,78 @@ Estimated 🟢
 
 ---
 
-## KAGANIEC
+## Issue Type Guard
 
-Automatyczna blokada logowania czasu do nieodpowiednich typow zadan:
+Automatic blocking of time logging to inappropriate issue types:
 
-- **Story** — zablokowane (loguj do subtaskow)
-- **Epic** — zablokowane
-- **Task z subtaskami** — zablokowane (loguj do subtaska)
+- **Story** — blocked (log to subtasks instead)
+- **Epic** — blocked
+- **Task with subtasks** — blocked (log to a subtask instead)
 
-Przy probie zalogowania do zablokowanego ticketa: komunikat bledu z lista dostepnych subtaskow.
+When attempting to log time to a blocked ticket, an error message is displayed along with a list of available subtasks.
 
 ---
 
-## Strony aplikacji
+## Pages
 
-| Strona       | URL               | Opis                                                   |
-| ------------ | ----------------- | ------------------------------------------------------ |
-| Dashboard    | `/`               | Podsumowanie dnia: godziny, aktywnosci, worklogi       |
-| Timesheet    | `/timesheet`      | Tygodniowy timesheet z ActivityWatch + Tempo           |
-| Moje Zadania | `/my-issues`      | Lista Jira + Daily Logger + Readiness Criteria         |
-| Kalendarz    | `/calendar`       | Tygodniowy widok: worklogi + Google Calendar + sprinty |
-| Analityka    | `/analytics`      | Wykresy: czas per projekt, trendy, kategorie           |
-| Porownanie   | `/compare`        | ActivityWatch vs Tempo (ile brakuje do zalogowania)    |
-| Taski        | `/tasks`          | Szybkie zarzadzanie taskami z historii                 |
-| Polaczenia   | `/connections`    | Status API: Jira, Tempo, ActivityWatch, AI             |
-| Ustawienia   | `/settings`       | Tokeny, modele AI, cele czasowe, mapowania             |
-| Reguly       | `/settings/rules` | Rules Engine — reguly dopasowywania bez AI             |
+| Page        | URL               | Description                                                |
+| ----------- | ----------------- | ---------------------------------------------------------- |
+| Dashboard   | `/`               | Daily summary: hours, activities, worklogs                 |
+| Timesheet   | `/timesheet`      | Weekly timesheet with ActivityWatch + Tempo                |
+| My Issues   | `/my-issues`      | Jira issues + Daily Logger + Readiness Criteria            |
+| Calendar    | `/calendar`       | Weekly view: worklogs + Google Calendar + sprints          |
+| Analytics   | `/analytics`      | Charts: time per project, trends, categories               |
+| Compare     | `/compare`        | ActivityWatch vs. Tempo (unlogged time delta)              |
+| Tasks       | `/tasks`          | Quick task management from history                         |
+| Connections | `/connections`    | API status: Jira, Tempo, ActivityWatch, AI                 |
+| Settings    | `/settings`       | Tokens, AI models, time goals, mappings                    |
+| Rules       | `/settings/rules` | Rules Engine — rule-based matching without AI              |
 
 ---
 
 ## API Endpoints
 
-| Endpoint                       | Metoda       | Opis                              |
-| ------------------------------ | ------------ | --------------------------------- |
-| `/api/jira/my-issues`          | GET          | Pobierz przypisane zadania z Jira |
-| `/api/jira/issues`             | GET          | Wyszukaj zadania                  |
-| `/api/jira/projects`           | GET          | Lista projektow Jira              |
-| `/api/tempo/worklogs`          | GET/POST     | Pobierz/utworz worklogi           |
-| `/api/tempo/worklogs/[id]`     | PUT/DELETE   | Edytuj/usun worklog               |
-| `/api/tempo/worklogs-by-issue` | GET          | Worklogi pogrupowane per issue    |
-| `/api/tempo/check-overlap`     | POST         | Sprawdz overlap worklogow         |
-| `/api/tempo/attributes`        | GET          | Atrybuty Tempo (action types)     |
-| `/api/llm/parse-daily`         | POST         | AI parsowanie notatek dnia        |
-| `/api/llm/suggest`             | POST         | AI sugestia ticketa               |
-| `/api/llm/suggest-worklog`     | POST         | AI sugestia workloga              |
-| `/api/activities`              | GET          | Aktywnosci z ActivityWatch        |
-| `/api/activities/merged`       | GET          | AW + Slack (skorelowane)          |
-| `/api/slack/activities`        | GET          | Aktywnosci ze Slack API           |
-| `/api/dashboard`               | GET          | Dane dashboardu                   |
-| `/api/analytics`               | GET          | Dane analityczne                  |
-| `/api/status`                  | GET          | Status polaczen API               |
-| `/api/settings`                | GET/PUT/POST | Konfiguracja + testy polaczen     |
+| Endpoint                       | Method       | Description                          |
+| ------------------------------ | ------------ | ------------------------------------ |
+| `/api/jira/my-issues`          | GET          | Retrieve assigned Jira issues        |
+| `/api/jira/issues`             | GET          | Search for issues                    |
+| `/api/jira/projects`           | GET          | List Jira projects                   |
+| `/api/tempo/worklogs`          | GET/POST     | Retrieve or create worklogs          |
+| `/api/tempo/worklogs/[id]`     | PUT/DELETE   | Update or delete a worklog           |
+| `/api/tempo/worklogs-by-issue` | GET          | Worklogs grouped by issue            |
+| `/api/tempo/check-overlap`     | POST         | Check for worklog overlaps           |
+| `/api/tempo/attributes`        | GET          | Tempo attributes (action types)      |
+| `/api/llm/parse-daily`         | POST         | AI parsing of daily notes            |
+| `/api/llm/suggest`             | POST         | AI ticket suggestion                 |
+| `/api/llm/suggest-worklog`     | POST         | AI worklog suggestion                |
+| `/api/activities`              | GET          | Activities from ActivityWatch        |
+| `/api/activities/merged`       | GET          | AW + Slack (correlated)              |
+| `/api/slack/activities`        | GET          | Activities from Slack API            |
+| `/api/dashboard`               | GET          | Dashboard data                       |
+| `/api/analytics`               | GET          | Analytics data                       |
+| `/api/status`                  | GET          | API connection status                |
+| `/api/settings`                | GET/PUT/POST | Configuration + connection tests     |
 
 ---
 
-## Komendy
+## Commands
 
 ```bash
 # Development
-pnpm dev              # Uruchom dev server (port 5666)
-pnpm build            # Build produkcyjny
-pnpm start            # Uruchom produkcyjnie
+pnpm dev              # Start dev server (port 5666)
+pnpm build            # Production build
+pnpm start            # Start in production mode
 
 # Quality
-pnpm lint             # Sprawdz ESLint
-pnpm lint:fix         # Napraw automatycznie
-pnpm format           # Formatuj Prettier
-pnpm type-check       # Sprawdz typy TypeScript
-pnpm test             # Uruchom testy Vitest
-pnpm test:coverage    # Testy z pokryciem
+pnpm lint             # Run ESLint checks
+pnpm lint:fix         # Auto-fix lint issues
+pnpm format           # Format with Prettier
+pnpm type-check       # Run TypeScript type checking
+pnpm test             # Run Vitest tests
+pnpm test:coverage    # Run tests with coverage report
 
 # Maintenance
-pnpm clean            # Wyczysc build artifacts i node_modules
+pnpm clean            # Clean build artifacts and node_modules
 
 # Windows
 pnpm build:electron   # Build Electron app
@@ -365,15 +365,15 @@ pnpm build:electron   # Build Electron app
 
 ---
 
-## Instalacja per system
+## Platform-Specific Installation
 
 <details>
-<summary><strong>Windows (instalator EXE)</strong></summary>
+<summary><strong>Windows (EXE Installer)</strong></summary>
 
-1. Zainstaluj [ActivityWatch](https://github.com/ActivityWatch/activitywatch/releases)
-2. Pobierz [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest)
-3. Uruchom instalator — Node.js jest wbudowany
-4. Kliknij "AI TimeTracker" w menu Start
+1. Install [ActivityWatch](https://github.com/ActivityWatch/activitywatch/releases)
+2. Download [TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest)
+3. Run the installer — Node.js is bundled
+4. Launch "AI TimeTracker" from the Start menu
 
 </details>
 
@@ -388,11 +388,11 @@ brew install --cask activitywatch
 git clone https://github.com/shopconnector/ai-timetracker.git
 cd ai-timetracker
 cp .env.example apps/web/.env.local
-# Uzupelnij tokeny
+# Fill in API tokens
 pnpm install && pnpm dev
 ```
 
-**Uprawnienia:** System Settings > Privacy > Accessibility — dodaj ActivityWatch.
+**Permissions:** System Settings > Privacy > Accessibility — add ActivityWatch.
 
 </details>
 
@@ -408,7 +408,7 @@ sudo snap install activitywatch
 git clone https://github.com/shopconnector/ai-timetracker.git
 cd ai-timetracker
 cp .env.example apps/web/.env.local
-# Uzupelnij tokeny
+# Fill in API tokens
 pnpm install && pnpm dev
 ```
 
@@ -421,7 +421,7 @@ pnpm install && pnpm dev
 git clone https://github.com/shopconnector/ai-timetracker.git
 cd ai-timetracker
 cp .env.example apps/web/.env.local
-# Uzupelnij tokeny
+# Fill in API tokens
 docker build -t timetracker .
 docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
 ```
@@ -430,9 +430,9 @@ docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
 
 ---
 
-## Adresy
+## Addresses
 
-| Usluga        | URL                               |
+| Service       | URL                               |
 | ------------- | --------------------------------- |
 | TimeTracker   | http://localhost:5666/timetracker |
 | ActivityWatch | http://localhost:5600             |
@@ -441,20 +441,22 @@ docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
 
 ## Troubleshooting
 
-| Problem                    | Rozwiazanie                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| AI nie sugeruje ticketow   | Sprawdz `GEMINI_API_KEY` w `.env.local`. Bez klucza dziala regex fallback.     |
-| ActivityWatch brak danych  | macOS: System Settings > Privacy > Accessibility. Windows: uruchom jako admin. |
-| Port 5666 zajety           | `lsof -i :5666` (mac/linux) lub `netstat -ano \| findstr :5666` (windows)      |
-| KAGANIEC blokuje logowanie | Loguj do subtaskow zamiast do Story/Epic.                                      |
-| Gemini quota exceeded      | Darmowy tier ma limit. Zmien model na `gemini-2.5-pro` lub uzyj OpenRouter.    |
-| Build sie nie buduje       | `pnpm clean && pnpm install && pnpm build`                                     |
+| Problem                              | Solution                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| AI does not suggest tickets          | Verify `GEMINI_API_KEY` in `.env.local`. Without a key, regex fallback is used.     |
+| ActivityWatch shows no data          | macOS: System Settings > Privacy > Accessibility. Windows: run as administrator.    |
+| Port 5666 is in use                  | `lsof -i :5666` (macOS/Linux) or `netstat -ano \| findstr :5666` (Windows)          |
+| Issue Type Guard blocks logging      | Log time to subtasks instead of Stories/Epics.                                      |
+| Gemini quota exceeded                | Free tier has rate limits. Switch to `gemini-2.5-pro` or use OpenRouter.            |
+| Build fails                          | `pnpm clean && pnpm install && pnpm build`                                          |
 
 ---
 
-## Licencja
+## License
 
-MIT
+BSL 1.1 (Business Source License) — see [LICENSE](LICENSE) for details.
+
+The source code will convert to the MIT license after 4 years from each release date.
 
 ---
 

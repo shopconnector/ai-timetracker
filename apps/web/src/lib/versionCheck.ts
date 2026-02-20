@@ -31,6 +31,14 @@ export interface VersionInfo {
 let cachedRelease: { data: GitHubRelease; fetchedAt: number } | null = null;
 
 /**
+ * Clear the cached release data so the next check fetches fresh info.
+ * Call after selfupdate completes to ensure new version is shown.
+ */
+export function clearVersionCache(): void {
+  cachedRelease = null;
+}
+
+/**
  * Compare two semver strings. Returns:
  *  -1 if v1 < v2, 0 if equal, 1 if v1 > v2
  */

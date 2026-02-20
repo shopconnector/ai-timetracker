@@ -30,6 +30,8 @@ interface WeekData {
 interface Ticket {
   key: string;
   name: string;
+  id?: string;
+  project?: string;
 }
 
 function getWeekDates(date: Date): { start: string; end: string } {

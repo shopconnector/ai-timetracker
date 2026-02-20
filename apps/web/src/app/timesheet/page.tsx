@@ -189,10 +189,11 @@ export default function TimesheetPage() {
       const ticketsRes = await fetch(apiUrl(`/api/jira/my-issues?${filterParam}`));
       if (ticketsRes.ok) {
         const ticketsData = await ticketsRes.json();
-        const jiraTickets: Ticket[] = ticketsData.issues?.map((i: { key: string; name: string; id?: string }) => ({
+        const jiraTickets: Ticket[] = ticketsData.issues?.map((i: { key: string; name: string; id?: string; project?: string }) => ({
           key: i.key,
           name: i.name,
-          id: i.id  // issueId for Tempo API v4
+          id: i.id,  // issueId for Tempo API v4
+          project: i.project || i.key.replace(/-\d+$/, ''),
         })) || [];
 
         // Merge with recent tasks from history
@@ -240,9 +241,11 @@ export default function TimesheetPage() {
       const res = await fetch(apiUrl(`/api/jira/my-issues?query=${encodeURIComponent(query)}`));
       if (res.ok) {
         const data = await res.json();
-        const searchResults: Ticket[] = data.issues?.map((i: { key: string; name: string }) => ({
+        const searchResults: Ticket[] = data.issues?.map((i: { key: string; name: string; id?: string; project?: string }) => ({
           key: i.key,
-          name: i.name
+          name: i.name,
+          id: i.id,
+          project: i.project || i.key.replace(/-\d+$/, ''),
         })) || [];
         // Add search results to existing tickets (at the top)
         setTickets(prev => {
@@ -265,9 +268,11 @@ export default function TimesheetPage() {
       const res = await fetch(apiUrl('/api/jira/my-issues?loadAll=true&limit=300'));
       if (res.ok) {
         const data = await res.json();
-        const allTickets: Ticket[] = data.issues?.map((i: { key: string; name: string }) => ({
+        const allTickets: Ticket[] = data.issues?.map((i: { key: string; name: string; id?: string; project?: string }) => ({
           key: i.key,
-          name: i.name
+          name: i.name,
+          id: i.id,
+          project: i.project || i.key.replace(/-\d+$/, ''),
         })) || [];
 
         // Merge with recent tasks from history

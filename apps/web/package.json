@@ -2,6 +2,7 @@
   "name": "@timetracker/web",
   "version": "0.7.0",
   "private": true,
+  "license": "BUSL-1.1",
   "scripts": {
     "dev": "next dev -p 5666",
     "build": "next build",

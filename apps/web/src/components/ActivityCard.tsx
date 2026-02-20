@@ -113,6 +113,7 @@ export interface Ticket {
   key: string;
   name: string;
   id?: string;  // Jira issue ID (numeric) - required for Tempo API v4
+  project?: string; // Jira project key, e.g. "BCI", "AGRO2"
 }
 
 interface ActivityCardProps {

@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
+
+/**
+ * Detect the correct .env.local path.
+ * On Windows standalone bundles, start-server.js reads from data/.env.local,
+ * so we must write there too if that path exists.
+ */
+function getEnvFilePath(): string {
+  const cwd = process.cwd();
+  const dataEnvPath = join(cwd, 'data', '.env.local');
+  if (existsSync(dataEnvPath)) {
+    return dataEnvPath;
+  }
+  return join(cwd, '.env.local');
+}
 
 // GET /api/settings - Get settings from environment variables
 export async function GET() {
@@ -249,7 +263,7 @@ const ENV_SECTIONS: Record<string, string> = {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const envPath = join(process.cwd(), '.env.local');
+    const envPath = getEnvFilePath();
 
     // Read current .env.local
     let envContent = '';

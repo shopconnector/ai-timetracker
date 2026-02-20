@@ -38,7 +38,9 @@ import {
   FileText,
   BarChart3,
   ExternalLink,
-  PackageCheck
+  PackageCheck,
+  HelpCircle,
+  ChevronDown
 } from 'lucide-react';
 import {
   getProjectMappings,
@@ -102,6 +104,24 @@ interface JiraIssue {
   key: string;
   name: string;
   project: string;
+}
+
+function HelpGuide({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2">
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 transition-colors">
+        <HelpCircle className="h-3.5 w-3.5" />
+        <span>{title}</span>
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 rounded-lg text-xs text-gray-700 dark:text-gray-300 space-y-1.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -1592,6 +1612,13 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
+              <HelpGuide title="Jak uzyskac token Tempo?">
+                <p>1. Otworz <strong>tempo.io</strong> i zaloguj sie kontem Atlassian</p>
+                <p>2. Kliknij swoj avatar (prawy gorny rog) → <strong>&quot;Settings&quot;</strong></p>
+                <p>3. W menu bocznym wybierz <strong>&quot;API Integration&quot;</strong></p>
+                <p>4. Kliknij <strong>&quot;New Token&quot;</strong>, nadaj nazwe (np. &quot;TimeTracker&quot;) i skopiuj token</p>
+                <p>5. <strong>Account ID</strong> znajdziesz: wejdz w Jira → kliknij swoj avatar → &quot;Profile&quot; → w URL zobaczysz swoje Account ID (format: 712020:xxxxxxxx-...)</p>
+              </HelpGuide>
             </div>
 
             {/* Jira Configuration */}
@@ -1631,6 +1658,16 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-400 dark:text-gray-500">
                 Utwórz token: id.atlassian.com/manage/api-tokens
               </p>
+              <HelpGuide title="Jak uzyskac dane do Jira?">
+                <p>1. <strong>Base URL</strong>: to adres Twojej firmy w Jira, np. https://nazwafirmy.atlassian.net</p>
+                <p>2. <strong>Email</strong>: wpisz ten sam email, ktorym logujesz sie do Jira</p>
+                <p>3. <strong>API Token</strong>:</p>
+                <p className="pl-3">a) Otworz <strong>id.atlassian.com/manage/api-tokens</strong></p>
+                <p className="pl-3">b) Zaloguj sie kontem Atlassian</p>
+                <p className="pl-3">c) Kliknij <strong>&quot;Create API token&quot;</strong></p>
+                <p className="pl-3">d) Nadaj nazwe (np. &quot;TimeTracker&quot;) i kliknij &quot;Create&quot;</p>
+                <p className="pl-3">e) Skopiuj token (pokaze sie tylko raz!)</p>
+              </HelpGuide>
             </div>
 
             {/* ActivityWatch Configuration */}
@@ -1650,6 +1687,12 @@ export default function SettingsPage() {
                   Domyślnie: http://localhost:5600 (ActivityWatch musi być uruchomiony)
                 </p>
               </div>
+              <HelpGuide title="Jak skonfigurowac ActivityWatch?">
+                <p>1. ActivityWatch jest juz zainstalowany razem z TimeTrackerem</p>
+                <p>2. Powinien uruchamiac sie automatycznie (ikona w zasobniku systemowym)</p>
+                <p>3. Domyslny adres to <strong>http://localhost:5600</strong> — zazwyczaj nie trzeba zmieniac</p>
+                <p>4. Jesli ActivityWatch nie dziala: znajdz &quot;ActivityWatch&quot; w menu Start i uruchom</p>
+              </HelpGuide>
             </div>
 
             {/* Slack Configuration */}
@@ -1695,6 +1738,16 @@ export default function SettingsPage() {
                   Znajdziesz w: Slack Profile &rarr; More &rarr; Copy member ID
                 </p>
               </div>
+              <HelpGuide title="Jak skonfigurowac Slacka? (opcjonalne — dla powiadomien)">
+                <p>1. Wejdz na <strong>api.slack.com/apps</strong> i kliknij &quot;Create New App&quot;</p>
+                <p>2. Wybierz &quot;From scratch&quot;, podaj nazwe (np. &quot;TimeTracker&quot;) i wybierz workspace</p>
+                <p>3. W menu bocznym kliknij <strong>&quot;OAuth &amp; Permissions&quot;</strong></p>
+                <p>4. W sekcji <strong>&quot;User Token Scopes&quot;</strong> dodaj: channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read</p>
+                <p>5. W sekcji <strong>&quot;Bot Token Scopes&quot;</strong> dodaj: chat:write, im:write, users:read</p>
+                <p>6. Kliknij <strong>&quot;Install to Workspace&quot;</strong> na gorze strony</p>
+                <p>7. Skopiuj &quot;User OAuth Token&quot; (xoxp-...) i &quot;Bot User OAuth Token&quot; (xoxb-...)</p>
+                <p>8. <strong>Slack User ID</strong>: otworz Slack → kliknij swoj avatar → &quot;Profile&quot; → &quot;&#8943;&quot; (More) → &quot;Copy member ID&quot;</p>
+              </HelpGuide>
             </div>
 
             {/* AI Provider Configuration */}
@@ -1723,91 +1776,109 @@ export default function SettingsPage() {
 
               {/* Gemini Configuration */}
               {apiConfig.aiProvider === 'gemini' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Gemini API Key</label>
-                    <Input
-                      type="password"
-                      placeholder="Gemini API Key"
-                      value={apiConfig.geminiApiKey}
-                      onChange={e => setApiConfig({ ...apiConfig, geminiApiKey: e.target.value })}
-                    />
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      Pobierz z: aistudio.google.com/apikey
-                    </p>
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Gemini API Key</label>
+                      <Input
+                        type="password"
+                        placeholder="Gemini API Key"
+                        value={apiConfig.geminiApiKey}
+                        onChange={e => setApiConfig({ ...apiConfig, geminiApiKey: e.target.value })}
+                      />
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Pobierz z: aistudio.google.com/apikey
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model Gemini</label>
+                      <Select
+                        value={apiConfig.llmModel}
+                        onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gemini-2.5-flash">
+                            Gemini 2.5 Flash (darmowy, szybki)
+                          </SelectItem>
+                          <SelectItem value="gemini-2.5-pro">
+                            Gemini 2.5 Pro ($1.25/1k, najlepsza jakosc)
+                          </SelectItem>
+                          <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash (darmowy)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model Gemini</label>
-                    <Select
-                      value={apiConfig.llmModel}
-                      onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Wybierz model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="gemini-2.5-flash">
-                          Gemini 2.5 Flash (darmowy, szybki)
-                        </SelectItem>
-                        <SelectItem value="gemini-2.5-pro">
-                          Gemini 2.5 Pro ($1.25/1k, najlepsza jakosc)
-                        </SelectItem>
-                        <SelectItem value="gemini-2.0-flash">Gemini 2.0 Flash (darmowy)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                  <HelpGuide title="Jak uzyskac klucz Gemini? (darmowe)">
+                    <p>1. Otworz <strong>aistudio.google.com/apikey</strong></p>
+                    <p>2. Zaloguj sie kontem Google</p>
+                    <p>3. Kliknij <strong>&quot;Create API Key&quot;</strong></p>
+                    <p>4. Wybierz projekt Google Cloud (lub utworz nowy)</p>
+                    <p>5. Skopiuj wygenerowany klucz</p>
+                    <p className="text-blue-600 dark:text-blue-400">Tip: Model &quot;Gemini 2.5 Flash&quot; jest darmowy i wystarczajacy</p>
+                  </HelpGuide>
+                </>
               )}
 
               {/* OpenRouter Configuration */}
               {apiConfig.aiProvider === 'openrouter' && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">OpenRouter API Key</label>
-                    <Input
-                      type="password"
-                      placeholder="OpenRouter API Key"
-                      value={apiConfig.openRouterApiKey}
-                      onChange={e => setApiConfig({ ...apiConfig, openRouterApiKey: e.target.value })}
-                    />
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Pobierz z: openrouter.ai/keys</p>
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">OpenRouter API Key</label>
+                      <Input
+                        type="password"
+                        placeholder="OpenRouter API Key"
+                        value={apiConfig.openRouterApiKey}
+                        onChange={e => setApiConfig({ ...apiConfig, openRouterApiKey: e.target.value })}
+                      />
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Pobierz z: openrouter.ai/keys</p>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model LLM</label>
+                      <Select
+                        value={apiConfig.llmModel}
+                        onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="anthropic/claude-3.5-haiku">
+                            Claude 3.5 Haiku (szybki, $0.25/1k)
+                          </SelectItem>
+                          <SelectItem value="anthropic/claude-3.5-sonnet">
+                            Claude 3.5 Sonnet (premium, $3/1k)
+                          </SelectItem>
+                          <SelectItem value="openai/gpt-4o-mini">
+                            GPT-4o Mini (tani, $0.15/1k)
+                          </SelectItem>
+                          <SelectItem value="openai/gpt-4o">GPT-4o (premium, $5/1k)</SelectItem>
+                          <SelectItem value="google/gemini-flash-1.5">
+                            Gemini Flash 1.5 ($0.075/1k)
+                          </SelectItem>
+                          <SelectItem value="meta-llama/llama-3.1-70b-instruct">
+                            Llama 3.1 70B ($0.59/1k)
+                          </SelectItem>
+                          <SelectItem value="qwen/qwen-2.5-72b-instruct">
+                            Qwen 2.5 72B ($0.35/1k)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        Automatyczny fallback do innych modeli jeśli wybrany zawiedzie
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Model LLM</label>
-                    <Select
-                      value={apiConfig.llmModel}
-                      onValueChange={value => setApiConfig({ ...apiConfig, llmModel: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Wybierz model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="anthropic/claude-3.5-haiku">
-                          Claude 3.5 Haiku (szybki, $0.25/1k)
-                        </SelectItem>
-                        <SelectItem value="anthropic/claude-3.5-sonnet">
-                          Claude 3.5 Sonnet (premium, $3/1k)
-                        </SelectItem>
-                        <SelectItem value="openai/gpt-4o-mini">
-                          GPT-4o Mini (tani, $0.15/1k)
-                        </SelectItem>
-                        <SelectItem value="openai/gpt-4o">GPT-4o (premium, $5/1k)</SelectItem>
-                        <SelectItem value="google/gemini-flash-1.5">
-                          Gemini Flash 1.5 ($0.075/1k)
-                        </SelectItem>
-                        <SelectItem value="meta-llama/llama-3.1-70b-instruct">
-                          Llama 3.1 70B ($0.59/1k)
-                        </SelectItem>
-                        <SelectItem value="qwen/qwen-2.5-72b-instruct">
-                          Qwen 2.5 72B ($0.35/1k)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      Automatyczny fallback do innych modeli jeśli wybrany zawiedzie
-                    </p>
-                  </div>
-                </div>
+                  <HelpGuide title="Jak uzyskac klucz OpenRouter?">
+                    <p>1. Otworz <strong>openrouter.ai</strong> i zaloz konto</p>
+                    <p>2. Przejdz do <strong>openrouter.ai/keys</strong></p>
+                    <p>3. Kliknij <strong>&quot;Create Key&quot;</strong> i skopiuj</p>
+                    <p>4. Doladuj konto (od $5) — modele sa platne za uzycie</p>
+                  </HelpGuide>
+                </>
               )}
             </div>
           </CardContent>

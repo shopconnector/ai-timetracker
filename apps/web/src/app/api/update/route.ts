@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchLatestRelease, getDownloadUrl, getPlatform } from '@/lib/versionCheck';
+import { fetchLatestRelease, getDownloadUrl, getPlatform, clearVersionCache } from '@/lib/versionCheck';
 import { createWriteStream, existsSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
@@ -152,12 +152,28 @@ async function downloadFile(url: string, destPath: string) {
   };
 }
 
+function getExtendedPath(): string {
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const paths = [
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    '/usr/bin',
+    '/bin',
+    `${home}/.local/share/pnpm`,
+    `${home}/.nvm/versions/node/${process.version}/bin`,
+    process.env.PATH || '',
+  ];
+  return paths.join(sep);
+}
+
 async function handleSelfUpdate() {
   if (selfUpdateState.status === 'running') {
     return NextResponse.json(selfUpdateState);
   }
 
   const projectDir = resolve(process.cwd());
+  const extendedEnv = { ...process.env, PATH: getExtendedPath() };
 
   const steps = [
     { name: 'git pull', cmd: 'git pull origin main' },
@@ -185,6 +201,7 @@ async function handleSelfUpdate() {
           encoding: 'utf-8',
           timeout: 300000, // 5 min per step
           stdio: ['pipe', 'pipe', 'pipe'],
+          env: extendedEnv,
         });
         selfUpdateState.steps[i].status = 'done';
         selfUpdateState.steps[i].output = output.slice(-500);
@@ -198,6 +215,9 @@ async function handleSelfUpdate() {
       }
     }
 
+    // Clear version cache so the new version is picked up immediately
+    clearVersionCache();
+
     selfUpdateState.status = 'done';
     selfUpdateState.step = 'pm2 restart';
 
@@ -206,6 +226,7 @@ async function handleSelfUpdate() {
       cwd: projectDir,
       detached: true,
       stdio: 'ignore',
+      env: extendedEnv,
     });
     child.unref();
   })();
