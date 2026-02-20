@@ -241,35 +241,40 @@ SLACK_USER_TOKEN=xoxp-...
 
 ## AI Daily Logger
 
-The primary productivity feature — instead of manually logging each worklog individually:
+Log an entire workday to Tempo in under a minute — no manual entry required.
 
-1. **Paste raw notes** from your workday:
+Instead of creating worklogs one by one, simply paste your rough notes from the day. The AI does the rest.
 
-   ```
-   09:30-10:30 research Mike n8n workflow
-   11:00-11:30 call Natalia claude setup
-   11:30-12:30 call z Piotkiem headlamp k8s
-   13:00-14:00 dofinansowanie unijne
-   14:00-15:00 Mike prompty linkedin
-   ```
+### How it works
 
-2. **AI parses** the input into a structured table:
-   - Time (editable)
-   - Description (editable)
-   - Jira ticket (dropdown from all assigned issues)
-   - Category (meeting / dev / research / comm / infra)
-   - Duration (editable)
+**1. Paste your raw notes** — any format, any language:
 
-3. **Edit** as needed — change tickets, adjust times
+```
+09:30-10:30 research n8n workflow automation with Mike
+11:00-11:30 call with Natalia — Claude AI setup
+11:30-12:30 sync with Peter — Headlamp K8s dashboard
+13:00-14:00 EU grant proposal review
+14:00-15:00 LinkedIn content strategy session
+```
 
-4. **Log with a single click** — all selected entries are sent to Tempo
+**2. AI generates a structured timesheet:**
 
-### Fallback Without AI
+| Time          | Description                      | Jira Ticket | Category | Duration |
+| ------------- | -------------------------------- | ----------- | -------- | -------- |
+| 09:30 – 10:30 | n8n workflow automation research | BCI-235     | research | 1h       |
+| 11:00 – 11:30 | Claude AI onboarding call        | BCI-326     | meeting  | 30m      |
+| ...           | ...                              | ...         | ...      | ...      |
 
-Without a Gemini/OpenRouter key, the **regex parser** is used:
+Every field is editable — change tickets, adjust times, fix descriptions.
 
-- Recognizes `HH:MM-HH:MM` patterns
-- Matches tickets by keywords
+**3. One click to log** — all selected entries are sent to Tempo as worklogs.
+
+### Without AI
+
+If no Gemini/OpenRouter key is configured, a built-in regex parser handles the basics:
+
+- Parses `HH:MM-HH:MM` time ranges
+- Matches tickets by keyword similarity
 - Detects categories (meeting / dev / research)
 
 ---
