@@ -47,8 +47,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "polish"; MessagesFile: "compiler:Languages\Polish.isl"
 
 [Messages]
-english.WelcomeLabel2=This will install [name/ver] on your computer.%n%nAI TimeTracker helps you automatically track your work time using ActivityWatch and log it to Tempo/Jira.%n%nActivityWatch is included and will be installed automatically.%n%nRequirements:%n• Jira/Tempo API tokens%n%nNote: Windows Defender may show a warning because this installer is not code-signed. Click "More info" then "Run anyway" to proceed.
-polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI TimeTracker pomaga automatycznie śledzić czas pracy używając ActivityWatch i logować go do Tempo/Jira.%n%nActivityWatch jest dołączony i zostanie zainstalowany automatycznie.%n%nWymagania:%n• Tokeny API Jira/Tempo%n%nUwaga: Windows Defender moze pokazac ostrzezenie, poniewaz instalator nie jest podpisany cyfrowo. Kliknij "Wiecej informacji", a nastepnie "Uruchom mimo to".
+english.WelcomeLabel2=This will install [name/ver] on your computer.%n%nAI TimeTracker helps you automatically track your work time using ActivityWatch and log it to Tempo/Jira.%n%nActivityWatch is included and will be installed automatically.%n%nRequirements:%n• Jira/Tempo API tokens
+polish.WelcomeLabel2=Kreator zainstaluje [name/ver] na Twoim komputerze.%n%nAI TimeTracker pomaga automatycznie śledzić czas pracy używając ActivityWatch i logować go do Tempo/Jira.%n%nActivityWatch jest dołączony i zostanie zainstalowany automatycznie.%n%nWymagania:%n• Tokeny API Jira/Tempo
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

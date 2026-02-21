@@ -544,6 +544,64 @@ jobs:
           Move-Item "installer\output\*.exe" "dist\"
           Write-Host "Installer created"
 
+      # ──────────────────────────────────────────────────────────────
+      # Code Signing (Azure Trusted Signing / Artifact Signing)
+      # Signs the .exe installer to eliminate Windows SmartScreen warnings.
+      # Skipped when secrets are not configured — build still works unsigned.
+      #
+      # Required GitHub Secrets:
+      #   AZURE_TENANT_ID          - Azure AD tenant ID
+      #   AZURE_CLIENT_ID          - App Registration client ID
+      #   AZURE_CLIENT_SECRET      - App Registration client secret
+      #   AZURE_SIGNING_ENDPOINT   - e.g. https://eus.codesigning.azure.net
+      #   AZURE_SIGNING_ACCOUNT    - Trusted Signing account name
+      #   AZURE_CERT_PROFILE       - Certificate profile name
+      # ──────────────────────────────────────────────────────────────
+      - name: Sign installer with Azure Trusted Signing
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        uses: azure/trusted-signing-action@v0.5.0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: ${{ github.workspace }}/dist
+          files-folder-filter: exe
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify code signature
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        shell: pwsh
+        run: |
+          Write-Host "Verifying code signatures..."
+          $AllSigned = $true
+          Get-ChildItem "dist" -Filter "*.exe" | ForEach-Object {
+            $Sig = Get-AuthenticodeSignature $_.FullName
+            if ($Sig.Status -eq "Valid") {
+              Write-Host "  ✓ $($_.Name): Signed by $($Sig.SignerCertificate.Subject)" -ForegroundColor Green
+            } else {
+              Write-Host "  ✗ $($_.Name): $($Sig.Status)" -ForegroundColor Red
+              $AllSigned = $false
+            }
+          }
+          if (-not $AllSigned) {
+            Write-Error "Some files are not properly signed!"
+            exit 1
+          }
+          Write-Host "All executables signed successfully" -ForegroundColor Green
+
+      - name: Signing status
+        if: ${{ secrets.AZURE_TENANT_ID == '' }}
+        shell: pwsh
+        run: |
+          Write-Host "⚠ Code signing SKIPPED — Azure Trusted Signing secrets not configured" -ForegroundColor Yellow
+          Write-Host "  See docs/SIGNING_SETUP.md for setup instructions" -ForegroundColor Yellow
+
       - name: List artifacts
         shell: pwsh
         run: |
@@ -650,6 +708,14 @@ jobs:
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
 
           # Create release with installer (versioned + stable name)
+          # Detect if installer was signed
+          SIGNED=""
+          if [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
+            SIGNED="✅ **Digitally signed** — verified publisher: ShopConnector"
+          else
+            SIGNED="⚠️ This build is not code-signed. Windows SmartScreen may show a warning — click \"More info\" → \"Run anyway\"."
+          fi
+
           gh release create "$TAG" \
             dist/TimeTracker-Setup-${VERSION}-x64.exe \
             dist/TimeTracker-Setup-x64.exe \
@@ -659,6 +725,8 @@ jobs:
           ## Download
 
           **[TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest/download/TimeTracker-Setup-x64.exe)** — always the latest version
+
+          ${SIGNED}
 
           ## Installation
           1. Download \`TimeTracker-Setup-x64.exe\`
