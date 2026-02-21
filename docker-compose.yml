@@ -1,11 +1,35 @@
 services:
-  web:
-    build: .
-    ports:
-      - "5666:5666"
-    env_file:
-      - apps/web/.env.local
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  ai-timetracker-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-timetracker-app
+    hostname: app.ai-timetracker.docker
+    restart: unless-stopped
     environment:
-      - ACTIVITYWATCH_URL=http://host.docker.internal:5600
+      - NODE_ENV=production
+      - PORT=3021
+      - HOSTNAME=0.0.0.0
+    expose:
+      - "3021"
+    networks:
+      - ai-timetracker-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3021/timetracker"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+
+networks:
+  ai-timetracker-network:
+    name: ai-timetracker-network
+    driver: bridge
