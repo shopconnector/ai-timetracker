@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,12 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Sparkles,
   Loader2,
@@ -26,6 +29,8 @@ import {
   Wand2,
   History,
   Bell,
+  ChevronsUpDown,
+  Check,
 } from 'lucide-react';
 import { getLoggingRules } from '@/lib/loggingRules';
 
@@ -129,6 +134,9 @@ export default function DailyLoggerSection({ issues }: Props) {
     activitiesCount: number;
     totalMinutes: number;
   } | null>(null);
+
+  // Ticket picker popover state
+  const [openPopoverIdx, setOpenPopoverIdx] = useState<number | null>(null);
 
   // Step 3 states
   const [suggestingAI, setSuggestingAI] = useState(false);
@@ -593,6 +601,72 @@ export default function DailyLoggerSection({ issues }: Props) {
   const allSelected = entries.length > 0 && entries.every(e => e.selected);
   const isBusy = generating || loading || suggestingAI || suggestingHistory || logging;
 
+  // Build hierarchical issue groups for the ticket picker
+  // Groups issues by parent (Story/Epic) with children (Task/Sub-task) underneath
+  const issueHierarchy = useMemo(() => {
+    if (issues.length === 0) return { groups: [], standalone: [] };
+
+    const issueByKey = new Map(issues.map(i => [i.key, i]));
+
+    // Collect all issues that have a parentKey
+    const childIssues = issues.filter(i => i.parentKey);
+    const parentKeysReferenced = new Set(childIssues.map(i => i.parentKey!));
+
+    // Build groups keyed by parentKey
+    const groupMap = new Map<string, {
+      parent: JiraIssueItem | null;
+      parentKey: string;
+      parentSummary: string;
+      children: JiraIssueItem[];
+    }>();
+
+    for (const issue of childIssues) {
+      const pk = issue.parentKey!;
+      let group = groupMap.get(pk);
+      if (!group) {
+        const parentIssue = issueByKey.get(pk) || null;
+        group = {
+          parent: parentIssue,
+          parentKey: pk,
+          parentSummary: parentIssue?.name || issue.parentSummary || pk,
+          children: [],
+        };
+        groupMap.set(pk, group);
+      }
+      group.children.push(issue);
+    }
+
+    // Parents in our list that have children referencing them — add them to group
+    for (const [key, group] of groupMap) {
+      if (!group.parent && issueByKey.has(key)) {
+        group.parent = issueByKey.get(key)!;
+      }
+    }
+
+    // Sort groups: by project, then by parentKey
+    const groups = Array.from(groupMap.values());
+    groups.sort((a, b) => {
+      const projA = a.parent?.project || a.children[0]?.project || '';
+      const projB = b.parent?.project || b.children[0]?.project || '';
+      if (projA !== projB) return projA.localeCompare(projB);
+      return a.parentKey.localeCompare(b.parentKey);
+    });
+
+    // Sort children within each group by key
+    for (const group of groups) {
+      group.children.sort((a, b) => a.key.localeCompare(b.key));
+    }
+
+    // Standalone = no parent AND not referenced as parent by any child
+    const standalone = issues.filter(i => !i.parentKey && !parentKeysReferenced.has(i.key));
+    standalone.sort((a, b) => {
+      if (a.project !== b.project) return a.project.localeCompare(b.project);
+      return a.key.localeCompare(b.key);
+    });
+
+    return { groups, standalone };
+  }, [issues]);
+
   return (
     <Card>
       <CardHeader>
@@ -819,38 +893,118 @@ export default function DailyLoggerSection({ issues }: Props) {
                           />
                         </td>
 
-                        {/* Ticket */}
+                        {/* Ticket — hierarchical combobox with search */}
                         <td className="px-2 py-1.5">
-                          <Select
-                            value={entry.suggestedTicket || '_none'}
-                            onValueChange={v =>
-                              updateEntry(idx, 'suggestedTicket', v === '_none' ? '' : v)
-                            }
-                          >
-                            <SelectTrigger
-                              className={`h-7 w-36 text-xs ${!entry.suggestedTicket ? 'border-red-300 text-red-500' : ''}`}
+                          <div className="flex items-center gap-1">
+                            <Popover
+                              open={openPopoverIdx === idx}
+                              onOpenChange={open => setOpenPopoverIdx(open ? idx : null)}
                             >
-                              <SelectValue placeholder="Wybierz ticket" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="_none">
-                                <span className="text-red-500">BRAK</span>
-                              </SelectItem>
-                              {issues.map(issue => (
-                                <SelectItem key={issue.key} value={issue.key}>
-                                  <span className="font-mono">{issue.key}</span>{' '}
-                                  <span className="text-gray-500">
-                                    {issue.name.substring(0, 30)}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {entry.ticketConfidence > 0 && entry.ticketConfidence < 0.7 && (
-                            <span className="ml-1 text-[10px] text-yellow-600">
-                              {Math.round(entry.ticketConfidence * 100)}%
-                            </span>
-                          )}
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className={`h-7 w-44 justify-between px-2 text-xs font-normal ${!entry.suggestedTicket ? 'border-red-300 text-red-500' : ''}`}
+                                >
+                                  {entry.suggestedTicket ? (
+                                    <span className="truncate">
+                                      <span className="font-mono">{entry.suggestedTicket}</span>{' '}
+                                      <span className="text-gray-500">
+                                        {issues.find(i => i.key === entry.suggestedTicket)?.name.substring(0, 18) || ''}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-400">Wybierz ticket</span>
+                                  )}
+                                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 p-0" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Szukaj ticket..." />
+                                  <CommandList>
+                                    <CommandEmpty>Brak wynikow</CommandEmpty>
+
+                                    {/* Clear selection */}
+                                    <CommandGroup>
+                                      <CommandItem
+                                        value="_none_brak"
+                                        onSelect={() => {
+                                          updateEntry(idx, 'suggestedTicket', '');
+                                          setOpenPopoverIdx(null);
+                                        }}
+                                      >
+                                        <span className="text-red-500">BRAK</span>
+                                      </CommandItem>
+                                    </CommandGroup>
+
+                                    {/* Grouped: parent → children */}
+                                    {issueHierarchy.groups.map(group => (
+                                      <CommandGroup
+                                        key={group.parentKey}
+                                        heading={`${group.parentKey} — ${group.parentSummary.substring(0, 45)}`}
+                                      >
+                                        {group.parent && (
+                                          <CommandItem
+                                            value={`${group.parent.key} ${group.parent.name}`}
+                                            onSelect={() => {
+                                              updateEntry(idx, 'suggestedTicket', group.parent!.key);
+                                              setOpenPopoverIdx(null);
+                                            }}
+                                          >
+                                            <Check className={`mr-1 h-3 w-3 ${entry.suggestedTicket === group.parent.key ? 'opacity-100' : 'opacity-0'}`} />
+                                            <span className="font-mono text-indigo-700">{group.parent.key}</span>
+                                            <span className="ml-1 text-gray-600 truncate">{group.parent.name.substring(0, 35)}</span>
+                                          </CommandItem>
+                                        )}
+                                        {group.children.map(child => (
+                                          <CommandItem
+                                            key={child.key}
+                                            value={`${child.key} ${child.name} ${group.parentKey}`}
+                                            onSelect={() => {
+                                              updateEntry(idx, 'suggestedTicket', child.key);
+                                              setOpenPopoverIdx(null);
+                                            }}
+                                            className="pl-6"
+                                          >
+                                            <Check className={`mr-1 h-3 w-3 ${entry.suggestedTicket === child.key ? 'opacity-100' : 'opacity-0'}`} />
+                                            <span className="text-gray-400 mr-0.5">└</span>
+                                            <span className="font-mono">{child.key}</span>
+                                            <span className="ml-1 text-gray-500 truncate">{child.name.substring(0, 30)}</span>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    ))}
+
+                                    {/* Standalone */}
+                                    {issueHierarchy.standalone.length > 0 && (
+                                      <CommandGroup heading="Samodzielne">
+                                        {issueHierarchy.standalone.map(issue => (
+                                          <CommandItem
+                                            key={issue.key}
+                                            value={`${issue.key} ${issue.name}`}
+                                            onSelect={() => {
+                                              updateEntry(idx, 'suggestedTicket', issue.key);
+                                              setOpenPopoverIdx(null);
+                                            }}
+                                          >
+                                            <Check className={`mr-1 h-3 w-3 ${entry.suggestedTicket === issue.key ? 'opacity-100' : 'opacity-0'}`} />
+                                            <span className="font-mono">{issue.key}</span>
+                                            <span className="ml-1 text-gray-500 truncate">{issue.name.substring(0, 35)}</span>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    )}
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            {entry.ticketConfidence > 0 && entry.ticketConfidence < 0.7 && (
+                              <span className="text-[10px] text-yellow-600">
+                                {Math.round(entry.ticketConfidence * 100)}%
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Category */}
