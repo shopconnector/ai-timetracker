@@ -562,8 +562,9 @@ jobs:
 
           $Errors = @()
 
+          # Note: Inno Setup PE fields may have trailing whitespace, so use .Trim()
           # Check version
-          $FileVersion = $Info.FileVersion
+          $FileVersion = if ($Info.FileVersion) { $Info.FileVersion.Trim() } else { "" }
           if (-not $FileVersion) {
             $Errors += "FileVersion is empty"
           } elseif (-not $FileVersion.StartsWith($Version)) {
@@ -573,7 +574,7 @@ jobs:
           }
 
           # Check company
-          $Company = $Info.CompanyName
+          $Company = if ($Info.CompanyName) { $Info.CompanyName.Trim() } else { "" }
           if ($Company -ne "ShopConnector") {
             $Errors += "CompanyName is '$Company', expected 'ShopConnector'"
           } else {
@@ -581,7 +582,7 @@ jobs:
           }
 
           # Check product name
-          $Product = $Info.ProductName
+          $Product = if ($Info.ProductName) { $Info.ProductName.Trim() } else { "" }
           if ($Product -ne "AI TimeTracker") {
             $Errors += "ProductName is '$Product', expected 'AI TimeTracker'"
           } else {
@@ -589,8 +590,8 @@ jobs:
           }
 
           # Check description
-          $Desc = $Info.FileDescription
-          if (-not $Desc -or $Desc -eq "") {
+          $Desc = if ($Info.FileDescription) { $Info.FileDescription.Trim() } else { "" }
+          if (-not $Desc) {
             $Errors += "FileDescription is empty"
           } else {
             Write-Host "  Description: $Desc" -ForegroundColor Green
