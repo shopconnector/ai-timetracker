@@ -24,6 +24,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
     steps:
       - name: Checkout code
@@ -619,7 +621,7 @@ jobs:
       #   AZURE_CERT_PROFILE       - Certificate profile name
       # ──────────────────────────────────────────────────────────────
       - name: Sign installer with Azure Trusted Signing
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: ${{ env.AZURE_TENANT_ID != '' }}
         uses: azure/trusted-signing-action@v0.5.0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -636,7 +638,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Verify code signature
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: ${{ env.AZURE_TENANT_ID != '' }}
         shell: pwsh
         run: |
           Write-Host "Verifying code signatures..."
@@ -657,7 +659,7 @@ jobs:
           Write-Host "All executables signed successfully" -ForegroundColor Green
 
       - name: Signing status
-        if: ${{ secrets.AZURE_TENANT_ID == '' }}
+        if: ${{ env.AZURE_TENANT_ID == '' }}
         shell: pwsh
         run: |
           Write-Host "⚠ Code signing SKIPPED — Azure Trusted Signing secrets not configured" -ForegroundColor Yellow
@@ -771,7 +773,7 @@ jobs:
           # Create release with installer (versioned + stable name)
           # Detect if installer was signed
           SIGNED=""
-          if [ -n "${{ secrets.AZURE_TENANT_ID }}" ]; then
+          if [ -n "${{ env.AZURE_TENANT_ID }}" ]; then
             SIGNED="✅ **Digitally signed** — verified publisher: ShopConnector"
           else
             SIGNED="⚠️ This build is not code-signed. Windows SmartScreen may show a warning — click \"More info\" → \"Run anyway\"."
