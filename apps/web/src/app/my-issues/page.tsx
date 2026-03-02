@@ -37,6 +37,8 @@ import {
   StickyNote,
   Shield,
   MessageCircle,
+  Users,
+  User,
 } from 'lucide-react';
 import {
   getAllIssueLocalData,
@@ -61,6 +63,8 @@ interface SubtaskInfo {
   type: string;
 }
 
+type IssueScope = 'assigned' | 'project_all';
+
 interface JiraIssueItem {
   id: string;
   key: string;
@@ -72,6 +76,7 @@ interface JiraIssueItem {
   type: string;
   priority: string;
   assignee: string;
+  assigneeId: string | null;
   isSubtask: boolean;
   parentKey: string | null;
   parentSummary: string | null;
@@ -129,11 +134,16 @@ export default function MyIssuesPage() {
   const [slackSummary, setSlackSummary] = useState<{ totalMinutes: number; conversationCount: number; huddleCount: number } | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
+  // Scope: assigned (my tasks) vs project_all (all project tasks)
+  const [scope, setScope] = useState<IssueScope>('assigned');
+  const [accountId, setAccountId] = useState<string | null>(null);
+
   // Filters
   const [filterProject, setFilterProject] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterAssignee, setFilterAssignee] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [showDoneOnly, setShowDoneOnly] = useState(false);
   const [hideLocalDone, setHideLocalDone] = useState(false);
@@ -150,9 +160,12 @@ export default function MyIssuesPage() {
     setError(null);
 
     try {
+      const filter = scope === 'project_all' ? 'project_all' : 'assigned';
+      const limit = scope === 'project_all' ? 500 : 200;
+
       // Ładuj dane z Jira i Tempo równolegle
       const [issuesRes, tempoRes] = await Promise.all([
-        fetch(apiUrl('/api/jira/my-issues?filter=assigned&limit=200')),
+        fetch(apiUrl(`/api/jira/my-issues?filter=${filter}&limit=${limit}`)),
         fetch(apiUrl('/api/tempo/worklogs-by-issue')),
       ]);
 
@@ -160,6 +173,7 @@ export default function MyIssuesPage() {
 
       const issuesData = await issuesRes.json();
       setIssues(issuesData.issues || []);
+      if (issuesData.accountId) setAccountId(issuesData.accountId);
 
       if (tempoRes.ok) {
         const tempoData = await tempoRes.json();
@@ -190,7 +204,7 @@ export default function MyIssuesPage() {
     }
 
     setLoading(false);
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     loadData();
@@ -221,6 +235,10 @@ export default function MyIssuesPage() {
     () => [...new Set(issues.map(i => i.priority).filter(Boolean))].sort(),
     [issues]
   );
+  const assigneeOptions = useMemo(
+    () => [...new Set(issues.map(i => i.assignee).filter(Boolean))].sort(),
+    [issues]
+  );
 
   // Filtruj i sortuj
   const filteredIssues = useMemo(() => {
@@ -230,6 +248,9 @@ export default function MyIssuesPage() {
         if (filterStatus !== 'all' && issue.status !== filterStatus) return false;
         if (filterType !== 'all' && issue.type !== filterType) return false;
         if (filterPriority !== 'all' && issue.priority !== filterPriority) return false;
+        if (filterAssignee === 'mine' && issue.assigneeId !== accountId) return false;
+        if (filterAssignee === 'unassigned' && issue.assignee) return false;
+        if (filterAssignee !== 'all' && filterAssignee !== 'mine' && filterAssignee !== 'unassigned' && issue.assignee !== filterAssignee) return false;
         if (showDoneOnly && !localData[issue.key]?.doneByMe) return false;
         if (hideLocalDone && localData[issue.key]?.doneByMe) return false;
         if (searchText) {
@@ -256,6 +277,8 @@ export default function MyIssuesPage() {
     filterStatus,
     filterType,
     filterPriority,
+    filterAssignee,
+    accountId,
     searchText,
     showDoneOnly,
     hideLocalDone,
@@ -403,6 +426,7 @@ export default function MyIssuesPage() {
     setFilterStatus('all');
     setFilterType('all');
     setFilterPriority('all');
+    setFilterAssignee('all');
     setSearchText('');
     setShowDoneOnly(false);
     setHideLocalDone(false);
@@ -415,7 +439,9 @@ export default function MyIssuesPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Moje Zadania Jira</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Wszystkie przypisane zadania &mdash; sledz postep i dodawaj notatki
+            {scope === 'assigned'
+              ? 'Zadania przypisane do mnie \u2014 sledz postep i dodawaj notatki'
+              : 'Wszystkie zadania z moich projektow \u2014 pelny widok hierarchii'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -428,6 +454,36 @@ export default function MyIssuesPage() {
             Eksport CSV
           </Button>
         </div>
+      </div>
+
+      {/* Scope Tabs */}
+      <div className="flex gap-2">
+        <Button
+          variant={scope === 'assigned' ? 'default' : 'outline'}
+          onClick={() => setScope('assigned')}
+          className="gap-2"
+        >
+          <User className="h-4 w-4" />
+          Moje zadania
+          {scope === 'assigned' && !loading && (
+            <Badge variant="secondary" className="ml-1 text-xs">
+              {issues.length}
+            </Badge>
+          )}
+        </Button>
+        <Button
+          variant={scope === 'project_all' ? 'default' : 'outline'}
+          onClick={() => setScope('project_all')}
+          className="gap-2"
+        >
+          <Users className="h-4 w-4" />
+          Wszystkie z projektow
+          {scope === 'project_all' && !loading && (
+            <Badge variant="secondary" className="ml-1 text-xs">
+              {issues.length}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Stats */}
@@ -593,6 +649,26 @@ export default function MyIssuesPage() {
                 </SelectContent>
               </Select>
             </div>
+            {scope === 'project_all' && (
+              <div>
+                <label className="mb-1 block text-sm text-gray-500">Przypisany</label>
+                <Select value={filterAssignee} onValueChange={setFilterAssignee}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Wszyscy</SelectItem>
+                    <SelectItem value="mine">Moje</SelectItem>
+                    <SelectItem value="unassigned">Nieprzypisane</SelectItem>
+                    {assigneeOptions.map(a => (
+                      <SelectItem key={a} value={a}>
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm text-gray-500">Szukaj</label>
               <Input
@@ -674,6 +750,11 @@ export default function MyIssuesPage() {
                     <TableHead className="cursor-pointer" onClick={() => handleSort('project')}>
                       Project {sortField === 'project' && (sortDir === 'asc' ? '↑' : '↓')}
                     </TableHead>
+                    {scope === 'project_all' && (
+                      <TableHead className="cursor-pointer" onClick={() => handleSort('assignee')}>
+                        Assignee {sortField === 'assignee' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
+                      </TableHead>
+                    )}
                     <TableHead className="text-right">Jira Time</TableHead>
                     <TableHead className="text-right">Tempo</TableHead>
                     <TableHead className="text-center">Comments</TableHead>
@@ -686,11 +767,12 @@ export default function MyIssuesPage() {
                     const ld = localData[issue.key];
                     const isExpanded = expandedRows.has(issue.key);
                     const logged = getLoggedTime(issue) || 0;
+                    const isMyIssue = accountId && issue.assigneeId === accountId;
 
                     return (
                       <Fragment key={issue.key}>
                         <TableRow
-                          className={`cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${ld?.doneByMe ? 'opacity-60' : ''}`}
+                          className={`cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${ld?.doneByMe ? 'opacity-60' : ''} ${scope === 'project_all' && isMyIssue ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''} ${scope === 'project_all' && !isMyIssue && !ld?.doneByMe ? 'opacity-75' : ''}`}
                         >
                           <TableCell onClick={e => e.stopPropagation()}>
                             <Checkbox
@@ -765,6 +847,13 @@ export default function MyIssuesPage() {
                               {issue.project}
                             </Badge>
                           </TableCell>
+                          {scope === 'project_all' && (
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              <span className={`text-xs ${isMyIssue ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>
+                                {issue.assignee || <span className="text-gray-300">-</span>}
+                              </span>
+                            </TableCell>
+                          )}
                           <TableCell className="text-right" onClick={() => toggleRow(issue.key)}>
                             <span
                               className={`font-mono text-sm ${issue.timespent ? 'text-blue-600' : 'text-gray-400'}`}
@@ -803,7 +892,7 @@ export default function MyIssuesPage() {
                         {/* Expanded row */}
                         {isExpanded && (
                           <TableRow className="bg-slate-50 dark:bg-slate-900">
-                            <TableCell colSpan={14} className="p-4">
+                            <TableCell colSpan={scope === 'project_all' ? 15 : 14} className="p-4">
                               <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                                 {/* Left column: Info */}
                                 <div className="space-y-4">

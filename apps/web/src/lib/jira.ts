@@ -75,7 +75,7 @@ export interface JiraIssue {
 }
 
 // Typ filtra dla pobierania zadań
-export type IssueFilter = 'all' | 'in_progress' | 'assigned' | 'recent';
+export type IssueFilter = 'all' | 'in_progress' | 'assigned' | 'recent' | 'project_all';
 
 // Zgrupowane zadania z hierarchią
 export interface GroupedIssues {
@@ -566,6 +566,28 @@ export async function getFilteredIssues(
       // Ostatnio logowane (7 dni)
       jql = `worklogAuthor = "${accountId}" AND worklogDate >= -7d ORDER BY updated DESC`;
       break;
+    case 'project_all': {
+      // Wszystkie zadania z projektów użytkownika (nie Done, ostatnie 180 dni)
+      const projects = await getAllProjects();
+      const projectKeys = projects.map(p => p.key);
+      if (projectKeys.length === 0) return [];
+      const projectsJql = projectKeys.slice(0, 20).map(k => `"${k}"`).join(', ');
+      jql = `project IN (${projectsJql}) AND updatedDate >= -180d AND status not in (Done) ORDER BY updated DESC`;
+
+      // Use pagination for larger result sets
+      const allIssues: JiraIssue[] = [];
+      let nextPageToken: string | undefined;
+      const pageSize = Math.min(maxResults, 100);
+
+      while (allIssues.length < maxResults) {
+        const result = await searchIssuesPaginated(jql, 0, pageSize, nextPageToken, fields);
+        allIssues.push(...result.issues);
+        if (!result.hasMore || result.issues.length === 0) break;
+        nextPageToken = result.nextPageToken;
+      }
+
+      return allIssues.slice(0, maxResults);
+    }
     case 'all':
     default:
       // Wszystkie dostępne

@@ -45,6 +45,7 @@ function formatIssue(issue: JiraIssue) {
     ...formatIssueForDisplay(issue),
     id: issue.id,
     assignee: issue.fields.assignee?.displayName,
+    assigneeId: issue.fields.assignee?.accountId || null,
     type: issue.fields.issuetype?.name,
     priority: issue.fields.priority?.name,
     updated: issue.fields.updated,
@@ -107,11 +108,12 @@ export async function GET(request: NextRequest) {
       // Search mode - search across all issues
       issues = await searchAllIssues(query, Math.min(limit, 50));
     } else if (filter) {
-      // Nowy filtr: in_progress, assigned, recent, all
+      // Nowy filtr: in_progress, assigned, recent, all, project_all
+      const maxLimit = filter === 'project_all' ? 500 : 200;
       issues = await getFilteredIssues(
         accountId,
         filter,
-        Math.min(limit, 200),
+        Math.min(limit, maxLimit),
         JIRA_FIELDS_WITH_DESCRIPTION
       );
     } else if (loadAll || type === 'projects') {
