@@ -624,9 +624,9 @@ jobs:
       #   AZURE_SUBSCRIPTION_ID    - Azure subscription ID
       #
       # Non-secret config (hardcoded below, change if your account differs):
-      #   Endpoint:    https://weu.codesigning.azure.net/  (West Europe)
-      #   Account:     shopconnector-signing
-      #   Cert Profile: ai-timetracker
+      #   Endpoint:    https://plc.codesigning.azure.net/  (Poland Central)
+      #   Account:     app-signing
+      #   Cert Profile: AppProfile
       # ──────────────────────────────────────────────────────────────
       - name: Azure Login for code signing
         if: ${{ env.AZURE_TENANT_ID != '' }}
@@ -641,9 +641,9 @@ jobs:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: shopconnector-signing
-          certificate-profile-name: ai-timetracker
+          endpoint: https://plc.codesigning.azure.net/
+          trusted-signing-account-name: app-signing
+          certificate-profile-name: AppProfile
           files-folder: ${{ github.workspace }}/dist
           files-folder-filter: exe
           files-folder-recurse: false
