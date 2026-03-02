@@ -609,28 +609,41 @@ jobs:
           Write-Host "Installer metadata verified successfully" -ForegroundColor Green
 
       # ──────────────────────────────────────────────────────────────
-      # Code Signing (Azure Trusted Signing / Artifact Signing)
+      # Code Signing with Azure Trusted Signing
+      # Based on: hanselman.com/blog/automatically-signing-a-windows-exe
+      #
       # Signs the .exe installer to eliminate Windows SmartScreen warnings.
+      # Uses short-lived (3-day) certs with RFC 3161 timestamping so
+      # signatures remain valid after cert expiry.
       # Skipped when secrets are not configured — build still works unsigned.
       #
-      # Required GitHub Secrets:
-      #   AZURE_TENANT_ID          - Azure AD tenant ID
-      #   AZURE_CLIENT_ID          - App Registration client ID
-      #   AZURE_CLIENT_SECRET      - App Registration client secret
-      #   AZURE_SIGNING_ENDPOINT   - e.g. https://eus.codesigning.azure.net
-      #   AZURE_SIGNING_ACCOUNT    - Trusted Signing account name
-      #   AZURE_CERT_PROFILE       - Certificate profile name
+      # Required GitHub Secrets (4 — created via az ad sp create-for-rbac):
+      #   AZURE_TENANT_ID          - Directory (tenant) ID
+      #   AZURE_CLIENT_ID          - Service Principal client ID
+      #   AZURE_CLIENT_SECRET      - Service Principal client secret
+      #   AZURE_SUBSCRIPTION_ID    - Azure subscription ID
+      #
+      # Non-secret config (hardcoded below, change if your account differs):
+      #   Endpoint:    https://weu.codesigning.azure.net/  (West Europe)
+      #   Account:     shopconnector-signing
+      #   Cert Profile: ai-timetracker
       # ──────────────────────────────────────────────────────────────
+      - name: Azure Login for code signing
+        if: ${{ env.AZURE_TENANT_ID != '' }}
+        uses: azure/login@v2
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
       - name: Sign installer with Azure Trusted Signing
         if: ${{ env.AZURE_TENANT_ID != '' }}
-        uses: azure/trusted-signing-action@v0.5.0
+        uses: azure/trusted-signing-action@v0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          endpoint: https://weu.codesigning.azure.net/
+          trusted-signing-account-name: shopconnector-signing
+          certificate-profile-name: ai-timetracker
           files-folder: ${{ github.workspace }}/dist
           files-folder-filter: exe
           files-folder-recurse: false
@@ -647,9 +660,13 @@ jobs:
           Get-ChildItem "dist" -Filter "*.exe" | ForEach-Object {
             $Sig = Get-AuthenticodeSignature $_.FullName
             if ($Sig.Status -eq "Valid") {
-              Write-Host "  ✓ $($_.Name): Signed by $($Sig.SignerCertificate.Subject)" -ForegroundColor Green
+              Write-Host "  OK $($_.Name): Signed by $($Sig.SignerCertificate.Subject)" -ForegroundColor Green
+              # Show certificate details
+              $Cert = $Sig.SignerCertificate
+              Write-Host "     Issuer: $($Cert.Issuer)" -ForegroundColor Gray
+              Write-Host "     Valid: $($Cert.NotBefore) - $($Cert.NotAfter)" -ForegroundColor Gray
             } else {
-              Write-Host "  ✗ $($_.Name): $($Sig.Status)" -ForegroundColor Red
+              Write-Host "  FAIL $($_.Name): $($Sig.Status)" -ForegroundColor Red
               $AllSigned = $false
             }
           }
@@ -663,8 +680,8 @@ jobs:
         if: ${{ env.AZURE_TENANT_ID == '' }}
         shell: pwsh
         run: |
-          Write-Host "⚠ Code signing SKIPPED — Azure Trusted Signing secrets not configured" -ForegroundColor Yellow
-          Write-Host "  See docs/SIGNING_SETUP.md for setup instructions" -ForegroundColor Yellow
+          Write-Host "Code signing SKIPPED — Azure Trusted Signing secrets not configured" -ForegroundColor Yellow
+          Write-Host "  See: hanselman.com/blog/automatically-signing-a-windows-exe" -ForegroundColor Yellow
 
       - name: List artifacts
         shell: pwsh
