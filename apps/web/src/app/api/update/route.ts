@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchLatestRelease, getDownloadUrl, getPlatform, clearVersionCache } from '@/lib/versionCheck';
-import { createWriteStream, existsSync, unlinkSync } from 'fs';
+import { createWriteStream, existsSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { join, resolve, dirname } from 'path';
 import { spawn, execSync } from 'child_process';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
@@ -51,7 +51,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(selfUpdateState);
   }
 
-  return NextResponse.json({ error: 'Invalid action. Use ?action=download|apply|status|selfupdate|selfupdate-status' }, { status: 400 });
+  if (action === 'shutdown') {
+    return handleShutdown();
+  }
+
+  return NextResponse.json({ error: 'Invalid action. Use ?action=download|apply|status|selfupdate|selfupdate-status|shutdown' }, { status: 400 });
 }
 
 async function handleDownload() {
@@ -234,6 +238,62 @@ async function handleSelfUpdate() {
   return NextResponse.json(selfUpdateState);
 }
 
+/**
+ * Get the application root directory (where start-server.js lives).
+ * On Windows standalone: process.cwd() is the app root.
+ * Fallback: walk up from __dirname looking for start-server.js or data/.
+ */
+function getAppDir(): string {
+  const cwd = process.cwd();
+  if (existsSync(join(cwd, 'start-server.js')) || existsSync(join(cwd, 'data'))) {
+    return cwd;
+  }
+  // Fallback: two levels up from the running script
+  const fallback = resolve(dirname(process.argv[1] || __dirname), '..', '..');
+  if (existsSync(join(fallback, 'start-server.js'))) {
+    return fallback;
+  }
+  return cwd;
+}
+
+/**
+ * Create update.flag file so the launcher .bat knows an update is in progress.
+ */
+function createUpdateFlag(version: string, installerPath: string): void {
+  const flagPath = join(getAppDir(), 'update.flag');
+  const content = [
+    `version=${version}`,
+    `timestamp=${new Date().toISOString()}`,
+    `installer=${installerPath}`,
+  ].join('\n');
+  writeFileSync(flagPath, content, 'utf-8');
+}
+
+/**
+ * Shutdown action — called by the installer (via HTTP) for graceful stop.
+ * Creates update.flag, responds 200, then exits after 1s to release file locks.
+ */
+function handleShutdown(): NextResponse {
+  const appDir = getAppDir();
+  const flagPath = join(appDir, 'update.flag');
+  const content = [
+    `version=shutdown`,
+    `timestamp=${new Date().toISOString()}`,
+    `source=installer`,
+  ].join('\n');
+  writeFileSync(flagPath, content, 'utf-8');
+
+  // Schedule process exit after response is sent
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
+
+  return NextResponse.json({
+    status: 'shutting_down',
+    message: 'Server will exit in 1 second. Update flag created.',
+  });
+}
+
 async function handleApply() {
   const platform = getPlatform();
   if (platform !== 'win32') {
@@ -259,20 +319,35 @@ async function handleApply() {
   }
 
   try {
-    // Launch installer in detached mode — it will kill the running server
-    // and install the new version, then the launcher (.bat) will restart
-    spawn(downloadState.filePath, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'], {
+    const version = downloadState.version || 'unknown';
+    const installerPath = downloadState.filePath;
+
+    // 1. Create update.flag so the launcher .bat waits for the installer
+    createUpdateFlag(version, installerPath);
+
+    // 2. Launch installer in detached mode with force-close flags
+    spawn(installerPath, [
+      '/VERYSILENT',
+      '/SUPPRESSMSGBOXES',
+      '/NORESTART',
+      '/SP-',
+      '/CLOSEAPPLICATIONS',
+      '/FORCECLOSEAPPLICATIONS',
+    ], {
       detached: true,
       stdio: 'ignore',
       windowsHide: false,
     }).unref();
 
-    // Give the installer a moment to start
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // 3. Exit process after 2s to release file locks so installer can overwrite files
+    setTimeout(() => {
+      process.exit(0);
+    }, 2000);
 
     return NextResponse.json({
       status: 'applying',
-      message: 'Installer started. The application will restart automatically after the update.',
+      message: 'Update flag created, installer started. Server will exit in 2 seconds.',
+      version,
     });
   } catch (error) {
     return NextResponse.json({

@@ -544,6 +544,67 @@ jobs:
           Move-Item "installer\output\*.exe" "dist\"
           Write-Host "Installer created"
 
+      - name: Verify installer metadata
+        shell: pwsh
+        run: |
+          $Version = "${{ steps.version.outputs.version }}"
+          $Exe = Get-ChildItem "dist" -Filter "TimeTracker-Setup-*.exe" | Select-Object -First 1
+
+          if (-not $Exe) {
+            Write-Error "No installer EXE found in dist/"
+            exit 1
+          }
+
+          Write-Host "Checking PE metadata for: $($Exe.Name)"
+          $Info = (Get-Item $Exe.FullName).VersionInfo
+
+          $Errors = @()
+
+          # Check version
+          $FileVersion = $Info.FileVersion
+          if (-not $FileVersion) {
+            $Errors += "FileVersion is empty"
+          } elseif (-not $FileVersion.StartsWith($Version)) {
+            $Errors += "FileVersion '$FileVersion' does not match expected '$Version'"
+          } else {
+            Write-Host "  Version: $FileVersion" -ForegroundColor Green
+          }
+
+          # Check company
+          $Company = $Info.CompanyName
+          if ($Company -ne "ShopConnector") {
+            $Errors += "CompanyName is '$Company', expected 'ShopConnector'"
+          } else {
+            Write-Host "  Company: $Company" -ForegroundColor Green
+          }
+
+          # Check product name
+          $Product = $Info.ProductName
+          if ($Product -ne "AI TimeTracker") {
+            $Errors += "ProductName is '$Product', expected 'AI TimeTracker'"
+          } else {
+            Write-Host "  Product: $Product" -ForegroundColor Green
+          }
+
+          # Check description
+          $Desc = $Info.FileDescription
+          if (-not $Desc -or $Desc -eq "") {
+            $Errors += "FileDescription is empty"
+          } else {
+            Write-Host "  Description: $Desc" -ForegroundColor Green
+          }
+
+          if ($Errors.Count -gt 0) {
+            Write-Host ""
+            foreach ($e in $Errors) {
+              Write-Host "  ERROR: $e" -ForegroundColor Red
+            }
+            Write-Error "Installer PE metadata verification failed!"
+            exit 1
+          }
+
+          Write-Host "Installer metadata verified successfully" -ForegroundColor Green
+
       # ──────────────────────────────────────────────────────────────
       # Code Signing (Azure Trusted Signing / Artifact Signing)
       # Signs the .exe installer to eliminate Windows SmartScreen warnings.

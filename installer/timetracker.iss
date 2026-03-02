@@ -19,6 +19,22 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
 
+; Upgrade behavior
+CloseApplications=force
+CloseApplicationsFilter=node.exe,aw-qt.exe
+RestartApplications=no
+AppMutex=AITimeTracker_SingleInstance_A1B2C3D4
+SetupMutex=AITimeTrackerSetup
+UsePreviousAppDir=yes
+
+; PE metadata for SmartScreen reputation
+VersionInfoVersion={#MyAppVersion}
+VersionInfoCompany=ShopConnector
+VersionInfoDescription=AI TimeTracker - Automatic Work Time Logger
+VersionInfoCopyright=Copyright (C) 2024-2026 ShopConnector
+VersionInfoProductName=AI TimeTracker
+VersionInfoProductVersion={#MyAppVersion}
+
 ; Installation
 DefaultDirName={localappdata}\TimeTracker
 DefaultGroupName={#MyAppName}
@@ -64,8 +80,8 @@ Source: "..\dist\windows\activitywatch\*"; DestDir: "{app}\activitywatch"; Flags
 ; Application
 Source: "..\dist\windows\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs
 
-; Data directory
-Source: "..\dist\windows\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs onlyifdoesntexist
+; Data directory — only copy .env.example, NEVER overwrite .env.local (user credentials)
+Source: "..\dist\windows\data\.env.example"; DestDir: "{app}\data"; Flags: ignoreversion
 
 ; Env loader + server wrapper
 Source: "..\dist\windows\start-server.js"; DestDir: "{app}"; Flags: ignoreversion
@@ -77,6 +93,18 @@ Source: "..\dist\windows\TimeTrackerSilent.vbs"; DestDir: "{app}"; Flags: ignore
 
 ; Service installer for standalone bundle
 Source: "..\scripts\windows\install-service-standalone.bat"; DestDir: "{app}"; Flags: ignoreversion
+
+[InstallDelete]
+; Clean old application files before installing new ones (upgrade hygiene)
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\node"
+Type: filesandordirs; Name: "{app}\activitywatch"
+Type: files; Name: "{app}\start-server.js"
+Type: files; Name: "{app}\TimeTracker.bat"
+Type: files; Name: "{app}\TimeTracker.ps1"
+Type: files; Name: "{app}\TimeTrackerSilent.vbs"
+Type: files; Name: "{app}\install-service-standalone.bat"
+; IMPORTANT: {app}\data is NEVER deleted — contains user credentials (.env.local)
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -96,49 +124,276 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Clean up data directory on uninstall (optional - commented out to preserve settings)
-; Type: filesandordirs; Name: "{app}\data"
+; Clean up application files on uninstall (data/ is preserved by default)
+Type: filesandordirs; Name: "{app}\app"
+Type: filesandordirs; Name: "{app}\node"
+Type: filesandordirs; Name: "{app}\activitywatch"
+Type: files; Name: "{app}\start-server.js"
+Type: files; Name: "{app}\TimeTracker.bat"
+Type: files; Name: "{app}\TimeTracker.ps1"
+Type: files; Name: "{app}\TimeTrackerSilent.vbs"
+Type: files; Name: "{app}\install-service-standalone.bat"
+Type: files; Name: "{app}\update.flag"
 
 [Code]
-// Check for ActivityWatch before installation
-function InitializeSetup(): Boolean;
+// ============================================================================
+// Semver comparison: returns -1, 0, or 1
+// ============================================================================
+function CompareVersion(V1, V2: String): Integer;
 var
-  ResultCode: Integer;
+  P1, P2: Integer;
+  Num1, Num2: Integer;
+  Part1, Part2, Rest1, Rest2: String;
 begin
-  Result := True;
+  Result := 0;
+  Rest1 := V1;
+  Rest2 := V2;
 
-  // Check if ActivityWatch API is accessible
-  // We just show a warning, don't block installation
+  while (Rest1 <> '') or (Rest2 <> '') do
+  begin
+    // Extract next numeric part from V1
+    P1 := Pos('.', Rest1);
+    if P1 > 0 then begin
+      Part1 := Copy(Rest1, 1, P1 - 1);
+      Rest1 := Copy(Rest1, P1 + 1, Length(Rest1));
+    end else begin
+      Part1 := Rest1;
+      Rest1 := '';
+    end;
+
+    // Extract next numeric part from V2
+    P2 := Pos('.', Rest2);
+    if P2 > 0 then begin
+      Part2 := Copy(Rest2, 1, P2 - 1);
+      Rest2 := Copy(Rest2, P2 + 1, Length(Rest2));
+    end else begin
+      Part2 := Rest2;
+      Rest2 := '';
+    end;
+
+    Num1 := StrToIntDef(Part1, 0);
+    Num2 := StrToIntDef(Part2, 0);
+
+    if Num1 < Num2 then begin
+      Result := -1;
+      Exit;
+    end;
+    if Num1 > Num2 then begin
+      Result := 1;
+      Exit;
+    end;
+  end;
 end;
 
-// Stop running TimeTracker server before installing files
-procedure CurStepChanged(CurStep: TSetupStep);
+// ============================================================================
+// Read installed version from Windows registry (Inno Setup's uninstall key)
+// ============================================================================
+function GetInstalledVersion(): String;
+var
+  Version: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1',
+      'DisplayVersion', Version) then
+    Result := Version;
+end;
+
+// ============================================================================
+// InitializeSetup — detect upgrade/reinstall/downgrade
+// ============================================================================
+function InitializeSetup(): Boolean;
+var
+  InstalledVer: String;
+  Cmp: Integer;
+begin
+  Result := True;
+  InstalledVer := GetInstalledVersion();
+
+  if InstalledVer = '' then
+  begin
+    // Fresh install — continue normally
+    Exit;
+  end;
+
+  Cmp := CompareVersion('{#MyAppVersion}', InstalledVer);
+
+  if Cmp > 0 then
+  begin
+    // Upgrade — silent, no questions
+    Log('Upgrade detected: ' + InstalledVer + ' -> {#MyAppVersion}');
+  end
+  else if Cmp = 0 then
+  begin
+    // Same version — ask about reinstall
+    if MsgBox('AI TimeTracker ' + InstalledVer + ' is already installed.' + #13#10 +
+              'Do you want to repair/reinstall?', mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
+    Log('Reinstall: ' + InstalledVer);
+  end
+  else
+  begin
+    // Downgrade — warn
+    if MsgBox('A newer version (' + InstalledVer + ') is already installed.' + #13#10 +
+              'You are installing an older version ({#MyAppVersion}).' + #13#10#13#10 +
+              'Downgrading may cause issues. Continue anyway?', mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
+    Log('Downgrade: ' + InstalledVer + ' -> {#MyAppVersion}');
+  end;
+end;
+
+// ============================================================================
+// StopTimeTrackerProcesses — targeted kill (NOT all node.exe!)
+// ============================================================================
+procedure StopTimeTrackerProcesses();
 var
   ResultCode: Integer;
+  WinHttp: Variant;
+  ShutdownUrl: String;
+begin
+  // Step 1: Try graceful HTTP shutdown (gives server time to create update.flag)
+  ShutdownUrl := 'http://localhost:5666/timetracker/api/update?action=shutdown';
+  try
+    WinHttp := CreateOleObject('WinHttp.WinHttpRequest.5.1');
+    WinHttp.SetTimeouts(2000, 2000, 2000, 2000);
+    WinHttp.Open('POST', ShutdownUrl, False);
+    WinHttp.Send('');
+    Log('Graceful shutdown request sent, waiting...');
+    Sleep(3000);
+  except
+    Log('Graceful shutdown failed (server may not be running)');
+  end;
+
+  // Step 2: Kill only node.exe processes running start-server.js (via WMIC command line match)
+  Exec('cmd.exe', '/c wmic process where "name=''node.exe'' and commandline like ''%start-server.js%''" call terminate 2>nul',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('WMIC targeted kill result: ' + IntToStr(ResultCode));
+
+  // Step 3: Kill ActivityWatch
+  Exec('taskkill', '/F /IM aw-qt.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/F /IM aw-server.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/F /IM aw-watcher-window.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill', '/F /IM aw-watcher-afk.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  Sleep(2000);
+end;
+
+// ============================================================================
+// MergeEnvExample — add new keys from .env.example to .env.local
+//                   without overwriting existing user values
+// ============================================================================
+procedure MergeEnvExample();
+var
+  AppDir, EnvLocal, EnvExample: String;
+  ExampleLines, LocalLines: TArrayOfString;
+  I, J, EqPos: Integer;
+  Key, Line: String;
+  KeyExists: Boolean;
+  MergedContent: String;
+  NewKeysCount: Integer;
+begin
+  AppDir := ExpandConstant('{app}');
+  EnvLocal := AppDir + '\data\.env.local';
+  EnvExample := AppDir + '\data\.env.example';
+
+  // If no .env.local exists yet, copy from example
+  if not FileExists(EnvLocal) then
+  begin
+    if FileExists(EnvExample) then
+      FileCopy(EnvExample, EnvLocal, False);
+    Log('No .env.local found — copied from .env.example');
+    Exit;
+  end;
+
+  // If no .env.example, nothing to merge
+  if not FileExists(EnvExample) then
+    Exit;
+
+  // Load both files
+  if not LoadStringsFromFile(EnvExample, ExampleLines) then Exit;
+  if not LoadStringsFromFile(EnvLocal, LocalLines) then Exit;
+
+  // Read existing .env.local content
+  MergedContent := '';
+  for I := 0 to GetArrayLength(LocalLines) - 1 do
+  begin
+    if MergedContent <> '' then
+      MergedContent := MergedContent + #13#10;
+    MergedContent := MergedContent + LocalLines[I];
+  end;
+
+  // Find keys in .env.example that are not in .env.local
+  NewKeysCount := 0;
+  for I := 0 to GetArrayLength(ExampleLines) - 1 do
+  begin
+    Line := Trim(ExampleLines[I]);
+    // Skip empty lines and comments
+    if (Line = '') or (Copy(Line, 1, 1) = '#') then
+      Continue;
+
+    EqPos := Pos('=', Line);
+    if EqPos <= 1 then
+      Continue;
+
+    Key := Trim(Copy(Line, 1, EqPos - 1));
+
+    // Check if this key already exists in .env.local
+    KeyExists := False;
+    for J := 0 to GetArrayLength(LocalLines) - 1 do
+    begin
+      if Pos(Key + '=', Trim(LocalLines[J])) = 1 then
+      begin
+        KeyExists := True;
+        Break;
+      end;
+    end;
+
+    // If key is new, append it
+    if not KeyExists then
+    begin
+      // Add section comment from .env.example (look backwards for # lines)
+      if NewKeysCount = 0 then
+        MergedContent := MergedContent + #13#10 + #13#10 + '# --- New keys added by installer ---';
+      MergedContent := MergedContent + #13#10 + Line;
+      NewKeysCount := NewKeysCount + 1;
+      Log('Merged new env key: ' + Key);
+    end;
+  end;
+
+  // Write back if we added anything
+  if NewKeysCount > 0 then
+  begin
+    SaveStringToFile(EnvLocal, MergedContent, False);
+    Log('Merged ' + IntToStr(NewKeysCount) + ' new keys into .env.local');
+  end else
+    Log('No new env keys to merge');
+end;
+
+// ============================================================================
+// CurStepChanged — stop processes before install, merge env after
+// ============================================================================
+procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
   begin
-    // Kill node.exe processes running TimeTracker
-    Exec('taskkill', '/F /IM node.exe /FI "WINDOWTITLE eq AI TimeTracker*"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    // Also try to kill by looking for our start-server.js
-    Exec('cmd.exe', '/c taskkill /F /IM node.exe 2>nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(2000);
+    StopTimeTrackerProcesses();
+  end;
+
+  if CurStep = ssPostInstall then
+  begin
+    MergeEnvExample();
   end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
-var
-  AwStatus: String;
 begin
   if CurPageID = wpFinished then
   begin
     // Could add final checks here
   end;
-end;
-
-// Custom function to check ActivityWatch
-function CheckActivityWatch(): Boolean;
-begin
-  Result := False;
-  // This would require WinHTTP or similar - keeping it simple for now
 end;
