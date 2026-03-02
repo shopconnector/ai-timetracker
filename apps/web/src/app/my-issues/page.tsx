@@ -39,6 +39,7 @@ import {
   MessageCircle,
   Users,
   User,
+  Layers,
 } from 'lucide-react';
 import {
   getAllIssueLocalData,
@@ -93,6 +94,18 @@ interface JiraIssueItem {
   resolution: string | null;
   commentsCount: number;
   comments: JiraComment[];
+}
+
+interface IssueGroup {
+  id: string;
+  parentKey: string | null;
+  parentSummary: string | null;
+  parentStatus: string | null;
+  parentType: string | null;
+  parentProject: string | null;
+  parentIssue: JiraIssueItem | null;
+  children: JiraIssueItem[];
+  stats: { total: number; doneCount: number; jiraTime: number; tempoTime: number };
 }
 
 const JIRA_BASE = 'https://beecommerce.atlassian.net/browse';
@@ -328,6 +341,112 @@ export default function MyIssuesPage() {
     }
     return { greenCount, totalWithRC };
   }, [readinessMap]);
+
+  // Expanded groups (parent-level collapse/expand)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['__all__']));
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const expandAllGroups = () => {
+    setExpandedGroups(new Set(hierarchicalIssues.map(g => g.id)));
+  };
+  const collapseAllGroups = () => {
+    setExpandedGroups(new Set());
+  };
+
+  // Build hierarchical tree from flat filtered issues
+  const hierarchicalIssues: IssueGroup[] = useMemo(() => {
+    const issueByKey = new Map<string, JiraIssueItem>();
+    for (const issue of filteredIssues) {
+      issueByKey.set(issue.key, issue);
+    }
+
+    const groupMap = new Map<string, IssueGroup>();
+    const consumedKeys = new Set<string>();
+
+    // Pass 1: group children under their parents
+    for (const issue of filteredIssues) {
+      if (!issue.parentKey) continue;
+
+      const gid = issue.parentKey;
+      if (!groupMap.has(gid)) {
+        const parentIssue = issueByKey.get(issue.parentKey) || null;
+        groupMap.set(gid, {
+          id: gid,
+          parentKey: issue.parentKey,
+          parentSummary: parentIssue?.name || issue.parentSummary || issue.parentKey,
+          parentStatus: parentIssue?.status || null,
+          parentType: parentIssue?.type || 'Story',
+          parentProject: parentIssue?.project || issue.project,
+          parentIssue,
+          children: [],
+          stats: { total: 0, doneCount: 0, jiraTime: 0, tempoTime: 0 },
+        });
+      }
+      groupMap.get(gid)!.children.push(issue);
+      consumedKeys.add(issue.key);
+    }
+
+    // Mark parent issues that are group headers as consumed
+    for (const [gid] of groupMap) {
+      if (issueByKey.has(gid)) consumedKeys.add(gid);
+    }
+
+    // Pass 2: standalone issues (no parent, not consumed as parent)
+    for (const issue of filteredIssues) {
+      if (consumedKeys.has(issue.key)) continue;
+
+      // Check if it has children in our list (it IS a parent)
+      if (groupMap.has(issue.key)) continue;
+
+      // True standalone — show as single row (no group header)
+      groupMap.set(`_s_${issue.key}`, {
+        id: `_s_${issue.key}`,
+        parentKey: null,
+        parentSummary: null,
+        parentStatus: null,
+        parentType: null,
+        parentProject: null,
+        parentIssue: null,
+        children: [issue],
+        stats: { total: 1, doneCount: 0, jiraTime: 0, tempoTime: 0 },
+      });
+    }
+
+    // Calculate stats
+    const groups: IssueGroup[] = [];
+    for (const group of groupMap.values()) {
+      const all = group.parentIssue
+        ? [group.parentIssue, ...group.children]
+        : group.children;
+      group.stats = {
+        total: all.length,
+        doneCount: all.filter(i => localData[i.key]?.doneByMe).length,
+        jiraTime: all.reduce((s, i) => s + (i.timespent || 0), 0),
+        tempoTime: all.reduce((s, i) => s + getLoggedTime(i), 0),
+      };
+      groups.push(group);
+    }
+
+    // Sort: multi-child groups first (stories), then standalone
+    return groups.sort((a, b) => {
+      const aMulti = a.children.length > 1 || a.parentIssue ? 1 : 0;
+      const bMulti = b.children.length > 1 || b.parentIssue ? 1 : 0;
+      if (aMulti !== bMulti) return bMulti - aMulti;
+      // Within same tier, sort by project then parent key
+      const pa = a.parentProject || a.children[0]?.project || '';
+      const pb = b.parentProject || b.children[0]?.project || '';
+      if (pa !== pb) return pa.localeCompare(pb);
+      return (a.parentKey || a.children[0]?.key || '').localeCompare(b.parentKey || b.children[0]?.key || '');
+    });
+  }, [filteredIssues, localData, getLoggedTime]);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -721,9 +840,26 @@ export default function MyIssuesPage() {
       {/* Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">
-            Zadania ({filteredIssues.length} z {issues.length})
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">
+              Zadania ({filteredIssues.length} z {issues.length})
+              {hierarchicalIssues.filter(g => g.parentKey).length > 0 && (
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  / {hierarchicalIssues.filter(g => g.parentKey).length} grup
+                </span>
+              )}
+            </CardTitle>
+            {hierarchicalIssues.filter(g => g.parentKey).length > 0 && (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={expandAllGroups}>
+                  Rozwin
+                </Button>
+                <Button variant="ghost" size="sm" onClick={collapseAllGroups}>
+                  Zwin
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {error ? (
@@ -733,30 +869,29 @@ export default function MyIssuesPage() {
           ) : filteredIssues.length === 0 ? (
             <div className="py-8 text-center text-gray-500">Brak zadan dla wybranych filtrow</div>
           ) : (
-            <div className="max-h-[700px] overflow-auto">
+            <div className="max-h-[800px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">Done</TableHead>
                     <TableHead className="w-8"></TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('key')}>
-                      Key {sortField === 'key' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Key {sortField === 'key' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('name')}>
-                      Summary {sortField === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Summary {sortField === 'name' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('status')}>
-                      Status {sortField === 'status' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Status {sortField === 'status' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('priority')}>
-                      Priority {sortField === 'priority' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Priority {sortField === 'priority' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('type')}>
-                      Type {sortField === 'type' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Type {sortField === 'type' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
-                    <TableHead>Parent</TableHead>
                     <TableHead className="cursor-pointer" onClick={() => handleSort('project')}>
-                      Project {sortField === 'project' && (sortDir === 'asc' ? '↑' : '↓')}
+                      Project {sortField === 'project' && (sortDir === 'asc' ? '\u2191' : '\u2193')}
                     </TableHead>
                     {scope === 'project_all' && (
                       <TableHead className="cursor-pointer" onClick={() => handleSort('assignee')}>
@@ -765,366 +900,294 @@ export default function MyIssuesPage() {
                     )}
                     <TableHead className="text-right">Jira Time</TableHead>
                     <TableHead className="text-right">Tempo</TableHead>
-                    <TableHead className="text-center">Comments</TableHead>
+                    <TableHead className="text-center">Cmt</TableHead>
                     <TableHead className="w-16 text-center">RC</TableHead>
-                    <TableHead className="w-10">Notes</TableHead>
+                    <TableHead className="w-10">N</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredIssues.map(issue => {
-                    const ld = localData[issue.key];
-                    const isExpanded = expandedRows.has(issue.key);
-                    const logged = getLoggedTime(issue) || 0;
-                    const isMyIssue = accountId && issue.assigneeId === accountId;
+                  {hierarchicalIssues.map(group => {
+                    const isMultiGroup = group.parentKey !== null;
+                    const isGroupOpen = expandedGroups.has(group.id);
+                    const colCount = scope === 'project_all' ? 14 : 13;
 
-                    return (
-                      <Fragment key={issue.key}>
-                        <TableRow
-                          className={`cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${ld?.doneByMe ? 'opacity-60' : ''} ${scope === 'project_all' && isMyIssue ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''} ${scope === 'project_all' && !isMyIssue && !ld?.doneByMe ? 'opacity-75' : ''}`}
-                        >
-                          <TableCell onClick={e => e.stopPropagation()}>
-                            <Checkbox
-                              checked={ld?.doneByMe || false}
-                              onCheckedChange={v => handleDoneToggle(issue.key, !!v)}
-                            />
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-gray-400" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-gray-400" />
-                            )}
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            <a
-                              href={`${JIRA_BASE}/${issue.key}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-blue-600 hover:underline"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <Badge variant="outline" className="font-mono text-xs">
-                                {issue.key}
-                              </Badge>
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </TableCell>
-                          <TableCell
-                            className={`max-w-xs truncate ${ld?.doneByMe ? 'line-through' : ''}`}
-                            title={issue.name}
-                            onClick={() => toggleRow(issue.key)}
+                    // Helper to render a single issue row
+                    const renderIssueRow = (issue: JiraIssueItem, indent: number) => {
+                      const ld = localData[issue.key];
+                      const isExpanded = expandedRows.has(issue.key);
+                      const logged = getLoggedTime(issue) || 0;
+                      const isMyIssue = accountId && issue.assigneeId === accountId;
+
+                      return (
+                        <Fragment key={issue.key}>
+                          <TableRow
+                            className={`cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${ld?.doneByMe ? 'opacity-60' : ''} ${scope === 'project_all' && isMyIssue ? 'bg-blue-50/50 dark:bg-blue-950/20' : ''} ${scope === 'project_all' && !isMyIssue && !ld?.doneByMe ? 'opacity-75' : ''}`}
                           >
-                            {issue.name}
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            <Badge
-                              className={`text-xs ${getStatusColor(issue.status)}`}
-                              variant="secondary"
-                            >
-                              {issue.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            <span
-                              className={`text-sm font-medium ${getPriorityColor(issue.priority)}`}
-                            >
-                              {issue.priority || '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            <span className="text-xs text-gray-600">{issue.type || '-'}</span>
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            {issue.parentKey ? (
+                            <TableCell onClick={e => e.stopPropagation()}>
+                              <Checkbox
+                                checked={ld?.doneByMe || false}
+                                onCheckedChange={v => handleDoneToggle(issue.key, !!v)}
+                              />
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-gray-400" />
+                              )}
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
                               <a
-                                href={`${JIRA_BASE}/${issue.parentKey}`}
+                                href={`${JIRA_BASE}/${issue.key}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-blue-500 hover:underline"
+                                className="flex items-center gap-1 text-blue-600 hover:underline"
                                 onClick={e => e.stopPropagation()}
-                                title={issue.parentSummary || ''}
                               >
-                                {issue.parentKey}
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {issue.key}
+                                </Badge>
+                                <ExternalLink className="h-3 w-3" />
                               </a>
-                            ) : (
-                              <span className="text-xs text-gray-300">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            <Badge variant="secondary" className="text-xs">
-                              {issue.project}
-                            </Badge>
-                          </TableCell>
-                          {scope === 'project_all' && (
-                            <TableCell onClick={() => toggleRow(issue.key)}>
-                              <span className={`text-xs ${isMyIssue ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>
-                                {issue.assignee || <span className="text-gray-300">-</span>}
+                            </TableCell>
+                            <TableCell
+                              className={`max-w-xs truncate ${ld?.doneByMe ? 'line-through' : ''}`}
+                              title={issue.name}
+                              onClick={() => toggleRow(issue.key)}
+                            >
+                              <span style={{ paddingLeft: `${indent * 16}px` }} className="flex items-center gap-1">
+                                {indent > 0 && <span className="text-gray-300">{'└'}</span>}
+                                {issue.name}
                               </span>
                             </TableCell>
-                          )}
-                          <TableCell className="text-right" onClick={() => toggleRow(issue.key)}>
-                            <span
-                              className={`font-mono text-sm ${issue.timespent ? 'text-blue-600' : 'text-gray-400'}`}
-                            >
-                              {issue.timespent ? formatSeconds(issue.timespent) : '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right" onClick={() => toggleRow(issue.key)}>
-                            <span
-                              className={`font-mono text-sm ${logged > 0 ? 'font-medium text-green-600' : 'text-gray-400'}`}
-                            >
-                              {logged > 0 ? formatSeconds(logged) : '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-center" onClick={() => toggleRow(issue.key)}>
-                            {issue.commentsCount > 0 ? (
-                              <Badge variant="secondary" className="text-xs">
-                                {issue.commentsCount}
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              <Badge
+                                className={`text-xs ${getStatusColor(issue.status)}`}
+                                variant="secondary"
+                              >
+                                {issue.status}
                               </Badge>
-                            ) : (
-                              <span className="text-gray-300">-</span>
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              <span className={`text-sm font-medium ${getPriorityColor(issue.priority)}`}>
+                                {issue.priority || '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              <span className="text-xs text-gray-600">{issue.type || '-'}</span>
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              <Badge variant="secondary" className="text-xs">
+                                {issue.project}
+                              </Badge>
+                            </TableCell>
+                            {scope === 'project_all' && (
+                              <TableCell onClick={() => toggleRow(issue.key)}>
+                                <span className={`text-xs ${isMyIssue ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>
+                                  {issue.assignee || <span className="text-gray-300">-</span>}
+                                </span>
+                              </TableCell>
                             )}
-                          </TableCell>
-                          <TableCell className="text-center" onClick={() => toggleRow(issue.key)}>
-                            <ReadinessBadgesCompact rc={readinessMap[issue.key]} />
-                          </TableCell>
-                          <TableCell onClick={() => toggleRow(issue.key)}>
-                            {ld?.notes ? (
-                              <StickyNote className="h-4 w-4 text-yellow-500" />
-                            ) : (
-                              <span className="text-gray-300">-</span>
-                            )}
+                            <TableCell className="text-right" onClick={() => toggleRow(issue.key)}>
+                              <span className={`font-mono text-sm ${issue.timespent ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {issue.timespent ? formatSeconds(issue.timespent) : '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right" onClick={() => toggleRow(issue.key)}>
+                              <span className={`font-mono text-sm ${logged > 0 ? 'font-medium text-green-600' : 'text-gray-400'}`}>
+                                {logged > 0 ? formatSeconds(logged) : '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center" onClick={() => toggleRow(issue.key)}>
+                              {issue.commentsCount > 0 ? (
+                                <Badge variant="secondary" className="text-xs">{issue.commentsCount}</Badge>
+                              ) : (
+                                <span className="text-gray-300">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center" onClick={() => toggleRow(issue.key)}>
+                              <ReadinessBadgesCompact rc={readinessMap[issue.key]} />
+                            </TableCell>
+                            <TableCell onClick={() => toggleRow(issue.key)}>
+                              {ld?.notes ? (
+                                <StickyNote className="h-4 w-4 text-yellow-500" />
+                              ) : (
+                                <span className="text-gray-300">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+
+                          {/* Expanded detail panel */}
+                          {isExpanded && (
+                            <TableRow className="bg-slate-50 dark:bg-slate-900">
+                              <TableCell colSpan={colCount} className="p-4">
+                                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                                  <div className="space-y-4">
+                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                      <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Informacje</h4>
+                                      <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div className="text-gray-500">Projekt:</div>
+                                        <div className="font-medium">{issue.projectName || issue.project}</div>
+                                        <div className="text-gray-500">Typ:</div>
+                                        <div>{issue.type || '-'}</div>
+                                        <div className="text-gray-500">Priorytet:</div>
+                                        <div className={getPriorityColor(issue.priority)}>{issue.priority || '-'}</div>
+                                        <div className="text-gray-500">Przypisany:</div>
+                                        <div>{issue.assignee || '-'}</div>
+                                        <div className="text-gray-500">Utworzony:</div>
+                                        <div>{issue.created ? new Date(issue.created).toLocaleDateString('pl-PL') : '-'}</div>
+                                        <div className="text-gray-500">Ostatnia zmiana:</div>
+                                        <div>{issue.updated ? new Date(issue.updated).toLocaleDateString('pl-PL') : '-'}</div>
+                                        {issue.duedate && (<><div className="text-gray-500">Termin:</div><div className="font-medium text-red-600">{new Date(issue.duedate).toLocaleDateString('pl-PL')}</div></>)}
+                                        {issue.resolution && (<><div className="text-gray-500">Rozwiazanie:</div><div>{issue.resolution}</div></>)}
+                                        <div className="text-gray-500">Czas w Jirze:</div>
+                                        <div className="font-mono text-blue-600">{issue.timespent ? formatSeconds(issue.timespent) : '0h'}</div>
+                                        <div className="text-gray-500">Czas w Tempo:</div>
+                                        <div className="font-mono text-green-600">{logged > 0 ? formatSeconds(logged) : '0h'}</div>
+                                        {issue.timeoriginalestimate && (<><div className="text-gray-500">Estymacja:</div><div className="font-mono">{formatSeconds(issue.timeoriginalestimate)}</div></>)}
+                                      </div>
+                                      {issue.labels.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                          {issue.labels.map(l => (<Badge key={l} variant="outline" className="text-xs">{l}</Badge>))}
+                                        </div>
+                                      )}
+                                      {issue.components.length > 0 && (
+                                        <div className="mt-1 text-xs text-gray-500">Komponenty: {issue.components.join(', ')}</div>
+                                      )}
+                                    </div>
+                                    {issue.parentKey && (
+                                      <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                        <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Parent</h4>
+                                        <a href={`${JIRA_BASE}/${issue.parentKey}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                                          <Badge variant="outline" className="font-mono text-xs">{issue.parentKey}</Badge>
+                                          <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                        {issue.parentSummary && <p className="mt-1 text-sm text-gray-600">{issue.parentSummary}</p>}
+                                      </div>
+                                    )}
+                                    {issue.subtasks.length > 0 && (
+                                      <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                        <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Subtaski ({issue.subtasks.length})</h4>
+                                        <div className="space-y-1">
+                                          {issue.subtasks.map(st => (
+                                            <div key={st.key} className="flex items-center gap-2 text-sm">
+                                              <a href={`${JIRA_BASE}/${st.key}`} target="_blank" rel="noopener noreferrer" className="font-mono text-xs text-blue-600 hover:underline">{st.key}</a>
+                                              <Badge className={`text-[10px] ${getStatusColor(st.status)}`} variant="secondary">{st.status}</Badge>
+                                              <span className="truncate text-gray-600">{st.summary}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {readinessMap[issue.key] && <ReadinessBadgesFull rc={readinessMap[issue.key]} />}
+                                    {issue.description && (
+                                      <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                        <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Opis</h4>
+                                        <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{issue.description}</pre>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="space-y-4">
+                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                      <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">Moje notatki</h4>
+                                      <Textarea placeholder="Dodaj notatki do tego zadania..." value={ld?.notes || ''} onChange={e => handleNotesChange(issue.key, e.target.value)} rows={4} />
+                                    </div>
+                                    {issue.comments.length > 0 && (
+                                      <div className="rounded border bg-white p-3 dark:bg-slate-800">
+                                        <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">Komentarze Jira ({issue.commentsCount})</h4>
+                                        <div className="max-h-80 space-y-3 overflow-auto">
+                                          {issue.comments.map((comment, ci) => (
+                                            <div key={ci} className="rounded bg-gray-50 p-2 dark:bg-slate-700">
+                                              <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                                                <span className="font-medium text-gray-700 dark:text-gray-300">{comment.author}</span>
+                                                <span>{new Date(comment.created).toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                              </div>
+                                              <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{comment.body.length > 500 ? comment.body.substring(0, 500) + '...' : comment.body}</pre>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {!issue.description && issue.comments.length === 0 && (
+                                      <div className="rounded border border-dashed bg-white p-4 text-center text-sm text-gray-400 dark:bg-slate-800">
+                                        Brak opisu i komentarzy w Jirze.<br />Uzyj notatek powyzej, zeby dodac informacje.
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    };
+
+                    // --- Render group ---
+                    if (!isMultiGroup) {
+                      // Standalone issue (no parent group) — render directly
+                      return group.children.map(issue => renderIssueRow(issue, 0));
+                    }
+
+                    // Multi-child group — render group header + children
+                    return (
+                      <Fragment key={group.id}>
+                        {/* Group header row */}
+                        <TableRow
+                          className="cursor-pointer bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700"
+                          onClick={() => toggleGroup(group.id)}
+                        >
+                          <TableCell colSpan={colCount}>
+                            <div className="flex items-center gap-3">
+                              {isGroupOpen ? (
+                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-slate-500" />
+                              )}
+                              <Layers className="h-4 w-4 text-indigo-500" />
+                              {group.parentKey && (
+                                <a
+                                  href={`${JIRA_BASE}/${group.parentKey}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-xs text-indigo-600 hover:underline"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  {group.parentKey}
+                                </a>
+                              )}
+                              <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                                {group.parentSummary}
+                              </span>
+                              {group.parentStatus && (
+                                <Badge className={`text-[10px] ${getStatusColor(group.parentStatus)}`} variant="secondary">
+                                  {group.parentStatus}
+                                </Badge>
+                              )}
+                              <span className="text-xs text-gray-400">{group.parentType}</span>
+                              <Badge variant="outline" className="text-[10px]">{group.parentProject}</Badge>
+                              {/* Aggregate stats */}
+                              <div className="ml-auto flex items-center gap-3 text-xs text-gray-500">
+                                <span>{group.stats.total} zadan</span>
+                                {group.stats.doneCount > 0 && (
+                                  <span className="text-green-600">{group.stats.doneCount} done</span>
+                                )}
+                                {group.stats.jiraTime > 0 && (
+                                  <span className="font-mono text-blue-500">{formatSeconds(group.stats.jiraTime)}</span>
+                                )}
+                                {group.stats.tempoTime > 0 && (
+                                  <span className="font-mono text-green-500">{formatSeconds(group.stats.tempoTime)}</span>
+                                )}
+                              </div>
+                            </div>
                           </TableCell>
                         </TableRow>
 
-                        {/* Expanded row */}
-                        {isExpanded && (
-                          <TableRow className="bg-slate-50 dark:bg-slate-900">
-                            <TableCell colSpan={scope === 'project_all' ? 15 : 14} className="p-4">
-                              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                                {/* Left column: Info */}
-                                <div className="space-y-4">
-                                  {/* Meta info */}
-                                  <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                    <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                      Informacje
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                      <div className="text-gray-500">Projekt:</div>
-                                      <div className="font-medium">
-                                        {issue.projectName || issue.project}
-                                      </div>
-                                      <div className="text-gray-500">Typ:</div>
-                                      <div>{issue.type || '-'}</div>
-                                      <div className="text-gray-500">Priorytet:</div>
-                                      <div className={getPriorityColor(issue.priority)}>
-                                        {issue.priority || '-'}
-                                      </div>
-                                      <div className="text-gray-500">Przypisany:</div>
-                                      <div>{issue.assignee || '-'}</div>
-                                      <div className="text-gray-500">Utworzony:</div>
-                                      <div>
-                                        {issue.created
-                                          ? new Date(issue.created).toLocaleDateString('pl-PL')
-                                          : '-'}
-                                      </div>
-                                      <div className="text-gray-500">Ostatnia zmiana:</div>
-                                      <div>
-                                        {issue.updated
-                                          ? new Date(issue.updated).toLocaleDateString('pl-PL')
-                                          : '-'}
-                                      </div>
-                                      {issue.duedate && (
-                                        <>
-                                          <div className="text-gray-500">Termin:</div>
-                                          <div className="font-medium text-red-600">
-                                            {new Date(issue.duedate).toLocaleDateString('pl-PL')}
-                                          </div>
-                                        </>
-                                      )}
-                                      {issue.resolution && (
-                                        <>
-                                          <div className="text-gray-500">Rozwiazanie:</div>
-                                          <div>{issue.resolution}</div>
-                                        </>
-                                      )}
-                                      <div className="text-gray-500">Czas w Jirze:</div>
-                                      <div className="font-mono text-blue-600">
-                                        {issue.timespent ? formatSeconds(issue.timespent) : '0h'}
-                                      </div>
-                                      <div className="text-gray-500">Czas w Tempo:</div>
-                                      <div className="font-mono text-green-600">
-                                        {logged > 0 ? formatSeconds(logged) : '0h'}
-                                      </div>
-                                      {issue.timeoriginalestimate && (
-                                        <>
-                                          <div className="text-gray-500">Estymacja:</div>
-                                          <div className="font-mono">
-                                            {formatSeconds(issue.timeoriginalestimate)}
-                                          </div>
-                                        </>
-                                      )}
-                                    </div>
-                                    {/* Labels */}
-                                    {issue.labels.length > 0 && (
-                                      <div className="mt-2 flex flex-wrap gap-1">
-                                        {issue.labels.map(l => (
-                                          <Badge key={l} variant="outline" className="text-xs">
-                                            {l}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {/* Components */}
-                                    {issue.components.length > 0 && (
-                                      <div className="mt-1 text-xs text-gray-500">
-                                        Komponenty: {issue.components.join(', ')}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Parent info */}
-                                  {issue.parentKey && (
-                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                      <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        Parent
-                                      </h4>
-                                      <a
-                                        href={`${JIRA_BASE}/${issue.parentKey}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 text-sm text-blue-600 hover:underline"
-                                      >
-                                        <Badge variant="outline" className="font-mono text-xs">
-                                          {issue.parentKey}
-                                        </Badge>
-                                        <ExternalLink className="h-3 w-3" />
-                                      </a>
-                                      {issue.parentSummary && (
-                                        <p className="mt-1 text-sm text-gray-600">
-                                          {issue.parentSummary}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* Subtasks */}
-                                  {issue.subtasks.length > 0 && (
-                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                      <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        Subtaski ({issue.subtasks.length})
-                                      </h4>
-                                      <div className="space-y-1">
-                                        {issue.subtasks.map(st => (
-                                          <div
-                                            key={st.key}
-                                            className="flex items-center gap-2 text-sm"
-                                          >
-                                            <a
-                                              href={`${JIRA_BASE}/${st.key}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="font-mono text-xs text-blue-600 hover:underline"
-                                            >
-                                              {st.key}
-                                            </a>
-                                            <Badge
-                                              className={`text-[10px] ${getStatusColor(st.status)}`}
-                                              variant="secondary"
-                                            >
-                                              {st.status}
-                                            </Badge>
-                                            <span className="truncate text-gray-600">
-                                              {st.summary}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Readiness Criteria */}
-                                  {readinessMap[issue.key] && (
-                                    <ReadinessBadgesFull rc={readinessMap[issue.key]} />
-                                  )}
-
-                                  {/* Description */}
-                                  {issue.description && (
-                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                      <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        Opis
-                                      </h4>
-                                      <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-                                        {issue.description}
-                                      </pre>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Right column: Comments + Notes */}
-                                <div className="space-y-4">
-                                  {/* Notes */}
-                                  <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                    <h4 className="mb-1 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                      Moje notatki
-                                    </h4>
-                                    <Textarea
-                                      placeholder="Dodaj notatki do tego zadania..."
-                                      value={ld?.notes || ''}
-                                      onChange={e => handleNotesChange(issue.key, e.target.value)}
-                                      rows={4}
-                                    />
-                                  </div>
-
-                                  {/* Comments from Jira */}
-                                  {issue.comments.length > 0 && (
-                                    <div className="rounded border bg-white p-3 dark:bg-slate-800">
-                                      <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                                        Komentarze Jira ({issue.commentsCount})
-                                      </h4>
-                                      <div className="max-h-80 space-y-3 overflow-auto">
-                                        {issue.comments.map((comment, ci) => (
-                                          <div
-                                            key={ci}
-                                            className="rounded bg-gray-50 p-2 dark:bg-slate-700"
-                                          >
-                                            <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                                              <span className="font-medium text-gray-700 dark:text-gray-300">
-                                                {comment.author}
-                                              </span>
-                                              <span>
-                                                {new Date(comment.created).toLocaleString('pl-PL', {
-                                                  day: '2-digit',
-                                                  month: '2-digit',
-                                                  year: 'numeric',
-                                                  hour: '2-digit',
-                                                  minute: '2-digit',
-                                                })}
-                                              </span>
-                                            </div>
-                                            <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
-                                              {comment.body.length > 500
-                                                ? comment.body.substring(0, 500) + '...'
-                                                : comment.body}
-                                            </pre>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* No comments/description info */}
-                                  {!issue.description && issue.comments.length === 0 && (
-                                    <div className="rounded border border-dashed bg-white p-4 text-center text-sm text-gray-400 dark:bg-slate-800">
-                                      Brak opisu i komentarzy w Jirze.
-                                      <br />
-                                      Uzyj notatek powyzej, zeby dodac informacje.
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                        {/* Children (if group expanded) */}
+                        {isGroupOpen && (
+                          <>
+                            {group.parentIssue && renderIssueRow(group.parentIssue, 0)}
+                            {group.children.map(issue => renderIssueRow(issue, 1))}
+                          </>
                         )}
                       </Fragment>
                     );
