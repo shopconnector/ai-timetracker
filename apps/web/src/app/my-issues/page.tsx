@@ -154,6 +154,39 @@ export default function MyIssuesPage() {
 
   // Debounce refs for notes
   const notesTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const tempoLoaded = useRef(false);
+
+  // Fetch Tempo worklogs + Slack only once (not on scope change)
+  const loadSideData = useCallback(async () => {
+    if (tempoLoaded.current) return;
+    tempoLoaded.current = true;
+
+    try {
+      const tempoRes = await fetch(apiUrl('/api/tempo/worklogs-by-issue'));
+      if (tempoRes.ok) {
+        const tempoData = await tempoRes.json();
+        setTimeByIssueKey(tempoData.timeByIssueKey || {});
+        setTimeByIssueId(tempoData.timeByIssueId || {});
+      }
+    } catch {
+      // Tempo fetch failed silently
+    }
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const slackRes = await fetch(apiUrl(`/api/slack/activities?date=${today}`));
+      if (slackRes.ok) {
+        const slackData = await slackRes.json();
+        const activities = slackData.activities || [];
+        const totalMinutes = Math.round(activities.reduce((sum: number, a: { totalSeconds: number }) => sum + a.totalSeconds, 0) / 60);
+        const conversationCount = activities.filter((a: { isMeeting?: boolean }) => !a.isMeeting).length;
+        const huddleCount = activities.filter((a: { isMeeting?: boolean }) => a.isMeeting).length;
+        setSlackSummary({ totalMinutes, conversationCount, huddleCount });
+      }
+    } catch {
+      // Slack not configured - silently ignore
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -163,44 +196,18 @@ export default function MyIssuesPage() {
       const filter = scope === 'project_all' ? 'project_all' : 'assigned';
       const limit = scope === 'project_all' ? 500 : 200;
 
-      // Ładuj dane z Jira i Tempo równolegle
-      const [issuesRes, tempoRes] = await Promise.all([
-        fetch(apiUrl(`/api/jira/my-issues?filter=${filter}&limit=${limit}`)),
-        fetch(apiUrl('/api/tempo/worklogs-by-issue')),
-      ]);
+      const issuesRes = await fetch(apiUrl(`/api/jira/my-issues?filter=${filter}&limit=${limit}`));
 
-      if (!issuesRes.ok) throw new Error('Nie udało się pobrać zadań z Jiry');
+      if (!issuesRes.ok) throw new Error('Nie udalo sie pobrac zadan z Jiry');
 
       const issuesData = await issuesRes.json();
       setIssues(issuesData.issues || []);
       if (issuesData.accountId) setAccountId(issuesData.accountId);
 
-      if (tempoRes.ok) {
-        const tempoData = await tempoRes.json();
-        setTimeByIssueKey(tempoData.timeByIssueKey || {});
-        setTimeByIssueId(tempoData.timeByIssueId || {});
-      }
-
       // Załaduj dane lokalne
       setLocalData(getAllIssueLocalData());
-
-      // Fetch Slack summary for today
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const slackRes = await fetch(apiUrl(`/api/slack/activities?date=${today}`));
-        if (slackRes.ok) {
-          const slackData = await slackRes.json();
-          const activities = slackData.activities || [];
-          const totalMinutes = Math.round(activities.reduce((sum: number, a: { totalSeconds: number }) => sum + a.totalSeconds, 0) / 60);
-          const conversationCount = activities.filter((a: { isMeeting?: boolean }) => !a.isMeeting).length;
-          const huddleCount = activities.filter((a: { isMeeting?: boolean }) => a.isMeeting).length;
-          setSlackSummary({ totalMinutes, conversationCount, huddleCount });
-        }
-      } catch {
-        // Slack not configured - silently ignore
-      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Błąd ładowania danych');
+      setError(err instanceof Error ? err.message : 'Blad ladowania danych');
     }
 
     setLoading(false);
@@ -208,7 +215,8 @@ export default function MyIssuesPage() {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadSideData();
+  }, [loadData, loadSideData]);
 
   // Helper: get logged time for an issue (by key or by id)
   const getLoggedTime = useCallback(
@@ -445,7 +453,7 @@ export default function MyIssuesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadData} disabled={loading}>
+          <Button variant="outline" onClick={() => { tempoLoaded.current = false; loadData(); loadSideData(); }} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Odswiez
           </Button>

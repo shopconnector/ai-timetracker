@@ -574,13 +574,28 @@ export async function getFilteredIssues(
       const projectsJql = projectKeys.slice(0, 20).map(k => `"${k}"`).join(', ');
       jql = `project IN (${projectsJql}) AND updatedDate >= -180d AND status not in (Done) ORDER BY updated DESC`;
 
-      // Use pagination for larger result sets
+      // Use pagination for larger result sets, with retry on rate limit
       const allIssues: JiraIssue[] = [];
       let nextPageToken: string | undefined;
       const pageSize = Math.min(maxResults, 100);
 
       while (allIssues.length < maxResults) {
-        const result = await searchIssuesPaginated(jql, 0, pageSize, nextPageToken, fields);
+        let result;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            result = await searchIssuesPaginated(jql, 0, pageSize, nextPageToken, fields);
+            break;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('429') && attempt < 2) {
+              // Rate limited — wait and retry
+              await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+              continue;
+            }
+            throw err;
+          }
+        }
+        if (!result) break;
         allIssues.push(...result.issues);
         if (!result.hasMore || result.issues.length === 0) break;
         nextPageToken = result.nextPageToken;
