@@ -1,0 +1,387 @@
+# Build macOS DMG Package
+# Triggers on tags (vX.Y.Z) or manual workflow_dispatch
+
+name: Build macOS Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g., 0.1.0)'
+        required: false
+        default: ''
+
+env:
+  NODE_VERSION: '20.18.1'
+  PNPM_VERSION: '9.15.0'
+  ACTIVITYWATCH_VERSION: '0.13.2'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Detect architecture
+        id: arch
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "arm64" ]; then
+            NODE_ARCH="arm64"
+            AW_ARCH="arm64"
+          else
+            NODE_ARCH="x64"
+            AW_ARCH="x86_64"
+          fi
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "node_arch=$NODE_ARCH" >> $GITHUB_OUTPUT
+          echo "aw_arch=$AW_ARCH" >> $GITHUB_OUTPUT
+          echo "Architecture: $ARCH (Node: $NODE_ARCH)"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build application
+        run: pnpm build
+        env:
+          ACTIVITYWATCH_URL: http://localhost:5600
+          TEMPO_API_TOKEN: ""
+          JIRA_BASE_URL: ""
+          JIRA_SERVICE_EMAIL: ""
+          JIRA_API_KEY: ""
+
+      - name: Verify standalone output
+        run: |
+          if [ ! -d "apps/web/.next/standalone" ]; then
+            echo "ERROR: Standalone output not found!"
+            exit 1
+          fi
+          echo "Standalone output verified"
+
+      - name: Download Node.js runtime
+        run: |
+          NODE_ARCH="${{ steps.arch.outputs.node_arch }}"
+          NODE_URL="https://nodejs.org/dist/v${{ env.NODE_VERSION }}/node-v${{ env.NODE_VERSION }}-darwin-${NODE_ARCH}.tar.gz"
+
+          echo "Downloading Node.js v${{ env.NODE_VERSION }} (${NODE_ARCH})..."
+          curl -fsSL "$NODE_URL" -o node-runtime.tar.gz
+          mkdir -p node-extract
+          tar xzf node-runtime.tar.gz -C node-extract
+
+          mkdir -p dist/macos/runtime/node
+          NODE_DIR=$(ls node-extract)
+          cp node-extract/$NODE_DIR/bin/node dist/macos/runtime/node/
+          chmod +x dist/macos/runtime/node/node
+
+          rm -rf node-extract node-runtime.tar.gz
+          echo "Node.js runtime ready: $(dist/macos/runtime/node/node --version)"
+
+      - name: Download ActivityWatch
+        run: |
+          AW_VERSION="${{ env.ACTIVITYWATCH_VERSION }}"
+          AW_URL="https://github.com/ActivityWatch/activitywatch/releases/download/v${AW_VERSION}/activitywatch-v${AW_VERSION}-macos-x86_64.dmg"
+
+          echo "Downloading ActivityWatch v${AW_VERSION}..."
+          curl -fsSL "$AW_URL" -o activitywatch.dmg
+
+          # Mount DMG and copy .app
+          hdiutil attach activitywatch.dmg -nobrowse -quiet
+          MOUNT_POINT=$(hdiutil info | grep "ActivityWatch" | awk '{print $NF}')
+          if [ -z "$MOUNT_POINT" ]; then
+            MOUNT_POINT=$(ls -d /Volumes/Activity* 2>/dev/null | head -1)
+          fi
+
+          mkdir -p dist/macos/ActivityWatch
+          if [ -d "$MOUNT_POINT/ActivityWatch.app" ]; then
+            cp -R "$MOUNT_POINT/ActivityWatch.app" dist/macos/ActivityWatch/
+            echo "ActivityWatch.app copied"
+          else
+            echo "WARNING: ActivityWatch.app not found in DMG, listing contents:"
+            ls -la "$MOUNT_POINT/" || true
+            # Try to find any .app
+            find "$MOUNT_POINT" -name "*.app" -maxdepth 2 2>/dev/null || true
+          fi
+
+          hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+          rm -f activitywatch.dmg
+          echo "ActivityWatch ready"
+
+      - name: Prepare bundle
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Create app structure
+          APP_DIR="dist/macos/AI TimeTracker.app"
+          CONTENTS="${APP_DIR}/Contents"
+          MACOS="${CONTENTS}/MacOS"
+          RESOURCES="${CONTENTS}/Resources"
+
+          mkdir -p "${MACOS}"
+          mkdir -p "${RESOURCES}/app"
+          mkdir -p "${RESOURCES}/node"
+          mkdir -p "${RESOURCES}/data"
+
+          # Copy standalone app
+          cp -R apps/web/.next/standalone/* "${RESOURCES}/app/"
+
+          # Copy static files
+          if [ -d "apps/web/.next/static" ]; then
+            mkdir -p "${RESOURCES}/app/apps/web/.next/static"
+            cp -R apps/web/.next/static/* "${RESOURCES}/app/apps/web/.next/static/"
+          fi
+
+          # Copy public
+          if [ -d "apps/web/public" ]; then
+            mkdir -p "${RESOURCES}/app/apps/web/public"
+            cp -R apps/web/public/* "${RESOURCES}/app/apps/web/public/"
+          fi
+
+          # Copy Node.js runtime
+          cp dist/macos/runtime/node/node "${RESOURCES}/node/"
+          chmod +x "${RESOURCES}/node/node"
+
+          # Copy env example
+          cp .env.example "${RESOURCES}/data/.env.example"
+
+          # Copy start-server.js
+          cp scripts/macos/start-server.js "${RESOURCES}/"
+
+          # Copy launcher
+          cp scripts/macos/launcher.sh "${MACOS}/AI TimeTracker"
+          chmod +x "${MACOS}/AI TimeTracker"
+
+          # Copy Info.plist
+          sed "s/__VERSION__/${VERSION}/g" scripts/macos/Info.plist > "${CONTENTS}/Info.plist"
+
+          # Copy icon if exists
+          if [ -f "scripts/macos/AppIcon.icns" ]; then
+            cp scripts/macos/AppIcon.icns "${RESOURCES}/"
+          fi
+
+          echo "App bundle structure:"
+          find "${APP_DIR}" -maxdepth 4 -type d | head -20
+
+      - name: Code sign (optional)
+        if: ${{ env.APPLE_DEVELOPER_ID != '' }}
+        run: |
+          # Import certificate from secrets
+          echo "${{ secrets.APPLE_CERTIFICATE_P12 }}" | base64 --decode > certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import certificate.p12 -P "${{ secrets.APPLE_CERTIFICATE_PASSWORD }}" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Sign the app
+          codesign --force --deep --sign "${{ secrets.APPLE_DEVELOPER_ID }}" \
+            --options runtime \
+            "dist/macos/AI TimeTracker.app"
+
+          echo "Code signing complete"
+          rm -f certificate.p12
+
+      - name: Signing status
+        if: ${{ env.APPLE_DEVELOPER_ID == '' }}
+        run: |
+          echo "::warning::Code signing SKIPPED - Apple Developer secrets not configured"
+          echo "  To enable: add APPLE_DEVELOPER_ID, APPLE_CERTIFICATE_P12, APPLE_CERTIFICATE_PASSWORD secrets"
+
+      - name: Create DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCH="${{ steps.arch.outputs.arch }}"
+          DMG_NAME="TimeTracker-${VERSION}-macos-${ARCH}.dmg"
+
+          # Install create-dmg
+          brew install create-dmg || true
+
+          # Create DMG with nice layout
+          create-dmg \
+            --volname "AI TimeTracker ${VERSION}" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 80 \
+            --icon "AI TimeTracker.app" 180 180 \
+            --app-drop-link 480 180 \
+            --no-internet-enable \
+            "dist/${DMG_NAME}" \
+            "dist/macos/AI TimeTracker.app" \
+            || true
+
+          # Fallback: simple DMG if create-dmg fails
+          if [ ! -f "dist/${DMG_NAME}" ]; then
+            echo "create-dmg failed, using hdiutil fallback..."
+            hdiutil create -volname "AI TimeTracker" \
+              -srcfolder "dist/macos/AI TimeTracker.app" \
+              -ov -format UDZO \
+              "dist/${DMG_NAME}"
+          fi
+
+          echo "Created: ${DMG_NAME}"
+          ls -lh "dist/${DMG_NAME}"
+
+      - name: Notarize (optional)
+        if: ${{ env.APPLE_DEVELOPER_ID != '' }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCH="${{ steps.arch.outputs.arch }}"
+          DMG_NAME="TimeTracker-${VERSION}-macos-${ARCH}.dmg"
+
+          xcrun notarytool submit "dist/${DMG_NAME}" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --wait
+
+          xcrun stapler staple "dist/${DMG_NAME}"
+          echo "Notarization complete"
+
+      - name: Test server startup
+        run: |
+          echo "Testing server startup..."
+          RESOURCES="dist/macos/AI TimeTracker.app/Contents/Resources"
+
+          export NODE_ENV=production
+          export HOSTNAME=localhost
+          export PORT=5666
+          export ACTIVITYWATCH_URL=http://localhost:5600
+
+          # Start server in background
+          "${RESOURCES}/node/node" "${RESOURCES}/start-server.js" &
+          SERVER_PID=$!
+
+          sleep 10
+
+          # Test endpoints
+          ALL_PASSED=true
+          for URL in \
+            "http://localhost:5666/timetracker/api/status" \
+            "http://localhost:5666/timetracker/" \
+            "http://localhost:5666/timetracker/settings"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: $URL ($STATUS)"
+            else
+              echo "FAIL: $URL ($STATUS)"
+              ALL_PASSED=false
+            fi
+          done
+
+          kill $SERVER_PID 2>/dev/null || true
+
+          if [ "$ALL_PASSED" = "false" ]; then
+            echo "Some endpoint tests failed!"
+            exit 1
+          fi
+          echo "All endpoint tests PASSED"
+
+      - name: List artifacts
+        run: |
+          echo "Build artifacts:"
+          ls -lh dist/*.dmg 2>/dev/null || echo "No DMG found"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeTracker-macos-dmg
+          path: dist/TimeTracker-*.dmg
+          retention-days: 30
+
+      - name: Create stable-named copy
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCH="${{ steps.arch.outputs.arch }}"
+          cp "dist/TimeTracker-${VERSION}-macos-${ARCH}.dmg" "dist/TimeTracker-macos-${ARCH}.dmg"
+          echo "Created stable-named copy: TimeTracker-macos-${ARCH}.dmg"
+
+      - name: Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          ARCH="${{ steps.arch.outputs.arch }}"
+
+          # Check if release exists (created by Windows build)
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG exists, uploading macOS artifacts..."
+            gh release upload "$TAG" \
+              "dist/TimeTracker-${VERSION}-macos-${ARCH}.dmg" \
+              "dist/TimeTracker-macos-${ARCH}.dmg" \
+              --clobber
+          else
+            echo "Creating new release $TAG..."
+
+            SIGNED=""
+            if [ -n "${{ env.APPLE_DEVELOPER_ID }}" ]; then
+              SIGNED="Signed and notarized"
+            else
+              SIGNED="Unsigned — macOS Gatekeeper may show a warning. Right-click > Open to bypass."
+            fi
+
+            gh release create "$TAG" \
+              "dist/TimeTracker-${VERSION}-macos-${ARCH}.dmg" \
+              "dist/TimeTracker-macos-${ARCH}.dmg" \
+              --title "AI TimeTracker $TAG" \
+              --notes "$(cat <<EOF
+          ## Download (macOS)
+
+          **[TimeTracker-macos-${ARCH}.dmg](https://github.com/shopconnector/ai-timetracker/releases/latest/download/TimeTracker-macos-${ARCH}.dmg)**
+
+          ${SIGNED}
+
+          ## Installation
+          1. Download the DMG
+          2. Drag **AI TimeTracker** to Applications
+          3. Launch from Applications
+          4. Configure API keys in Settings
+
+          ## Requirements
+          - macOS 12+ (Monterey or later)
+          - Jira/Tempo API tokens
+          EOF
+          )"
+          fi
+
+          echo "Release updated: $TAG"
