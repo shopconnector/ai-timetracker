@@ -27,9 +27,11 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 // Default Billing Account mapping by project prefix
 const PROJECT_BILLING_ACCOUNT: Record<string, string> = {
   'BCI': 'BEE-INTERNAL',
-  'AR': 'BEE-INTERNAL',
-  'BSL': 'BEE-INTERNAL',
+  'AR': 'AI',
+  'BSL': 'SALES-ACTI',
+  'CFR': 'CARFREE',
   'AGRO': 'AGROSIMEXMARKETING',
+  'AGRO2': 'AGROAI',
   'WOSH': 'WOSHWMS',
   'SAND': 'SANDOZ',
   'CEPD': 'CEPDANALYT',
