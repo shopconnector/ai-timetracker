@@ -142,7 +142,9 @@ Open **Settings** in the app and enter your API keys — see [API Keys Setup](#a
 
 ### API Keys Setup (step by step)
 
-After installing the app, open **Settings** (gear icon in the sidebar). You'll see fields for each API key. Fill them in one by one:
+After installing the app, open **Settings** (gear icon in the sidebar). You'll see fields for each API key. Fill them in one by one.
+
+> **Tip:** every field in the app has an inline **"How to get this?"** help guide next to it. The steps below mirror those guides — use whichever is more convenient.
 
 #### 1. Jira API Key (required)
 
@@ -158,9 +160,11 @@ You need this for TimeTracker to access your Jira issues.
    - **Jira Base URL** — your company's Jira address, e.g. `https://yourcompany.atlassian.net`
    - **Jira Email** — the email you use to log into Jira
 
-#### 2. Tempo API Token (required)
+#### 2. Tempo API Token + Account ID (required)
 
-You need this for TimeTracker to read and create worklogs.
+You need these for TimeTracker to read and create worklogs.
+
+**Tempo API Token:**
 
 1. Open **Jira** in your browser
 2. Click **Apps** in the top menu bar → click **Tempo** → click **Settings** (bottom-left gear icon)
@@ -170,6 +174,19 @@ You need this for TimeTracker to read and create worklogs.
 6. Select these permissions: **Worklogs: View, Create, Edit**
 7. Click **Create** and **copy the token**
 8. Go back to TimeTracker **Settings** and paste it into the **Tempo API Token** field
+
+**Tempo Account ID** (= your Atlassian Account ID):
+
+The Tempo API needs to know who is creating the worklog. TimeTracker will **auto-fetch** this from Jira on the first save if you leave the field empty — but filling it in avoids one extra API call. Two ways to find it:
+
+- **From Jira profile URL** — in Jira, click your avatar (top-right) → **Profile**. The accountId appears at the end of the page URL, e.g. `https://yourcompany.atlassian.net/jira/people/712020:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Copy the part after `/people/`.
+- **From the Jira REST API** — after you have the Jira token + email (step 1), run:
+  ```bash
+  curl -u YOUR_EMAIL:YOUR_JIRA_TOKEN https://yourcompany.atlassian.net/rest/api/3/myself
+  ```
+  Copy the value of the `accountId` field from the JSON response.
+
+Paste it into the **Account ID** field in Settings (placeholder shows the expected format).
 
 #### 3. Gemini API Key (recommended — it's free!)
 
@@ -195,7 +212,13 @@ Only needed if Gemini doesn't work or you prefer other models (Claude, GPT-4, et
 
 #### 5. Slack Integration (optional)
 
-Adds Slack activity correlation — shows which Slack channels/huddles you were active in alongside your desktop activity.
+Slack gives TimeTracker two separate capabilities, each needing its own token:
+
+- **User Token (`xoxp-`)** — reads your Slack activity (DMs, channels, huddles) to correlate with desktop activity.
+- **Bot Token (`xoxb-`)** — sends notifications (worklog suggestions, real-time prompts) as a DM from the bot.
+- **Slack User ID** — tells the bot *who* to DM with those notifications.
+
+**Create the Slack app + add scopes:**
 
 1. Open: **https://api.slack.com/apps** → click **"Create New App"** → choose **"From scratch"**
 2. Give it a name like `TimeTracker` and select your workspace
@@ -206,9 +229,26 @@ Adds Slack activity correlation — shows which Slack channels/huddles you were 
    - `im:history`, `im:read`
    - `mpim:history`, `mpim:read`
    - `users:read`
-5. Scroll back up and click **"Install to Workspace"** → click **Allow**
-6. Copy the **User OAuth Token** (starts with `xoxp-...`)
-7. Paste into the **Slack User Token** field in Settings
+5. Scroll to **"Bot Token Scopes"** and add:
+   - `chat:write`, `im:write`, `users:read`
+6. Scroll back up and click **"Install to Workspace"** → click **Allow**
+7. Copy both tokens from the OAuth page:
+   - **User OAuth Token** (starts with `xoxp-...`) → paste into **Slack User Token** field in Settings
+   - **Bot User OAuth Token** (starts with `xoxb-...`) → see note below for the Bot Token
+
+**Get your Slack User ID (for DM notifications):**
+
+1. Open Slack (desktop or web)
+2. Click your avatar → **Profile**
+3. Click the `⋯` (More) button next to your name → **Copy member ID**
+4. The ID looks like `U0123456789` (starts with `U`)
+
+> **Known limitation:** the **Bot Token** and **Slack User ID** fields are visible in the Settings UI but are not currently persisted by the settings API (the FIELD_TO_ENV map in `apps/web/src/app/api/settings/route.ts` omits them). Until that is fixed, set them directly in `.env.local`:
+> ```env
+> SLACK_BOT_TOKEN=xoxb-...
+> SLACK_NOTIFY_USER_ID=U0123456789
+> ```
+> The User Token (`SLACK_USER_TOKEN`) does save correctly via the UI.
 
 ---
 
@@ -217,6 +257,7 @@ Adds Slack activity correlation — shows which Slack channels/huddles you were 
 ```env
 # Tempo API (required)
 TEMPO_API_TOKEN=your_token
+TEMPO_ACCOUNT_ID=712020:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx  # leave blank to auto-fetch from Jira
 
 # Jira API (required)
 JIRA_BASE_URL=https://your-company.atlassian.net
@@ -225,16 +266,18 @@ JIRA_API_KEY=your_token
 
 # Gemini API (recommended — free tier available)
 GEMINI_API_KEY=your_gemini_key
-# GEMINI_MODEL=gemini-2.5-flash  # optional
+# LLM_MODEL=gemini-2.5-flash  # optional: gemini-2.5-flash | gemini-2.5-pro | gemini-2.0-flash
 
 # ActivityWatch (optional)
 ACTIVITYWATCH_URL=http://localhost:5600
 
-# OpenRouter (optional — fallback)
+# OpenRouter (optional — fallback AI provider)
 OPENROUTER_API_KEY=
 
-# Slack (optional — ActivityWatch correlation)
-SLACK_USER_TOKEN=xoxp-...
+# Slack (optional)
+SLACK_USER_TOKEN=xoxp-...       # read activity (saves via Settings UI)
+SLACK_BOT_TOKEN=xoxb-...        # send notifications (UI does not persist — set here)
+SLACK_NOTIFY_USER_ID=U0123456789  # DM recipient (UI does not persist — set here)
 ```
 
 ---
