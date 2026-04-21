@@ -26,8 +26,11 @@ import {
   Monitor,
   Wifi,
   WifiOff,
+  Pause,
+  Play,
+  Loader2,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 // Map paths to labels
 const pathLabels: Record<string, string> = {
@@ -48,10 +51,48 @@ export function Header() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [trackingPaused, setTrackingPaused] = useState(false);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingSupported, setTrackingSupported] = useState(true);
+
+  const fetchTrackingState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tracking/toggle');
+      if (res.ok) {
+        const data = await res.json();
+        setTrackingPaused(data.paused);
+        setTrackingSupported(data.supported);
+      }
+    } catch {}
+  }, []);
+
+  const toggleTracking = useCallback(async () => {
+    if (trackingLoading) return;
+    setTrackingLoading(true);
+    try {
+      const action = trackingPaused ? 'resume' : 'pause';
+      const res = await fetch('/api/tracking/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTrackingPaused(data.state === 'paused');
+      } else {
+        alert(data.error || 'Błąd zmiany stanu śledzenia');
+      }
+    } catch {
+      alert('Błąd połączenia z serwerem');
+    } finally {
+      setTrackingLoading(false);
+    }
+  }, [trackingPaused, trackingLoading]);
 
   useEffect(() => {
     setMounted(true);
     setIsOnline(navigator.onLine);
+    fetchTrackingState();
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -63,7 +104,7 @@ export function Header() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [fetchTrackingState]);
 
   // Generate breadcrumbs from pathname
   const segments = pathname.split('/').filter(Boolean);
@@ -153,6 +194,32 @@ export function Header() {
               </>
             )}
           </div>
+
+          {/* Tracking pause/resume toggle */}
+          {mounted && trackingSupported && (
+            <button
+              onClick={toggleTracking}
+              disabled={trackingLoading}
+              title={trackingPaused ? 'Wznów śledzenie (uruchom ActivityWatch)' : 'Wstrzymaj śledzenie (zatrzymaj ActivityWatch)'}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60',
+                trackingPaused
+                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+              )}
+            >
+              {trackingLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : trackingPaused ? (
+                <Play className="h-3 w-3" />
+              ) : (
+                <Pause className="h-3 w-3" />
+              )}
+              <span className="hidden sm:inline">
+                {trackingLoading ? '...' : trackingPaused ? 'Wznów' : 'Wstrzymaj'}
+              </span>
+            </button>
+          )}
 
           {/* Theme toggle */}
           {mounted && (
