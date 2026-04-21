@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useSidebar } from '@/lib/providers/SidebarProvider';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { apiUrl } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +59,7 @@ export function Header() {
 
   const fetchTrackingState = useCallback(async () => {
     try {
-      const res = await fetch('/api/tracking/toggle');
+      const res = await fetch(apiUrl('/api/tracking/toggle'));
       if (res.ok) {
         const data = await res.json();
         setTrackingPaused(data.paused);
@@ -71,7 +73,7 @@ export function Header() {
     setTrackingLoading(true);
     try {
       const action = trackingPaused ? 'resume' : 'pause';
-      const res = await fetch('/api/tracking/toggle', {
+      const res = await fetch(apiUrl('/api/tracking/toggle'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -79,11 +81,12 @@ export function Header() {
       const data = await res.json();
       if (res.ok) {
         setTrackingPaused(data.state === 'paused');
+        toast.success(data.state === 'paused' ? 'Śledzenie wstrzymane' : 'Śledzenie wznowione');
       } else {
-        alert(data.error || 'Błąd zmiany stanu śledzenia');
+        toast.error(data.error || 'Błąd zmiany stanu śledzenia');
       }
     } catch {
-      alert('Błąd połączenia z serwerem');
+      toast.error('Błąd połączenia z serwerem');
     } finally {
       setTrackingLoading(false);
     }
