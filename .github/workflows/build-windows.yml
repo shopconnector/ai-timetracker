@@ -785,10 +785,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
 
-          # Delete existing release/tag if exists (for re-runs)
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-
-          # Create release with installer (versioned + stable name)
           # Detect if installer was signed
           SIGNED=""
           if [ -n "${{ env.AZURE_TENANT_ID }}" ]; then
@@ -797,12 +793,23 @@ jobs:
             SIGNED="⚠️ This build is not code-signed. Windows SmartScreen may show a warning — click \"More info\" → \"Run anyway\"."
           fi
 
-          gh release create "$TAG" \
-            dist/TimeTracker-Setup-${VERSION}-x64.exe \
-            dist/TimeTracker-Setup-x64.exe \
-            dist/TimeTracker-${VERSION}-portable-x64.zip \
-            --title "AI TimeTracker $TAG" \
-            --notes "$(cat <<EOF
+          # If release already exists (created by macOS or prior run), upload Windows assets to it.
+          # Otherwise create a new release. Never delete — that would race-clobber assets from the parallel macOS job.
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG exists, uploading Windows artifacts..."
+            gh release upload "$TAG" \
+              "dist/TimeTracker-Setup-${VERSION}-x64.exe" \
+              "dist/TimeTracker-Setup-x64.exe" \
+              "dist/TimeTracker-${VERSION}-portable-x64.zip" \
+              --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" \
+              "dist/TimeTracker-Setup-${VERSION}-x64.exe" \
+              "dist/TimeTracker-Setup-x64.exe" \
+              "dist/TimeTracker-${VERSION}-portable-x64.zip" \
+              --title "AI TimeTracker $TAG" \
+              --notes "$(cat <<EOF
           ## Download
 
           **[TimeTracker-Setup-x64.exe](https://github.com/shopconnector/ai-timetracker/releases/latest/download/TimeTracker-Setup-x64.exe)** — always the latest version
@@ -821,3 +828,4 @@ jobs:
           - Jira/Tempo API tokens (configure in Settings after first launch)
           EOF
           )"
+          fi
