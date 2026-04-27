@@ -299,7 +299,7 @@ jobs:
             "http://localhost:5666/timetracker/api/status" \
             "http://localhost:5666/timetracker/" \
             "http://localhost:5666/timetracker/settings"; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
+            STATUS=$(curl -sL -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "OK: $URL ($STATUS)"
             else
