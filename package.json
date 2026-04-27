@@ -1,6 +1,6 @@
 {
   "name": "timetracker",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "private": true,
   "license": "BUSL-1.1",
   "workspaces": [
