@@ -6,6 +6,7 @@ import {
   Settings,
   Plug,
   ClipboardList,
+  Github,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -48,6 +49,11 @@ export const navigation: NavSection[] = [
         title: 'Analytics',
         href: '/analytics',
         icon: BarChart3,
+      },
+      {
+        title: 'Activity',
+        href: '/activity',
+        icon: Github,
       },
     ],
   },
