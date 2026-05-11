@@ -2,12 +2,30 @@ import { NextResponse } from 'next/server';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readdir, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { getCurrentGitUserEmail } from '@/lib/git-activity';
+import { getGithubUser, getGithubCommits, type GithubCommit } from '@/lib/github';
 
 const execAsync = promisify(exec);
 
-const PROJECTS_ROOT = process.env.PROJECTS_ROOT || '/Users/gaca/projects/beecommerce';
-const AUTHOR_FILTER = process.env.GIT_AUTHOR_FILTER || 'gaca';
+function getProjectsRoot(): string {
+  return process.env.PROJECTS_ROOT || '';
+}
+
+/**
+ * Resolve the git author filter:
+ *   1. GIT_AUTHOR_FILTER env var (set in Settings)
+ *   2. `git config user.email` from the current shell environment
+ *   3. empty (no author filter — returns ALL commits in matching repos)
+ */
+async function getAuthorFilter(): Promise<string> {
+  const explicit = process.env.GIT_AUTHOR_FILTER;
+  if (explicit && explicit.trim()) return explicit.trim();
+
+  const fromGit = await getCurrentGitUserEmail();
+  return fromGit || '';
+}
 
 interface Commit {
   repo: string;
@@ -41,10 +59,11 @@ async function listRepos(root: string): Promise<string[]> {
   }
 }
 
-async function commitsForRepo(repoPath: string, since: string, until: string): Promise<Commit[]> {
+async function commitsForRepo(repoPath: string, since: string, until: string, authorFilter: string): Promise<Commit[]> {
   const repoName = repoPath.split('/').pop() || repoPath;
   const fmt = '%H|%h|%ad|%an|%s';
-  const cmd = `git -C "${repoPath}" log --since="${since} 00:00:00" --until="${until} 23:59:59" --author="${AUTHOR_FILTER}" --pretty=format:"${fmt}" --date=format:"%Y-%m-%d %H:%M:%S" --no-merges 2>/dev/null || true`;
+  const authorClause = authorFilter ? ` --author="${authorFilter}"` : '';
+  const cmd = `git -C "${repoPath}" log --since="${since} 00:00:00" --until="${until} 23:59:59"${authorClause} --pretty=format:"${fmt}" --date=format:"%Y-%m-%d %H:%M:%S" --no-merges 2>/dev/null || true`;
   let stdout = '';
   try {
     const r = await execAsync(cmd, { maxBuffer: 4 * 1024 * 1024 });
@@ -84,6 +103,26 @@ async function commitsForRepo(repoPath: string, since: string, until: string): P
     .filter((c) => c.hash);
 }
 
+function groupCommits(all: Array<Commit | GithubCommit>, groupBy: string, fromTo: { from: string; to: string }, repoCount: number, source: 'api' | 'local') {
+  if (groupBy === 'repo') {
+    const byRepo: Record<string, Array<Commit | GithubCommit>> = {};
+    for (const c of all) {
+      if (!byRepo[c.repo]) byRepo[c.repo] = [];
+      byRepo[c.repo].push(c);
+    }
+    return NextResponse.json({ ...fromTo, total: all.length, repos: repoCount, source, byRepo });
+  }
+  if (groupBy === 'date') {
+    const byDate: Record<string, Array<Commit | GithubCommit>> = {};
+    for (const c of all) {
+      if (!byDate[c.date]) byDate[c.date] = [];
+      byDate[c.date].push(c);
+    }
+    return NextResponse.json({ ...fromTo, total: all.length, repos: repoCount, source, byDate });
+  }
+  return NextResponse.json({ ...fromTo, total: all.length, repos: repoCount, source, commits: all });
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -92,32 +131,56 @@ export async function GET(request: Request) {
     const to = searchParams.get('to') || date || from;
     const groupBy = searchParams.get('groupBy') || 'flat';
 
-    const repos = await listRepos(PROJECTS_ROOT);
-    if (repos.length === 0) {
-      return NextResponse.json({ from, to, total: 0, repos: 0, commits: [], message: `No git repos under ${PROJECTS_ROOT}` });
+    // Strategy 1: GitHub REST API (when GITHUB_TOKEN is set)
+    // Cross-platform, no local clones required.
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (githubToken) {
+      const userOrErr = await getGithubUser(githubToken);
+      if ('error' in userOrErr) {
+        return NextResponse.json({
+          from, to, total: 0, repos: 0, commits: [],
+          source: 'api',
+          message: `GitHub API ${userOrErr.status || ''}: ${userOrErr.error.slice(0, 200)}. Sprawdź token w Settings → Git / Activity.`,
+        });
+      }
+      const commits = await getGithubCommits(githubToken, userOrErr.login, from, to);
+      const repoNames = new Set(commits.map((c) => c.repo));
+      return groupCommits(commits, groupBy, { from, to }, repoNames.size, 'api');
     }
 
-    const all = (await Promise.all(repos.map((r) => commitsForRepo(r, from, to)))).flat();
+    // Strategy 2: Local git scan (fallback when no token)
+    const projectsRoot = getProjectsRoot();
+    const authorFilter = await getAuthorFilter();
+
+    if (!projectsRoot) {
+      return NextResponse.json({
+        from, to, total: 0, repos: 0, commits: [],
+        message: 'PROJECTS_ROOT nie jest ustawiony. Otwórz Settings → Git / Activity i wskaż katalog z lokalnymi repozytoriami.',
+        configHint: { projectsRoot: '', gitAuthorFilter: authorFilter, settingsUrl: '/settings' },
+      });
+    }
+
+    if (!existsSync(projectsRoot)) {
+      return NextResponse.json({
+        from, to, total: 0, repos: 0, commits: [],
+        message: `Katalog "${projectsRoot}" nie istnieje na tej maszynie. Popraw ścieżkę w Settings → Git / Activity.`,
+        configHint: { projectsRoot, gitAuthorFilter: authorFilter, settingsUrl: '/settings' },
+      });
+    }
+
+    const repos = await listRepos(projectsRoot);
+    if (repos.length === 0) {
+      return NextResponse.json({
+        from, to, total: 0, repos: 0, commits: [],
+        message: `Brak repozytoriów git pod "${projectsRoot}". Sprawdź ścieżkę albo upewnij się że katalogi mają podkatalog .git.`,
+        configHint: { projectsRoot, gitAuthorFilter: authorFilter, settingsUrl: '/settings' },
+      });
+    }
+
+    const all = (await Promise.all(repos.map((r) => commitsForRepo(r, from, to, authorFilter)))).flat();
     all.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
 
-    if (groupBy === 'repo') {
-      const byRepo: Record<string, Commit[]> = {};
-      for (const c of all) {
-        if (!byRepo[c.repo]) byRepo[c.repo] = [];
-        byRepo[c.repo].push(c);
-      }
-      return NextResponse.json({ from, to, total: all.length, repos: repos.length, byRepo });
-    }
-    if (groupBy === 'date') {
-      const byDate: Record<string, Commit[]> = {};
-      for (const c of all) {
-        if (!byDate[c.date]) byDate[c.date] = [];
-        byDate[c.date].push(c);
-      }
-      return NextResponse.json({ from, to, total: all.length, repos: repos.length, byDate });
-    }
-
-    return NextResponse.json({ from, to, total: all.length, repos: repos.length, commits: all });
+    return groupCommits(all, groupBy, { from, to }, repos.length, 'local');
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error', commits: [] },

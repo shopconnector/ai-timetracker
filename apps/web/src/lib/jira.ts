@@ -369,6 +369,41 @@ export async function getIssueId(issueKey: string): Promise<number> {
   return parseInt(issue.id);
 }
 
+// Tempo Account field is `option2` (Connect plugin io.tempo.jira__account).
+// Backfills the issue-level Account so Tempo billing reports aggregate worklogs correctly.
+// No-op when the field already has any value (does not overwrite).
+export async function ensureIssueTempoAccount(
+  issueKey: string,
+  tempoAccountId: number,
+): Promise<{ updated: boolean; reason: string }> {
+  const getUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=customfield_10048`;
+  const getRes = await fetch(getUrl, {
+    headers: getAuthHeader(),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!getRes.ok) {
+    return { updated: false, reason: `get failed: ${getRes.status}` };
+  }
+  const data = await getRes.json();
+  const current = data?.fields?.customfield_10048;
+  if (current && (current.value || current.id)) {
+    return { updated: false, reason: 'already set' };
+  }
+
+  const putUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`;
+  const putRes = await fetch(putUrl, {
+    method: 'PUT',
+    headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: { customfield_10048: tempoAccountId } }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!putRes.ok) {
+    const text = await putRes.text().catch(() => '');
+    return { updated: false, reason: `put failed: ${putRes.status} ${text.slice(0, 200)}` };
+  }
+  return { updated: true, reason: 'set' };
+}
+
 // Get issue key by numeric ID
 export async function getIssueKeyById(issueId: number | string): Promise<string> {
   const url = `${JIRA_BASE_URL}/rest/api/3/issue/${issueId}?fields=key`;

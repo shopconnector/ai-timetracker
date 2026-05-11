@@ -150,7 +150,12 @@ $StartServerContent = @'
 const fs = require('fs');
 const path = require('path');
 
-const envFile = path.join(__dirname, 'data', '.env.local');
+const dataDir = path.join(__dirname, 'data');
+// Export so the Next.js process (settings PUT) writes back to the SAME file we read from.
+// Without this, the UI may write to process.cwd()/.env.local instead of data/.env.local
+// and tokens "disappear" after restart.
+process.env.TIMETRACKER_DATA_DIR = dataDir;
+const envFile = path.join(dataDir, '.env.local');
 if (fs.existsSync(envFile)) {
   const lines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
   let loaded = 0;

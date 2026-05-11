@@ -140,6 +140,20 @@ The application will be available at: **http://localhost:5666/timetracker**
 
 Open **Settings** in the app and enter your API keys — see [API Keys Setup](#api-keys-setup-step-by-step) below.
 
+### Before You Start — Pre-flight Checklist
+
+These five preconditions cause **>90% of "I get 401 / nothing works" reports**. Read them once, save yourself the debugging.
+
+| ✓ | Requirement | Why |
+|---|---|---|
+| ☐ | **Atlassian Cloud only** — your Jira URL ends with `.atlassian.net` | We hit `/rest/api/3/myself` — REST v3, Cloud-only. JIRA Server / Data Center returns 404. |
+| ☐ | **Jira Email = Atlassian ID email** (the one on https://id.atlassian.com) | The token is bound to that account. SSO/internal aliases give 401 even with a "valid" token. |
+| ☐ | **No trailing slash** in `JIRA_BASE_URL` (use `https://x.atlassian.net`, not `…/`) | Some Atlassian edges accept `//rest/...`, some don't. We strip it server-side, but be safe. |
+| ☐ | **Two separate tokens**: Jira token (atlassian.com) ≠ Tempo token (Tempo Settings inside Jira) | They look similar. Pasting one in the other's field always 401s. |
+| ☐ | **Tempo token scope must include `Worklogs: View`** | Even just to *test* the connection. Tokens with only `Create` give 403. |
+
+After saving credentials in Settings, click **Test connection**. The error messages now point you to the exact fix — read them.
+
 ### API Keys Setup (step by step)
 
 After installing the app, open **Settings** (gear icon in the sidebar). You'll see fields for each API key. Fill them in one by one.
@@ -521,6 +535,63 @@ docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
 
 ## Troubleshooting
 
+### Jira / Tempo connection (`Test` button)
+
+| Symptom in `Test` | Most likely cause | Fix |
+|---|---|---|
+| **Jira 401** | Email ≠ token owner | Open https://id.atlassian.com and copy the exact email shown there into `Jira Email`. |
+| **Jira 401** *after rotating tokens* | New token saved, but old one is still loaded by the launcher (different .env file paths) | Save in Settings → **fully restart** the app (close window AND tray icon) → Test again. If still 401, see [Tokens "disappear" after restart](#tokens-disappear-after-restart). |
+| **Jira 403** | Token belongs to user with no project access | Check user permissions in Jira admin. |
+| **Jira 404** | URL points to JIRA Server / Data Center | Not supported. Only Atlassian Cloud (`*.atlassian.net`). |
+| **Jira "network error"** | Trailing slash, typo, or proxy blocks `*.atlassian.net` | Remove trailing `/` from URL. Check corp VPN/proxy. |
+| **Tempo 401** | Token from a different workspace, or revoked | Generate fresh token in *that* Jira's Tempo → Settings → API Integration. |
+| **Tempo 403** | Token missing scope `Worklogs: View` | Recreate token with **View + Create + Edit** scopes. |
+| **Tempo 404** | Wrong Tempo URL (Server, not Cloud) | We support Tempo Cloud only (`api.tempo.io`). |
+
+### Tokens "disappear" after restart
+
+If you save tokens, they work, you restart, and you get 401 again — the launcher is reading from a different `.env.local` file than the Settings UI writes to.
+
+**Fix is in v0.10.6+** — `start-server.js` now sets `TIMETRACKER_DATA_DIR` so both reads and writes use the same file. If you're on an older build:
+
+- **macOS bundle**: tokens live at `~/.timetracker/.env.local`. Edit there directly, then restart.
+- **Windows bundle**: tokens live at `<install dir>/data/.env.local`. Edit there directly, then restart.
+
+To confirm where Settings is writing now, open `/api/settings` directly in your browser — the `envFilePath` field shows the path.
+
+### Auto-update doesn't pick up the new version
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Settings shows "Aktualna wersja: 0.0.0" | `NEXT_PUBLIC_APP_VERSION` not injected at build time | Reinstall from latest installer, or rebuild from source. |
+| "Sprawdz aktualizacje" shows the same version after a release | 6h client cache + 1h Next.js fetch cache | Click **Force refresh** (added in v0.10.6+). On older builds, restart the app. |
+| "Pobieranie..." spins forever | Anti-virus / Defender blocks write to `%TEMP%` | Whitelist TimeTracker.exe in Defender, or download manually from the [release page](https://github.com/shopconnector/ai-timetracker/releases/latest). |
+| "Zainstaluj aktualizacje" → silent fail | Installer needs to close `node.exe`, lock prevents overwrite | Quit the app fully (incl. tray icon), run the downloaded `TimeTracker-Setup-*.exe` manually from `%TEMP%`. |
+| **Nothing happens at all** | Open `/api/version?debug=1` in browser — it shows `current`, `latest`, `assetNames`, `lastError` | If `current=0.0.0` and `latest=0.10.5`, update IS offered but UI cache may be stale; if `lastError` is set, GitHub API is unreachable (proxy/firewall). |
+
+### Windows SmartScreen / "Unknown publisher" warning
+
+Releases since v0.10.5 are **digitally signed** with Azure Trusted Signing as `ShopConnector`. If you see "Windows protected your PC":
+
+1. Click **More info**
+2. Click **Run anyway**
+3. The signature is real — Windows just hasn't built reputation for the new cert yet (typical for first weeks after a cert is issued).
+
+If your build shows "Unknown publisher" instead of "ShopConnector", you have an unsigned dev build — that's fine for local dev, but production users should use the signed installer from GitHub Releases.
+
+### GitHub activity (`/activity` page) is empty
+
+The `/activity` page reads **local `.git/` directories on your disk** — it does NOT call github.com.
+
+| Symptom | Fix |
+|---|---|
+| "PROJECTS_ROOT nie jest ustawiony" | Open Settings → **Git / Activity** → set the path to your projects root (e.g. `/Users/YOU/projects`). |
+| "Katalog X nie istnieje" | Path is wrong — typo, or you don't have local clones. |
+| "Brak repozytoriów git pod X" | Path exists but no `.git` subfolders. Either wrong path, or your repos are nested deeper (the scanner only looks 1 level deep). |
+| Path is set, repos exist, but commits are empty | The default git author filter is your `git config user.email` — if your repos use a different commit author email, set it explicitly in Settings → Git author. |
+
+### Other
+
 | Problem                              | Solution                                                                            |
 | ------------------------------------ | ----------------------------------------------------------------------------------- |
 | AI does not suggest tickets          | Verify `GEMINI_API_KEY` in `.env.local`. Without a key, regex fallback is used.     |
@@ -529,6 +600,7 @@ docker run -d -p 5666:5666 --env-file apps/web/.env.local timetracker
 | Issue Type Guard blocks logging      | Log time to subtasks instead of Stories/Epics.                                      |
 | Gemini quota exceeded                | Free tier has rate limits. Switch to `gemini-2.5-pro` or use OpenRouter.            |
 | Build fails                          | `pnpm clean && pnpm install && pnpm build`                                          |
+| `/yesterday` shows wrong date | Default is now **previous workday** (Mon shows Fri, not Sun). Use the date input or quick buttons (Pn / Pt / Wczoraj / Tydzień temu) to jump anywhere. |
 
 ---
 

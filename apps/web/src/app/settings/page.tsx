@@ -158,6 +158,13 @@ export default function SettingsPage() {
     platform: string;
     checkedAt: string;
     error?: string;
+    debug?: {
+      nextPublicAppVersion: string | null;
+      timetrackerDataDir: string | null;
+      cwd: string;
+      nodeVersion: string;
+      assetNames?: string[];
+    };
   } | null>(null);
   const [checkingVersion, setCheckingVersion] = useState(false);
   const [updateDownloading, setUpdateDownloading] = useState(false);
@@ -207,6 +214,9 @@ export default function SettingsPage() {
     slackUserToken: '',
     slackBotToken: '',
     slackNotifyUserId: '',
+    projectsRoot: '',
+    gitAuthorFilter: '',
+    githubToken: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
   });
   const [savingConfig, setSavingConfig] = useState(false);
@@ -266,6 +276,9 @@ export default function SettingsPage() {
           slackUserToken: settings.slackUserToken || '',
           slackBotToken: settings.slackBotToken || '',
           slackNotifyUserId: settings.slackNotifyUserId || '',
+          projectsRoot: settings.projectsRoot || '',
+          gitAuthorFilter: settings.gitAuthorFilter || '',
+          githubToken: settings.githubToken || '',
           aiProvider: settings.aiProvider || 'gemini',
         });
       }
@@ -277,10 +290,11 @@ export default function SettingsPage() {
     loadJiraData();
   }, []);
 
-  const checkForUpdates = useCallback(async () => {
+  const checkForUpdates = useCallback(async (force = false) => {
     setCheckingVersion(true);
     try {
-      const res = await fetch(apiUrl('/api/version'));
+      const url = force ? '/api/version?refresh=1&debug=1' : '/api/version';
+      const res = await fetch(apiUrl(url));
       if (res.ok) {
         const data = await res.json();
         setVersionInfo(data);
@@ -404,7 +418,23 @@ export default function SettingsPage() {
       const res = await fetch(apiUrl('/api/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testType: 'all' }),
+        // Send current form values — backend uses them when not masked,
+        // so Test reflects what's currently typed (not last-saved process.env).
+        body: JSON.stringify({
+          testType: 'all',
+          credentials: {
+            jiraBaseUrl: apiConfig.jiraBaseUrl,
+            jiraEmail: apiConfig.jiraEmail,
+            jiraApiToken: apiConfig.jiraApiToken,
+            tempoApiToken: apiConfig.tempoApiToken,
+            tempoAccountId: apiConfig.tempoAccountId,
+            slackUserToken: apiConfig.slackUserToken,
+            geminiApiKey: apiConfig.geminiApiKey,
+            openRouterApiKey: apiConfig.openRouterApiKey,
+            activityWatchUrl: apiConfig.activityWatchUrl,
+            githubToken: apiConfig.githubToken,
+          },
+        }),
       });
 
       if (res.ok) {
@@ -701,10 +731,21 @@ export default function SettingsPage() {
                   <CardDescription>Sprawdz dostepnosc nowych wersji TimeTracker</CardDescription>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={checkingVersion}>
-                <RefreshCw className={`h-4 w-4 mr-2 ${checkingVersion ? 'animate-spin' : ''}`} />
-                Sprawdz aktualizacje
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => checkForUpdates(false)} disabled={checkingVersion}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${checkingVersion ? 'animate-spin' : ''}`} />
+                  Sprawdz aktualizacje
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => checkForUpdates(true)}
+                  disabled={checkingVersion}
+                  title="Pomiń cache (6h) i pobierz świeże dane z GitHub. Pokazuje też debug info."
+                >
+                  Force refresh
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -856,6 +897,27 @@ export default function SettingsPage() {
               <p className="text-xs text-gray-400 dark:text-gray-500">
                 Ostatnie sprawdzenie: {new Date(versionInfo.checkedAt).toLocaleString('pl')}
               </p>
+            )}
+
+            {versionInfo?.debug && (
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+                  Debug info (dla supportu)
+                </summary>
+                <pre className="mt-2 p-3 bg-gray-50 dark:bg-slate-900 rounded text-xs overflow-auto">
+{`current:                 ${versionInfo.current}
+latest:                  ${versionInfo.latest}
+hasUpdate:               ${versionInfo.hasUpdate}
+platform:                ${versionInfo.platform}
+downloadUrl:             ${versionInfo.downloadUrl ?? '(none)'}
+NEXT_PUBLIC_APP_VERSION: ${versionInfo.debug.nextPublicAppVersion ?? '(unset)'}
+TIMETRACKER_DATA_DIR:    ${versionInfo.debug.timetrackerDataDir ?? '(unset)'}
+cwd:                     ${versionInfo.debug.cwd}
+node:                    ${versionInfo.debug.nodeVersion}
+${versionInfo.debug.assetNames ? `assetNames:              ${versionInfo.debug.assetNames.join(', ')}` : ''}
+${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
+                </pre>
+              </details>
             )}
           </CardContent>
         </Card>
@@ -1747,6 +1809,69 @@ export default function SettingsPage() {
                 <p>6. Kliknij <strong>&quot;Install to Workspace&quot;</strong> na gorze strony</p>
                 <p>7. Skopiuj &quot;User OAuth Token&quot; (xoxp-...) i &quot;Bot User OAuth Token&quot; (xoxb-...)</p>
                 <p>8. <strong>Slack User ID</strong>: otworz Slack → kliknij swoj avatar → &quot;Profile&quot; → &quot;&#8943;&quot; (More) → &quot;Copy member ID&quot;</p>
+              </HelpGuide>
+            </div>
+
+            {/* Git / Activity Configuration */}
+            <div className="space-y-3">
+              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <span className="w-2 h-2 bg-zinc-500 rounded-full"></span>
+                Git / Activity (opcjonalne)
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Dwa tryby: <strong>(A)</strong> GitHub Personal Access Token — działa cross-platform, nie wymaga lokalnych repo;
+                albo <strong>(B)</strong> lokalny git scan — szybszy ale wymaga repo na dysku.
+                Wybierz jeden.
+              </p>
+              <div>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">GitHub Personal Access Token (tryb A — opcjonalne)</label>
+                <Input
+                  type="password"
+                  placeholder="ghp_... lub github_pat_..."
+                  value={apiConfig.githubToken}
+                  onChange={(e) => setApiConfig({ ...apiConfig, githubToken: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Z tokenem zakładka /activity pobiera commity z github.com (PushEvents) — działa wszędzie.
+                  Bez tokenu używa lokalnych repo (ścieżka poniżej).
+                </p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Projects root (pełna ścieżka)</label>
+                <Input
+                  placeholder="np. /Users/YOU/projects albo C:\Users\YOU\projects"
+                  value={apiConfig.projectsRoot}
+                  onChange={(e) => setApiConfig({ ...apiConfig, projectsRoot: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Katalog zawierający Twoje lokalne repo git. Aplikacja przeskanuje pierwszy poziom katalogów i wybierze te z podkatalogiem .git.
+                </p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Git author (email lub nazwa)</label>
+                <Input
+                  placeholder="auto-detect: git config user.email"
+                  value={apiConfig.gitAuthorFilter}
+                  onChange={(e) => setApiConfig({ ...apiConfig, gitAuthorFilter: e.target.value })}
+                />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Filtr <code>--author</code> dla <code>git log</code>. Puste = automatyczne wykrycie z <code>git config user.email</code>.
+                </p>
+              </div>
+              <HelpGuide title="Tryb A — GitHub Personal Access Token (cross-platform)">
+                <p>1. Otwórz: <strong>https://github.com/settings/tokens</strong> (Classic) lub <strong>/settings/tokens?type=beta</strong> (Fine-grained)</p>
+                <p>2. <strong>Generate new token</strong> → wybierz scope:</p>
+                <p>&nbsp;&nbsp;&nbsp;• <code>public_repo</code> — wystarczy do publicznych repo</p>
+                <p>&nbsp;&nbsp;&nbsp;• <code>repo</code> — pełny dostęp (też prywatne) — <strong>zalecane</strong></p>
+                <p>3. <strong>Copy</strong> token (zaczyna się od <code>ghp_</code> lub <code>github_pat_</code>)</p>
+                <p>4. Wklej do pola &quot;GitHub Personal Access Token&quot; i kliknij &quot;Save&quot;</p>
+                <p>5. Klikni &quot;Test connection&quot; — powinieneś zobaczyć swój login GitHub</p>
+              </HelpGuide>
+              <HelpGuide title="Tryb B — lokalny git scan (szybszy, ale wymaga repo na dysku)">
+                <p>Bez tokenu GitHub — aplikacja odczytuje lokalne katalogi <code>.git/</code> z Twojego dysku.</p>
+                <p>Jeśli masz repozytoria sklonowane lokalnie pod jednym katalogiem (np. <code>~/projects</code>), wskaż ten katalog w polu &quot;Projects root&quot; powyżej.</p>
+                <p>Aplikacja przeskanuje pierwszy poziom katalogów i wybierze te z podkatalogiem <code>.git</code>.</p>
+                <p>&quot;Git author&quot; jest auto-wykrywany z <code>git config user.email</code>, ale możesz nadpisać.</p>
               </HelpGuide>
             </div>
 

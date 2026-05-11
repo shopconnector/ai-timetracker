@@ -7,6 +7,7 @@ import {
   Plug,
   ClipboardList,
   Github,
+  Sunrise,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -29,6 +30,11 @@ export const navigation: NavSection[] = [
         title: 'Dashboard',
         href: '/',
         icon: LayoutDashboard,
+      },
+      {
+        title: 'Wczoraj',
+        href: '/yesterday',
+        icon: Sunrise,
       },
       {
         title: 'Timesheet',

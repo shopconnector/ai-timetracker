@@ -1,19 +1,113 @@
 import { NextResponse } from 'next/server';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { homedir } from 'os';
+import { getGithubUser } from '@/lib/github';
 
 /**
  * Detect the correct .env.local path.
- * On Windows standalone bundles, start-server.js reads from data/.env.local,
- * so we must write there too if that path exists.
+ *
+ * Priority:
+ *   1. TIMETRACKER_DATA_DIR — exported by start-server.js (macOS bundle, Windows bundle).
+ *      Guarantees we WRITE to the same file the launcher READS at startup.
+ *   2. <cwd>/data/.env.local — Windows standalone bundle convention (legacy).
+ *   3. ~/.timetracker/.env.local — macOS bundle convention (when start-server hasn't run).
+ *   4. <cwd>/.env.local — dev mode (pnpm dev from monorepo root or apps/web).
+ *
+ * Without this synchronization, tokens saved via the UI "disappear" after the next
+ * app restart because start-server.js loads from a different file than route.ts wrote to.
  */
 function getEnvFilePath(): string {
+  const explicitDir = process.env.TIMETRACKER_DATA_DIR;
+  if (explicitDir) {
+    return join(explicitDir, '.env.local');
+  }
+
   const cwd = process.cwd();
   const dataEnvPath = join(cwd, 'data', '.env.local');
   if (existsSync(dataEnvPath)) {
     return dataEnvPath;
   }
+
+  if (process.platform === 'darwin') {
+    return join(homedir(), '.timetracker', '.env.local');
+  }
+
   return join(cwd, '.env.local');
+}
+
+/** Strip trailing slash and whitespace from a base URL. */
+function normalizeBaseUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  return url.trim().replace(/\/+$/, '');
+}
+
+/**
+ * Build a human-readable error message for a JIRA test failure.
+ * Each branch points the user toward the most likely fix.
+ */
+function jiraErrorMessage(status: number, body: string): string {
+  if (status === 401) {
+    return (
+      'Błąd 401: Email nie pasuje do właściciela tokenu, albo token wygasł/został unieważniony. ' +
+      'Sprawdź email na https://id.atlassian.com (musi być DOKŁADNIE ten sam) lub wygeneruj nowy token: ' +
+      'https://id.atlassian.com/manage-profile/security/api-tokens'
+    );
+  }
+  if (status === 403) {
+    return 'Błąd 403: Token nie ma uprawnień do tego endpointa. Sprawdź konto/scope w Atlassian.';
+  }
+  if (status === 404) {
+    return (
+      'Błąd 404: Endpoint /rest/api/3/myself nie istnieje na tym serwerze. ' +
+      'Aplikacja wspiera WYŁĄCZNIE Atlassian Cloud (URL kończy się na .atlassian.net). ' +
+      'JIRA Server / Data Center nie jest wspierany.'
+    );
+  }
+  const excerpt = body ? ` (${body.slice(0, 120)})` : '';
+  return `Błąd HTTP ${status}${excerpt}`;
+}
+
+function tempoErrorMessage(status: number, body: string): string {
+  if (status === 401) {
+    return (
+      'Błąd 401: Token Tempo wygasł lub jest nieprawidłowy. ' +
+      'Wygeneruj nowy: Jira → Apps → Tempo → Settings → API Integration → New Token. ' +
+      'Pamiętaj zaznaczyć scope: Worklogs (View, Create, Edit).'
+    );
+  }
+  if (status === 403) {
+    return (
+      'Błąd 403: Token Tempo nie ma scope `Worklogs: View`. ' +
+      'Wygeneruj nowy token z odpowiednim scope (View + Create + Edit).'
+    );
+  }
+  if (status === 404) {
+    return 'Błąd 404: Endpoint Tempo nie istnieje. Sprawdź czy używasz Tempo Cloud (api.tempo.io).';
+  }
+  const excerpt = body ? ` (${body.slice(0, 120)})` : '';
+  return `Błąd HTTP ${status}${excerpt}`;
+}
+
+interface TestCredentials {
+  jiraBaseUrl?: string;
+  jiraEmail?: string;
+  jiraApiToken?: string;
+  tempoApiToken?: string;
+  tempoAccountId?: string;
+  slackUserToken?: string;
+  geminiApiKey?: string;
+  openRouterApiKey?: string;
+  activityWatchUrl?: string;
+  githubToken?: string;
+}
+
+/** Pick a credential value from request body if not masked, otherwise fall back to env. */
+function pickCred(fromBody: string | undefined, fromEnv: string | undefined): string | undefined {
+  if (typeof fromBody === 'string' && fromBody.length > 0 && !fromBody.includes('••')) {
+    return fromBody;
+  }
+  return fromEnv;
 }
 
 // GET /api/settings - Get settings from environment variables
@@ -21,7 +115,7 @@ export async function GET() {
   try {
     const tempoApiToken = process.env.TEMPO_API_TOKEN;
     const tempoAccountId = process.env.TEMPO_ACCOUNT_ID;
-    const jiraBaseUrl = process.env.JIRA_BASE_URL;
+    const jiraBaseUrl = normalizeBaseUrl(process.env.JIRA_BASE_URL);
     const jiraApiToken = process.env.JIRA_API_KEY;
     const jiraEmail = process.env.JIRA_SERVICE_EMAIL;
     const activityWatchUrl = process.env.ACTIVITYWATCH_URL || 'http://localhost:5600';
@@ -29,6 +123,9 @@ export async function GET() {
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const llmModel = process.env.LLM_MODEL || 'gemini-2.5-flash';
     const slackUserToken = process.env.SLACK_USER_TOKEN;
+    const projectsRoot = process.env.PROJECTS_ROOT;
+    const gitAuthorFilter = process.env.GIT_AUTHOR_FILTER;
+    const githubToken = process.env.GITHUB_TOKEN;
 
     return NextResponse.json({
       // API Config (masked)
@@ -42,6 +139,9 @@ export async function GET() {
       geminiApiKey: geminiApiKey ? '••••••••' : null,
       llmModel,
       slackUserToken: slackUserToken ? '••••••••' : null,
+      projectsRoot,
+      gitAuthorFilter,
+      githubToken: githubToken ? '••••••••' : null,
       aiProvider: geminiApiKey ? 'gemini' : 'openrouter',
 
       // Status flags
@@ -50,6 +150,12 @@ export async function GET() {
       hasOpenRouterConfig: !!openRouterApiKey,
       hasGeminiConfig: !!geminiApiKey,
       hasSlackConfig: !!slackUserToken,
+      hasGitConfig: !!projectsRoot,
+      hasGithubApiConfig: !!githubToken,
+
+      // Diagnostics — helps users see WHERE we're reading/writing
+      envFilePath: getEnvFilePath(),
+      dataDir: process.env.TIMETRACKER_DATA_DIR || null,
     });
   } catch (error) {
     console.error('Get settings error:', error);
@@ -57,18 +163,23 @@ export async function GET() {
   }
 }
 
-// POST /api/settings/test - Test API connections
+// POST /api/settings/test - Test API connections.
+// If `credentials` is provided in body, test with those values directly (no save needed).
+// Otherwise fall back to current process.env values.
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { testType } = body;
+    const { testType, credentials = {} } = body as {
+      testType: string;
+      credentials?: TestCredentials;
+    };
 
     const results: Record<string, { success: boolean; message: string }> = {};
 
     // Test Tempo API
     if (testType === 'tempo' || testType === 'all') {
-      const tempoApiToken = process.env.TEMPO_API_TOKEN;
-      const tempoAccountId = process.env.TEMPO_ACCOUNT_ID;
+      const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
+      const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
 
       if (tempoApiToken && tempoAccountId) {
         try {
@@ -79,30 +190,35 @@ export async function POST(request: Request) {
             },
             signal: AbortSignal.timeout(5000),
           });
-          results.tempo = {
-            success: res.ok,
-            message: res.ok ? 'Połączono z Tempo API' : `Błąd: ${res.status}`,
-          };
+          if (res.ok) {
+            results.tempo = { success: true, message: 'Połączono z Tempo API' };
+          } else {
+            const bodyText = await res.text().catch(() => '');
+            results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
+          }
         } catch (e) {
-          results.tempo = { success: false, message: `Błąd połączenia: ${e}` };
+          results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
         }
       } else {
-        results.tempo = { success: false, message: 'Brak konfiguracji Tempo' };
+        results.tempo = {
+          success: false,
+          message: 'Brak konfiguracji Tempo (wymagane: TEMPO_API_TOKEN i TEMPO_ACCOUNT_ID)',
+        };
       }
     }
 
     // Test Jira API
     if (testType === 'jira' || testType === 'all') {
-      const jiraBaseUrl = process.env.JIRA_BASE_URL;
-      const jiraApiToken = process.env.JIRA_API_KEY;
-      const jiraEmail = process.env.JIRA_SERVICE_EMAIL;
+      const jiraBaseUrl = normalizeBaseUrl(pickCred(credentials.jiraBaseUrl, process.env.JIRA_BASE_URL));
+      const jiraApiToken = pickCred(credentials.jiraApiToken, process.env.JIRA_API_KEY);
+      const jiraEmail = pickCred(credentials.jiraEmail, process.env.JIRA_SERVICE_EMAIL);
 
       if (jiraBaseUrl && jiraApiToken && jiraEmail) {
         try {
-          const credentials = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64');
+          const credentialsB64 = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64');
           const res = await fetch(`${jiraBaseUrl}/rest/api/3/myself`, {
             headers: {
-              'Authorization': `Basic ${credentials}`,
+              'Authorization': `Basic ${credentialsB64}`,
               'Accept': 'application/json',
             },
             signal: AbortSignal.timeout(5000),
@@ -111,16 +227,21 @@ export async function POST(request: Request) {
             const data = await res.json();
             results.jira = {
               success: true,
-              message: `Połączono jako: ${data.displayName}`,
+              message: `Połączono jako: ${data.displayName} (${data.emailAddress || jiraEmail})`,
             };
           } else {
-            results.jira = { success: false, message: `Błąd: ${res.status}` };
+            const bodyText = await res.text().catch(() => '');
+            results.jira = { success: false, message: jiraErrorMessage(res.status, bodyText) };
           }
         } catch (e) {
-          results.jira = { success: false, message: `Błąd połączenia: ${e}` };
+          results.jira = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
         }
       } else {
-        results.jira = { success: false, message: 'Brak konfiguracji Jira' };
+        const missing = [];
+        if (!jiraBaseUrl) missing.push('Base URL');
+        if (!jiraEmail) missing.push('Email');
+        if (!jiraApiToken) missing.push('API Token');
+        results.jira = { success: false, message: `Brak konfiguracji Jira (wymagane: ${missing.join(', ')})` };
       }
     }
 
@@ -141,14 +262,14 @@ export async function POST(request: Request) {
       } catch {
         results.activitywatch = {
           success: false,
-          message: 'ActivityWatch nie działa lub niedostępny',
+          message: 'ActivityWatch nie działa lub niedostępny (port 5600)',
         };
       }
     }
 
     // Test Slack API
     if (testType === 'slack' || testType === 'all') {
-      const slackToken = process.env.SLACK_USER_TOKEN;
+      const slackToken = pickCred(credentials.slackUserToken, process.env.SLACK_USER_TOKEN);
 
       if (slackToken) {
         try {
@@ -167,20 +288,48 @@ export async function POST(request: Request) {
               message: `Połączono jako: ${data.user}`,
             };
           } else {
-            results.slack = { success: false, message: `Błąd: ${data.error}` };
+            results.slack = { success: false, message: `Błąd Slack: ${data.error}` };
           }
         } catch (e) {
-          results.slack = { success: false, message: `Błąd połączenia: ${e}` };
+          results.slack = { success: false, message: `Błąd połączenia: ${e instanceof Error ? e.message : String(e)}` };
         }
       } else {
         results.slack = { success: false, message: 'Brak konfiguracji Slack (SLACK_USER_TOKEN)' };
       }
     }
 
+    // Test GitHub API (Personal Access Token)
+    if (testType === 'github' || testType === 'all') {
+      const githubToken = pickCred(credentials.githubToken, process.env.GITHUB_TOKEN);
+      if (githubToken) {
+        const userOrErr = await getGithubUser(githubToken);
+        if ('error' in userOrErr) {
+          let hint = '';
+          if (userOrErr.status === 401) {
+            hint = ' Token wygasł albo jest niepoprawny — wygeneruj nowy: https://github.com/settings/tokens';
+          } else if (userOrErr.status === 403) {
+            hint = ' Token nie ma wymaganego scope. Potrzeba: `repo` (private) lub `public_repo`.';
+          }
+          results.github = {
+            success: false,
+            message: `GitHub API ${userOrErr.status || ''}: ${userOrErr.error.slice(0, 120)}.${hint}`,
+          };
+        } else {
+          results.github = {
+            success: true,
+            message: `Połączono jako: ${userOrErr.login}${userOrErr.name ? ` (${userOrErr.name})` : ''}`,
+          };
+        }
+      } else if (testType === 'github') {
+        results.github = { success: false, message: 'Brak GITHUB_TOKEN — wpisz Personal Access Token w polu GitHub.' };
+      }
+      // when testType === 'all' and no token, silently skip — local-repo strategy is used instead
+    }
+
     // Test AI/LLM (Gemini first, then OpenRouter)
     if (testType === 'openrouter' || testType === 'gemini' || testType === 'all') {
-      const geminiApiKey = process.env.GEMINI_API_KEY;
-      const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+      const geminiApiKey = pickCred(credentials.geminiApiKey, process.env.GEMINI_API_KEY);
+      const openRouterApiKey = pickCred(credentials.openRouterApiKey, process.env.OPENROUTER_API_KEY);
 
       if (geminiApiKey) {
         try {
@@ -243,6 +392,9 @@ const FIELD_TO_ENV: Record<string, string> = {
   geminiApiKey: 'GEMINI_API_KEY',
   llmModel: 'LLM_MODEL',
   slackUserToken: 'SLACK_USER_TOKEN',
+  projectsRoot: 'PROJECTS_ROOT',
+  gitAuthorFilter: 'GIT_AUTHOR_FILTER',
+  githubToken: 'GITHUB_TOKEN',
 };
 
 // Section comments for env file organization
@@ -257,6 +409,9 @@ const ENV_SECTIONS: Record<string, string> = {
   GEMINI_API_KEY: '# Gemini API (Google AI Studio)',
   LLM_MODEL: '# LLM Model',
   SLACK_USER_TOKEN: '# Slack API',
+  PROJECTS_ROOT: '# Git / Activity',
+  GIT_AUTHOR_FILTER: '# Git / Activity',
+  GITHUB_TOKEN: '# GitHub API (Personal Access Token, scope: repo or public_repo)',
 };
 
 // PUT /api/settings - Save settings to .env.local
@@ -265,7 +420,11 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const envPath = getEnvFilePath();
 
-    // Read current .env.local
+    const envDir = dirname(envPath);
+    if (!existsSync(envDir)) {
+      mkdirSync(envDir, { recursive: true });
+    }
+
     let envContent = '';
     try {
       envContent = readFileSync(envPath, 'utf-8');
@@ -273,7 +432,6 @@ export async function PUT(request: Request) {
       // File doesn't exist yet, start fresh
     }
 
-    // Parse existing env vars
     const envLines = envContent.split('\n');
     const existingVars = new Map<string, { value: string; lineIndex: number }>();
     for (let i = 0; i < envLines.length; i++) {
@@ -283,39 +441,39 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Update env vars from body
     const updatedVars = new Set<string>();
     for (const [field, envName] of Object.entries(FIELD_TO_ENV)) {
-      const value = body[field];
+      let value = body[field];
       if (value === undefined || value === null) continue;
       // Skip masked values — don't overwrite real keys with placeholders
       if (typeof value === 'string' && value.includes('••')) continue;
       // Skip empty strings for token/key fields (don't clear existing keys)
-      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken'].includes(field);
+      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken', 'githubToken'].includes(field);
       if (isSecretField && value === '') continue;
       // Skip aiProvider — it's derived, not stored
       if (field === 'aiProvider') continue;
 
+      // Normalize URLs — strip trailing slash so fetch builds clean paths
+      if (field === 'jiraBaseUrl' && typeof value === 'string') {
+        value = normalizeBaseUrl(value) ?? value;
+      }
+
       updatedVars.add(envName);
 
       if (existingVars.has(envName)) {
-        // Update existing line
         const { lineIndex } = existingVars.get(envName)!;
         envLines[lineIndex] = `${envName}=${value}`;
       } else {
-        // Add new var — find or create section
         const section = ENV_SECTIONS[envName] || '';
         const sectionIndex = envLines.findIndex(l => l === section);
 
         if (sectionIndex >= 0) {
-          // Find last var in this section
           let insertAt = sectionIndex + 1;
-          while (insertAt < envLines.length && envLines[insertAt].match(/^[A-Z_]+=/) ) {
+          while (insertAt < envLines.length && envLines[insertAt].match(/^[A-Z_]+=/)) {
             insertAt++;
           }
           envLines.splice(insertAt, 0, `${envName}=${value}`);
         } else {
-          // Add new section at end
           if (envLines[envLines.length - 1] !== '') {
             envLines.push('');
           }
@@ -324,20 +482,23 @@ export async function PUT(request: Request) {
         }
       }
 
-      // Update process.env in-memory for immediate effect
+      // Update process.env in-memory for immediate effect (Test button uses this)
       process.env[envName] = value;
     }
 
-    // Write back
     writeFileSync(envPath, envLines.join('\n'));
 
     return NextResponse.json({
       success: true,
-      message: 'Konfiguracja zapisana do .env.local',
+      message: 'Konfiguracja zapisana',
+      envFilePath: envPath,
       updated: Array.from(updatedVars),
     });
   } catch (error) {
     console.error('Save settings error:', error);
-    return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to save settings', details: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    );
   }
 }

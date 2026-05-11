@@ -36,3 +36,8 @@ coverage/
 # Misc
 *.tsbuildinfo
 .cache/
+
+# Local agent / dev session
+.claude/
+.playwright-mcp/
+tracking.state.json

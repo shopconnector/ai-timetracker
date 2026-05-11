@@ -4,6 +4,9 @@ const fs = require('fs');
 const path = require('path');
 
 const dataDir = process.env.TIMETRACKER_DATA_DIR || path.join(require('os').homedir(), '.timetracker');
+// Export so the Next.js process (settings PUT) writes back to the SAME file we read from.
+// Without this, UI saves to process.cwd()/.env.local which is never read by start-server.
+process.env.TIMETRACKER_DATA_DIR = dataDir;
 const envFile = path.join(dataDir, '.env.local');
 
 if (fs.existsSync(envFile)) {

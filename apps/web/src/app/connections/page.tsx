@@ -27,6 +27,7 @@ const API_LINKS: Record<string, string> = {
   'Slack': 'https://api.slack.com/apps',
   'AI/LLM (Gemini)': 'https://aistudio.google.com/apikey',
   'AI/LLM (OpenRouter)': 'https://openrouter.ai/keys',
+  'GitHub (local repos)': 'https://github.com',
 };
 
 export default function ConnectionsPage() {

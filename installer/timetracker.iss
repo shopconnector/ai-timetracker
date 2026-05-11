@@ -3,7 +3,7 @@
 ; https://jrsoftware.org/isinfo.php
 
 #define MyAppName "AI TimeTracker"
-#define MyAppVersion "0.4.5"
+#define MyAppVersion "0.10.6"
 #define MyAppPublisher "ShopConnector"
 #define MyAppURL "https://github.com/shopconnector/ai-timetracker"
 #define MyAppExeName "TimeTracker.bat"

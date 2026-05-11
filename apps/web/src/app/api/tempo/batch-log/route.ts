@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createWorklog, roundToMinutes } from '@/lib/tempo';
 import { smartRoundSeconds, applyValueMultiplier, type RoundingTier, type ProjectValueMultiplier } from '@/lib/loggingRules';
-import { getIssueId, getCurrentUser } from '@/lib/jira';
+import { getIssueId, getCurrentUser, ensureIssueTempoAccount } from '@/lib/jira';
 
 interface BatchEntry {
   issueKey: string;
@@ -24,7 +24,7 @@ interface BatchResult {
 const ISSUE_KEY_REGEX = /^[A-Z][A-Z0-9]*-\d+$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-// Default Billing Account mapping by project prefix
+// Default Billing Account mapping by project prefix (Tempo worklog attribute _BillingAccount_)
 const PROJECT_BILLING_ACCOUNT: Record<string, string> = {
   'BCI': 'BEE-INTERNAL',
   'AR': 'AI',
@@ -37,9 +37,26 @@ const PROJECT_BILLING_ACCOUNT: Record<string, string> = {
   'CEPD': 'CEPDANALYT',
 };
 
+// Tempo Account numeric IDs (Jira customfield_10048, schema option2).
+// Verified via Tempo REST `/4/accounts` 2026-05-05. Only verified OPEN accounts included —
+// prefixes not present here will skip the issue-level backfill (worklog _BillingAccount_ still set).
+const PROJECT_TEMPO_ACCOUNT_ID: Record<string, number> = {
+  'AR': 91,    // AI
+  'BCI': 7,    // BEE-INTERNAL
+  'AGRO': 63,  // AGROSIMEXMARKETING
+  'AGRO2': 93, // AGROAI
+  'BSL': 90,   // SALES-ACTI
+  'CFR': 89,   // CARFREE
+};
+
 function getBillingAccountForProject(issueKey: string): string {
   const projectKey = issueKey.split('-')[0];
   return PROJECT_BILLING_ACCOUNT[projectKey] || 'BEE-INTERNAL';
+}
+
+function getTempoAccountIdForProject(issueKey: string): number | null {
+  const projectKey = issueKey.split('-')[0];
+  return PROJECT_TEMPO_ACCOUNT_ID[projectKey] ?? null;
 }
 
 // POST - batch log multiple worklogs at once
@@ -123,6 +140,27 @@ export async function POST(request: NextRequest) {
           issueIdMap.set(key, id);
         } catch (error) {
           console.error(`Failed to resolve issueId for ${key}:`, error);
+        }
+      })
+    );
+
+    // Backfill Tempo Account on each unique issue (idempotent: skips if already set).
+    // Worklog _BillingAccount_ alone doesn't anchor the issue in Tempo Account reports —
+    // the issue-level customfield_10048 must be populated for aggregation to work.
+    const allUniqueKeys = [...new Set(entries.map(e => e.issueKey))];
+    await Promise.all(
+      allUniqueKeys.map(async (key) => {
+        const accountId = getTempoAccountIdForProject(key);
+        if (accountId === null) return;
+        try {
+          const result = await ensureIssueTempoAccount(key, accountId);
+          if (result.updated) {
+            console.log(`[batch-log] Set Tempo Account ${accountId} on ${key}`);
+          } else if (result.reason !== 'already set') {
+            console.warn(`[batch-log] Tempo Account backfill skipped for ${key}: ${result.reason}`);
+          }
+        } catch (error) {
+          console.error(`[batch-log] Tempo Account backfill error for ${key}:`, error);
         }
       })
     );

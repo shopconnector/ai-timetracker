@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { awFetch } from '@/lib/activitywatch';
+import { getGithubUser } from '@/lib/github';
 
 interface ApiStatus {
   name: string;
@@ -98,6 +101,94 @@ async function checkSlack(): Promise<ApiStatus> {
   }
 }
 
+/**
+ * GitHub status check — two strategies:
+ *   1. If GITHUB_TOKEN is set → call GitHub REST API /user (real network check, returns logged-in user)
+ *   2. Else → scan local PROJECTS_ROOT for .git subdirectories
+ *
+ * In both cases: ok / unconfigured / error with actionable message.
+ */
+async function checkGithub(): Promise<ApiStatus> {
+  const token = process.env.GITHUB_TOKEN;
+
+  if (token) {
+    const userOrErr = await getGithubUser(token);
+    if ('error' in userOrErr) {
+      return {
+        name: 'GitHub API',
+        configured: true,
+        status: 'error',
+        message: `HTTP ${userOrErr.status || '?'}: ${userOrErr.error.slice(0, 80)}`,
+      };
+    }
+    return {
+      name: 'GitHub API',
+      configured: true,
+      status: 'ok',
+      message: `Połączono jako: ${userOrErr.login}${userOrErr.name ? ` (${userOrErr.name})` : ''}`,
+    };
+  }
+
+  // Local repo scan fallback
+  const root = process.env.PROJECTS_ROOT;
+  if (!root) {
+    return {
+      name: 'GitHub (local repos)',
+      configured: false,
+      status: 'unconfigured',
+      message: 'Ustaw GitHub Token lub "Projects root" w Settings → Git / Activity',
+    };
+  }
+
+  if (!existsSync(root)) {
+    return {
+      name: 'GitHub (local repos)',
+      configured: true,
+      status: 'error',
+      message: `Katalog "${root}" nie istnieje`,
+    };
+  }
+
+  let repoCount = 0;
+  try {
+    const entries = readdirSync(root);
+    for (const e of entries) {
+      if (e.startsWith('.') || e.startsWith('_')) continue;
+      const full = join(root, e);
+      try {
+        if (statSync(full).isDirectory() && existsSync(join(full, '.git'))) {
+          repoCount++;
+        }
+      } catch {
+        // ignore unreadable entries
+      }
+    }
+  } catch {
+    return {
+      name: 'GitHub (local repos)',
+      configured: true,
+      status: 'error',
+      message: `Błąd odczytu "${root}"`,
+    };
+  }
+
+  if (repoCount === 0) {
+    return {
+      name: 'GitHub (local repos)',
+      configured: true,
+      status: 'error',
+      message: `Brak repozytoriów git pod "${root}"`,
+    };
+  }
+
+  return {
+    name: 'GitHub (local repos)',
+    configured: true,
+    status: 'ok',
+    message: `${repoCount} repozytoriów`,
+  };
+}
+
 async function checkOpenRouter(): Promise<ApiStatus> {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (geminiKey) {
@@ -114,16 +205,17 @@ async function checkOpenRouter(): Promise<ApiStatus> {
 }
 
 export async function GET() {
-  const [activityWatch, tempo, jira, slack, openRouter] = await Promise.all([
+  const [activityWatch, tempo, jira, slack, openRouter, github] = await Promise.all([
     checkActivityWatch(),
     checkTempo(),
     checkJira(),
     checkSlack(),
-    checkOpenRouter()
+    checkOpenRouter(),
+    checkGithub(),
   ]);
 
   return NextResponse.json({
-    apis: [activityWatch, tempo, jira, slack, openRouter],
+    apis: [activityWatch, tempo, jira, slack, github, openRouter],
     allOk: [activityWatch, tempo, jira].every(a => a.status === 'ok')
   });
 }

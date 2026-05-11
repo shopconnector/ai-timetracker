@@ -5,9 +5,18 @@ import {
   compareVersions,
   getDownloadUrl,
   getPlatform,
+  clearVersionCache,
 } from '@/lib/versionCheck';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const debug = searchParams.get('debug') === '1';
+  const forceRefresh = searchParams.get('refresh') === '1';
+
+  if (forceRefresh) {
+    clearVersionCache();
+  }
+
   const current = getCurrentVersion();
   const platform = getPlatform();
 
@@ -17,7 +26,7 @@ export async function GET() {
     const hasUpdate = compareVersions(current, latest) < 0;
     const downloadUrl = getDownloadUrl(release.assets, platform);
 
-    return NextResponse.json({
+    const payload: Record<string, unknown> = {
       current,
       latest,
       hasUpdate,
@@ -27,7 +36,19 @@ export async function GET() {
       publishedAt: release.published_at,
       platform,
       checkedAt: new Date().toISOString(),
-    });
+    };
+
+    if (debug) {
+      payload.debug = {
+        nextPublicAppVersion: process.env.NEXT_PUBLIC_APP_VERSION || null,
+        timetrackerDataDir: process.env.TIMETRACKER_DATA_DIR || null,
+        cwd: process.cwd(),
+        nodeVersion: process.version,
+        assetNames: release.assets.map((a) => a.name),
+      };
+    }
+
+    return NextResponse.json(payload);
   } catch (error) {
     return NextResponse.json({
       current,
@@ -40,6 +61,14 @@ export async function GET() {
       platform,
       checkedAt: new Date().toISOString(),
       error: error instanceof Error ? error.message : 'Failed to check for updates',
+      ...(debug && {
+        debug: {
+          nextPublicAppVersion: process.env.NEXT_PUBLIC_APP_VERSION || null,
+          timetrackerDataDir: process.env.TIMETRACKER_DATA_DIR || null,
+          cwd: process.cwd(),
+          nodeVersion: process.version,
+        },
+      }),
     });
   }
 }
