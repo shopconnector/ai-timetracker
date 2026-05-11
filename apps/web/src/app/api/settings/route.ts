@@ -10,12 +10,16 @@ import { getGithubUser } from '@/lib/github';
  * Priority:
  *   1. TIMETRACKER_DATA_DIR — exported by start-server.js (macOS bundle, Windows bundle).
  *      Guarantees we WRITE to the same file the launcher READS at startup.
- *   2. <cwd>/data/.env.local — Windows standalone bundle convention (legacy).
- *   3. ~/.timetracker/.env.local — macOS bundle convention (when start-server hasn't run).
- *   4. <cwd>/.env.local — dev mode (pnpm dev from monorepo root or apps/web).
+ *   2. <cwd>/data/.env.local — Windows standalone bundle convention.
+ *   3. Monorepo dev/PM2 mode — cwd's package.json name === '@timetracker/web'
+ *      means Next.js is auto-loading <cwd>/.env.local; match it so PUT and READ
+ *      hit the SAME file. Covers `pnpm dev` and `pm2 start next start -p 5666`.
+ *   4. ~/.timetracker/.env.local — macOS bundle convention (when start-server.js
+ *      hasn't run AND we're not in monorepo).
+ *   5. <cwd>/.env.local — last-resort fallback.
  *
  * Without this synchronization, tokens saved via the UI "disappear" after the next
- * app restart because start-server.js loads from a different file than route.ts wrote to.
+ * app restart because the launcher loads from a different file than route.ts wrote to.
  */
 function getEnvFilePath(): string {
   const explicitDir = process.env.TIMETRACKER_DATA_DIR;
@@ -27,6 +31,20 @@ function getEnvFilePath(): string {
   const dataEnvPath = join(cwd, 'data', '.env.local');
   if (existsSync(dataEnvPath)) {
     return dataEnvPath;
+  }
+
+  // Monorepo dev / PM2-with-next-start: cwd is the @timetracker/web package root.
+  // Next.js auto-loads <cwd>/.env.local — we MUST write back to the same file.
+  const cwdPkg = join(cwd, 'package.json');
+  if (existsSync(cwdPkg)) {
+    try {
+      const pkg = JSON.parse(readFileSync(cwdPkg, 'utf-8')) as { name?: string };
+      if (pkg.name === '@timetracker/web') {
+        return join(cwd, '.env.local');
+      }
+    } catch {
+      // ignore malformed package.json
+    }
   }
 
   if (process.platform === 'darwin') {
