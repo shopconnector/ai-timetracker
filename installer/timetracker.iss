@@ -120,8 +120,19 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ActivityWatch"; ValueData: """{app}\activitywatch\aw-qt.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-; Show readme / open app after install
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; ALWAYS launch the silent VBS wrapper after install — both silent and wizard
+; installs. Uses wscript so no console window appears. Without this, a
+; reinstall leaves the user with no running server until next Windows login
+; (when HKCU Run autostart fires).
+Filename: "wscript.exe"; Parameters: """{app}\TimeTrackerSilent.vbs"""; Flags: nowait runhidden
+
+; Wait for the server to boot, then auto-open the browser. 8s gives the
+; node.exe runtime + Next.js standalone time to bind :5666 on a cold start.
+Filename: "cmd.exe"; Parameters: "/c timeout /t 8 /nobreak >nul && start http://localhost:5666/timetracker"; Flags: nowait runhidden skipifsilent
+
+; Optional manual launcher button on the finish wizard page (visible in BAT)
+; — kept for users who want to see the console output for troubleshooting.
+Filename: "{app}\{#MyAppExeName}"; Description: "Pokaż konsolę TimeTracker (debug)"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallDelete]
 ; Clean up application files on uninstall (data/ is preserved by default)
