@@ -747,6 +747,28 @@ export default function SettingsPage() {
                 >
                   Force refresh
                 </Button>
+                {/* Always-on reinstall button — works regardless of hasUpdate.
+                    Lets users force-redownload the latest installer when the
+                    automatic upgrade path is broken (stale node.exe holding :5666,
+                    corrupted build, etc.). */}
+                <a
+                  href={versionInfo?.downloadUrl ?? versionInfo?.releaseUrl ?? 'https://github.com/shopconnector/ai-timetracker/releases/latest'}
+                  target={versionInfo?.downloadUrl ? '_self' : '_blank'}
+                  rel="noopener noreferrer"
+                  download={versionInfo?.downloadUrl ? '' : undefined}
+                  title={
+                    versionInfo?.platform === 'win32'
+                      ? 'Pobierz najnowszy TimeTracker-Setup-x64.exe i uruchom ręcznie'
+                      : versionInfo?.platform === 'darwin'
+                        ? 'Pobierz najnowszy TimeTracker-macos-arm64.dmg'
+                        : 'Otwórz stronę release na GitHub'
+                  }
+                >
+                  <Button variant="default" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Reinstaluj
+                  </Button>
+                </a>
               </div>
             </div>
           </CardHeader>
@@ -754,8 +776,20 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Aktualna wersja</div>
-                <div className="text-lg font-bold text-slate-900 dark:text-white">
-                  v{versionInfo?.current || process.env.NEXT_PUBLIC_APP_VERSION || '?'}
+                <div className="text-lg font-bold text-slate-900 dark:text-white flex items-baseline gap-2">
+                  <span>v{versionInfo?.current || process.env.NEXT_PUBLIC_APP_VERSION || '?'}</span>
+                  {(versionInfo?.downloadUrl || versionInfo?.releaseUrl) && (
+                    <a
+                      href={versionInfo.downloadUrl ?? versionInfo.releaseUrl}
+                      target={versionInfo.downloadUrl ? '_self' : '_blank'}
+                      rel="noopener noreferrer"
+                      download={versionInfo.downloadUrl ? '' : undefined}
+                      className="text-xs font-normal text-blue-600 dark:text-blue-400 hover:underline"
+                      title="Pobierz ten sam installer ponownie (przydatne gdy reinstall nie zmienia nic na localhost)"
+                    >
+                      · pobierz ponownie
+                    </a>
+                  )}
                 </div>
               </div>
               <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
