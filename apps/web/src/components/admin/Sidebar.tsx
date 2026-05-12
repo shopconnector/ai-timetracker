@@ -182,6 +182,11 @@ export function Sidebar() {
               </>
             )}
           </Button>
+          {!isCollapsed && (
+            <div className="mt-1 text-center text-[10px] text-slate-500 tabular-nums">
+              v{process.env.NEXT_PUBLIC_APP_VERSION ?? '?'}
+            </div>
+          )}
         </div>
       </aside>
     </TooltipProvider>
