@@ -93,7 +93,13 @@ export function getDownloadUrl(
     );
     return exe?.browser_download_url ?? null;
   }
-  // macOS/Linux — no direct download, use release page
+  if (platform === 'darwin') {
+    const dmg = assets.find((a) =>
+      /TimeTracker-.*-macos-arm64\.dmg$/i.test(a.name)
+    );
+    return dmg?.browser_download_url ?? null;
+  }
+  // Linux — no installer yet, use release page
   return null;
 }
 
