@@ -1,5 +1,8 @@
 const GITHUB_REPO = 'shopconnector/ai-timetracker';
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// 5 minutes — short enough that users see new releases shortly after publish,
+// long enough to stay well under GitHub's 60 req/h anonymous rate limit
+// (worst case: ~12 requests per hour per server instance).
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface GitHubAsset {
   name: string;
@@ -70,7 +73,10 @@ export async function fetchLatestRelease(): Promise<GitHubRelease> {
     {
       headers: { Accept: 'application/vnd.github+json' },
       signal: AbortSignal.timeout(10000),
-      next: { revalidate: 3600 },
+      // Disable Next.js fetch cache — we already have an in-memory cache
+      // with a tight TTL above. The Next.js layer was adding 1h staleness
+      // on top, defeating the 5-minute refresh expectation.
+      cache: 'no-store',
     }
   );
 
