@@ -133,6 +133,29 @@ Pełne, techniczne sekcje znajdują się w [angielskim README](./README.md):
 
 ---
 
+## Troubleshooting
+
+### Po reinstalacji localhost nadal pokazuje starą wersję
+
+Pobrałeś nowy `TimeTracker-Setup-x64.exe`, zainstalowałeś, ale `http://localhost:5666/timetracker` wciąż pokazuje starą wersję. Installer skopiował pliki, ale stary `node.exe` nadal trzyma port 5666 i serwuje stary build.
+
+**Naprawione w v0.11.2+** — installer ma teraz fallback do `taskkill /F /IM node.exe` jeśli port 5666 jest LISTENING po WMIC kill. Dla starszych wersji:
+
+1. **Otwórz endpoint diagnostyczny**: `http://localhost:5666/timetracker/api/diagnostic`
+   - `serverBootAt` starszy niż uruchomienie installera → stary serwer wciąż działa
+   - `packageVersion` ≠ `envVersion` → stare artefakty buildu na dysku
+   - `buildMtime` starszy niż dzisiaj → installer nie nadpisał `.next/BUILD_ID` (lock pliku)
+2. **Zabij wszystkie node.exe**: Menedżer Zadań → zakładka Szczegóły → prawym kliknij `node.exe` → Zakończ zadanie. Powtórz aż nic nie zostanie.
+3. **Hard refresh przeglądarki**: `Ctrl+Shift+R` (cached JS/RSC chunki mogą trzymać starą wersję nawet po czystej reinstalacji)
+4. **Wyczyść dane strony**: F12 → Application → Storage → "Clear site data"
+5. **Uruchom installer ponownie**
+
+Aktualna wersja jest zawsze widoczna w lewym dolnym rogu sidebara (dodane w v0.11.2+).
+
+Pełna lista troubleshootingu (Jira, Tempo, ActivityWatch, SmartScreen) jest w [README.md](./README.md#troubleshooting).
+
+---
+
 ## Licencja
 
 BUSL-1.1 — patrz [LICENSE](./LICENSE)

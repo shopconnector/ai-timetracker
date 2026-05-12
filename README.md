@@ -561,6 +561,23 @@ If you save tokens, they work, you restart, and you get 401 again — the launch
 
 To confirm where Settings is writing now, open `/api/settings` directly in your browser — the `envFilePath` field shows the path.
 
+### Reinstalled but localhost still shows the old version
+
+You downloaded the new `TimeTracker-Setup-x64.exe`, ran it, but `http://localhost:5666/timetracker` still shows the old version. The installer copied new files, but an old `node.exe` is still holding port 5666 and serving the stale build.
+
+**Fix in v0.11.2+** — installer now falls back to `taskkill /F /IM node.exe` if port 5666 is still LISTENING after the targeted WMIC kill. For older builds:
+
+1. **Open the diagnostic endpoint**: `http://localhost:5666/timetracker/api/diagnostic`
+   - `serverBootAt` older than your installer run → old server is still running
+   - `packageVersion` ≠ `envVersion` → stale build artifacts on disk
+   - `buildMtime` older than today → installer didn't replace `.next/BUILD_ID` (file lock)
+2. **Kill all node.exe**: Task Manager → Details tab → right-click any `node.exe` → End task. Repeat until none remain.
+3. **Hard refresh browser**: `Ctrl+Shift+R` (cached JS/RSC chunks can pin the old version even after a clean reinstall)
+4. **Clear site data**: F12 → Application → Storage → "Clear site data"
+5. **Re-run the installer**
+
+The current version is always visible in the bottom-left of the sidebar (added in v0.11.2+).
+
 ### Auto-update doesn't pick up the new version
 
 | Symptom | Cause | Fix |
