@@ -1,0 +1,518 @@
+{
+  "updateBanner": {
+    "updating": "Updating: {step}",
+    "startingStep": "Starting...",
+    "newVersion": "New version available",
+    "installing": "Installing... The app will restart automatically.",
+    "details": "Details",
+    "install": "Install",
+    "update": "Update",
+    "dismiss": "Remind in 24h",
+    "done": "Update finished. Restarting...",
+    "errors": {
+      "selfUpdateStart": "Failed to start self-update",
+      "installerStart": "Failed to launch installer",
+      "downloadStart": "Failed to start download"
+    }
+  },
+  "common": {
+    "meta": {
+      "title": "TimeTracker",
+      "description": "Track your time and sync with Tempo"
+    },
+    "appName": "TimeTracker",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "noData": "No data",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This week",
+    "lastWeek": "Last week",
+    "online": "Online",
+    "offline": "Offline",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pauseTooltip": "Pause tracking (stop ActivityWatch)",
+    "resumeTooltip": "Resume tracking (start ActivityWatch)",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "language": {
+      "label": "Language",
+      "pl": "Polski",
+      "en": "English"
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "yesterday": "Yesterday",
+    "timesheet": "Timesheet",
+    "myIssues": "My Issues",
+    "calendar": "Calendar",
+    "analytics": "Analytics",
+    "activity": "Activity",
+    "settings": "Settings",
+    "connections": "Connections",
+    "configuration": "Configuration"
+  },
+  "header": {
+    "pathLabels": {
+      "dashboard": "Dashboard",
+      "yesterday": "Yesterday",
+      "timesheet": "Timesheet",
+      "myIssues": "My Issues",
+      "calendar": "Calendar",
+      "analytics": "Analytics",
+      "activity": "Activity",
+      "settings": "Settings",
+      "connections": "Connections",
+      "api": "API Keys",
+      "mappings": "Project Mappings",
+      "history": "Task History",
+      "admin": "Admin"
+    },
+    "toast": {
+      "trackingPaused": "Tracking paused",
+      "trackingResumed": "Tracking resumed",
+      "trackingError": "Failed to toggle tracking state",
+      "connectionError": "Server connection error"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "ActivityWatch + Tempo Analytics",
+    "quickLog": {
+      "title": "Quick Log",
+      "hours": "Hours",
+      "description": "Description",
+      "ticket": "Ticket",
+      "submit": "Log Now",
+      "submitting": "Logging...",
+      "selectTicket": "Select a ticket",
+      "descriptionPlaceholder": "What did you work on?",
+      "hoursPlaceholder": "1.5",
+      "noRecent": "No recently logged tasks. Log time in",
+      "noRecentTail": "and recently used tickets will show up here.",
+      "loggedHours": "✓ Logged {hours}h!",
+      "connectionErrorPrefix": "✗ Connection error",
+      "errorPrefix": "✗ {message}"
+    },
+    "cards": {
+      "activityWatch": "ActivityWatch",
+      "tempoLogged": "Tempo Logged",
+      "efficiency": "Efficiency",
+      "weekTotal": "Week Total",
+      "dailyAverage": "Daily Average",
+      "activities": "{count} activities",
+      "worklogs": "{count} worklogs",
+      "loggedVsTracked": "logged vs tracked",
+      "workDays": "{count} work days",
+      "target8h": "target: 8h"
+    },
+    "slack": {
+      "activityHeader": "Slack Activity — {date}",
+      "conversations": "conversations",
+      "huddles": "huddles"
+    },
+    "charts": {
+      "hourlyActivity": "Hourly Activity — {date}",
+      "appUsage": "App Usage — {date}",
+      "weeklyComparison": "Weekly Comparison",
+      "topActivities": "Top Activities",
+      "todaysWorklogs": "Today's Worklogs",
+      "apiStatus": "API Status",
+      "weekOverview": "Week Overview",
+      "tempoSeries": "Tempo Logged",
+      "awSeries": "ActivityWatch",
+      "targetSeries": "Target (8h)",
+      "minutes": "min",
+      "hours": "hrs"
+    },
+    "buttons": {
+      "refresh": "Refresh",
+      "loading": "Loading...",
+      "check": "Check"
+    },
+    "events": "events",
+    "logs": "logs",
+    "empty": {
+      "activities": "No activities",
+      "worklogs": "No worklogs",
+      "data": "No data"
+    },
+    "status": {
+      "ok": "OK",
+      "error": "Error",
+      "unconfigured": "Not Set"
+    },
+    "toast": {
+      "logged": "Logged {hours}h!",
+      "missingDescription": "Provide a description!",
+      "missingHours": "Provide hours!",
+      "invalidHours": "Time must be between 0.01 and 24 hours",
+      "missingTicket": "Select a ticket!",
+      "logError": "Failed to log time",
+      "connectionError": "Connection error"
+    }
+  },
+  "yesterday": {
+    "title": "Yesterday",
+    "datePicker": {
+      "prev": "Previous day",
+      "next": "Next day",
+      "pickDate": "Pick any date",
+      "jumpLabel": "Jump:",
+      "yesterday": "Yesterday",
+      "monday": "Mon",
+      "friday": "Fri",
+      "weekAgo": "Week ago"
+    },
+    "summary": {
+      "on": "Summary ON",
+      "off": "Summary",
+      "tooltip": "Generate a 1-2 sentence summary per project (Gemini)"
+    },
+    "days": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "stats": {
+      "awTime": "Time (AW)",
+      "projects": "BC projects",
+      "commits": "Commits",
+      "tempo": "Tempo"
+    },
+    "warnings": "Source warnings:",
+    "sections": {
+      "awActivity": "Activity (AW)",
+      "commits": "Commits",
+      "tempoWorklogs": "Tempo worklogs",
+      "slack": "Slack",
+      "plans": "Claude plans",
+      "changedFiles": "Changed files ({count})",
+      "filesMore": "+ {count} more",
+      "proposalForToday": "Proposal for today",
+      "proposalLabel": "Finish plan: {title}",
+      "proposalSource": "(Claude plan)",
+      "proposalTempo": "(Tempo)"
+    },
+    "noActivity": "No activity",
+    "noActivityHeadline": "No BeeCommerce activity for this day",
+    "noActivityHint": "Try another date or check whether ActivityWatch and Slack are running.",
+    "error": {
+      "headline": "Failed to generate report",
+      "dateLabel": "Date: {date}",
+      "hint": "Check that ActivityWatch (`localhost:5600`), Slack and Tempo are configured in {settingsLink}. Each source is optional individually — if a single fetch is breaking everything here, file a bug."
+    },
+    "tempoLabel": "Tempo {value}",
+    "footer": {
+      "generated": "Generated {datetime} · Filter:",
+      "filterBeeCommerce": "BeeCommerce only",
+      "filterAll": "all projects"
+    },
+    "toast": {
+      "reportError": "Failed to generate report"
+    }
+  },
+  "calendar": {
+    "title": "Calendar",
+    "weekLabel": "Week {week}",
+    "today": "Today",
+    "prevWeek": "Previous week",
+    "nextWeek": "Next week",
+    "loading": "Loading calendar data...",
+    "noActivities": "No activities for this day",
+    "columns": {
+      "time": "Time",
+      "activity": "Activity",
+      "duration": "Duration",
+      "project": "Project",
+      "actions": "Actions"
+    },
+    "weekSummary": "Week: {logged}h / {target}h logged",
+    "weekSummarySlack": "💬 {h}h {m}m Slack",
+    "showOther": "Show \"Other\"",
+    "logAll": "Log All Activities",
+    "loadingWeek": "Loading week data...",
+    "legend": {
+      "awToLog": "ActivityWatch (to log)",
+      "tempoLogged": "Tempo (logged)",
+      "calendar": "Calendar",
+      "slack": "Slack",
+      "otherNotLoggable": "Other (not loggable)"
+    },
+    "toast": {
+      "loadError": "Failed to load calendar data",
+      "worklogCreated": "Worklog created successfully",
+      "worklogFailed": "Failed to create worklog",
+      "cannotLogToTempo": "This activity cannot be logged to Tempo (marked as \"Other\")",
+      "overlap": "Overlapping time!",
+      "noActivitiesToLog": "No activities to log",
+      "bulkComingSoon": "Found {count} activities to log — bulk logging coming soon",
+      "editWorklogComingSoon": "Edit worklog {id} — coming soon",
+      "calendarEventInfo": "Calendar event: {title}",
+      "slackInfo": "💬 Slack: {title} ({minutes}m)"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "loading": "Loading analytics data...",
+    "period": {
+      "label": "Period",
+      "today": "Today",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "wtd": "Week to date",
+      "mtd": "Month to date"
+    },
+    "refresh": {
+      "off": "Off",
+      "seconds": "{n} seconds",
+      "minute": "1 minute",
+      "minutes": "{n} minutes",
+      "refreshing": "Loading...",
+      "refresh": "Refresh"
+    },
+    "kpis": {
+      "totalAW": "ActivityWatch",
+      "totalTempo": "Tempo Logged",
+      "avgDaily": "Daily average",
+      "avgDailyAWHint": "AW: {value}",
+      "target": "Target (8h)",
+      "captureRate": "Capture rate",
+      "productivity": "Productivity",
+      "slack": "Slack",
+      "workdays": "{count} workdays",
+      "worklogs": "{count} worklogs",
+      "daysOk": "{ok}/{total} days OK",
+      "loggedVsTracked": "logged / tracked",
+      "peakAt": "Peak: {hour}",
+      "conversationsHuddles": "{conv} conversations, {huddles} huddles",
+      "previous": "previously: {value}"
+    },
+    "charts": {
+      "dailyComparison": "Daily comparison (AW vs Tempo)",
+      "daysStatus": "Days status",
+      "hourlyDistribution": "Hourly distribution",
+      "productivity": "Productivity",
+      "heatmap": "Activity heatmap (AW)",
+      "gapAnalysis": "Gap analysis (unlogged time)",
+      "topApps": "Top apps",
+      "dailyDetails": "Daily details",
+      "less": "Less",
+      "more": "More"
+    },
+    "daysStatus": {
+      "okLabel": "OK (7h+)",
+      "warningLabel": "Warning (4-7h)",
+      "missingLabel": "Missing (<4h)",
+      "ok": "OK",
+      "warning": "Warning",
+      "missing": "Missing",
+      "onTarget": "days on target"
+    },
+    "productivity": {
+      "productive": "Productive",
+      "neutral": "Neutral",
+      "distracting": "Distracting"
+    },
+    "table": {
+      "day": "Day",
+      "aw": "AW",
+      "tempo": "Tempo",
+      "slack": "Slack",
+      "gap": "Gap",
+      "logs": "Logs",
+      "status": "Status"
+    },
+    "series": {
+      "activityWatch": "ActivityWatch",
+      "tempo": "Tempo",
+      "slack": "Slack",
+      "target8h": "Target 8h",
+      "logged": "Logged",
+      "notLogged": "Not logged",
+      "gap": "Gap",
+      "tracked": "Tracked"
+    },
+    "trend": {
+      "up": "up {percent}%",
+      "down": "down {percent}%",
+      "flat": "flat"
+    }
+  },
+  "activity": {
+    "title": "Activity — GitHub commits",
+    "noCommits": "No commits in this range",
+    "week": "Wk",
+    "summary": "{total} commits in {repos} repos, range {from} → {to}",
+    "errorPrefix": "Error: {message}",
+    "commitsCount": "{count} commits",
+    "filters": {
+      "dateRange": "Date range",
+      "from": "From",
+      "to": "To",
+      "repo": "Repository"
+    },
+    "configHint": "PROJECTS_ROOT is not set. Open Settings → Git / Activity and point to a directory with local repos."
+  },
+  "timesheet": {
+    "title": "Timesheet",
+    "columns": {
+      "date": "Date",
+      "activity": "Activity",
+      "duration": "Duration",
+      "project": "Project",
+      "description": "Description",
+      "actions": "Actions"
+    },
+    "actions": {
+      "logTime": "Log time",
+      "mergeSplit": "Merge / Split",
+      "refresh": "Refresh"
+    },
+    "toast": {
+      "activitiesRefreshed": "Activities refreshed",
+      "loadError": "Failed to fetch activities",
+      "worklogsLoadError": "Failed to fetch worklogs",
+      "dataRefreshed": "Data refreshed",
+      "refreshError": "Refresh failed",
+      "searchError": "Search failed",
+      "ticketsLoadError": "Failed to load tickets",
+      "suggestionsGenerated": "Suggestions generated",
+      "suggestionsError": "Failed to generate suggestions",
+      "cannotLog": "Cannot log",
+      "overlap": "Overlapping time!",
+      "logged": "Time logged",
+      "logError": "Failed to log time",
+      "invalidTime": "Invalid time",
+      "activitiesMerged": "Activities merged",
+      "mergeError": "Merge failed",
+      "activitySplit": "Activity split",
+      "partialSuccess": "Partial success",
+      "missingDescription": "Provide a description!",
+      "invalidDuration": "Time must be at least 0.1h"
+    }
+  },
+  "myIssues": {
+    "title": "My Jira Issues",
+    "subtitleAssigned": "Issues assigned to me — track progress and add notes",
+    "subtitleAll": "All issues from my projects — full hierarchy view",
+    "noIssues": "No issues",
+    "loadError": "Failed to fetch issues",
+    "buttons": {
+      "refresh": "Refresh",
+      "exportCsv": "Export CSV"
+    },
+    "scope": {
+      "assigned": "My issues",
+      "projectAll": "All from projects"
+    },
+    "stats": {
+      "total": "Total issues",
+      "done": "Done",
+      "inProgress": "In progress",
+      "toDo": "To do",
+      "withWorklogs": "With worklogs",
+      "withoutWorklogs": "Without worklogs",
+      "watching": "Watching",
+      "jiraTime": "Time in Jira",
+      "tempoTime": "Time in Tempo",
+      "readinessOk": "Readiness OK",
+      "slackToday": "{count} conversations today"
+    },
+    "filters": "Filters",
+    "filterFields": {
+      "project": "Project"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure your TimeTracker integrations",
+    "sections": {
+      "general": "General",
+      "tempo": "Tempo",
+      "jira": "JIRA",
+      "github": "GitHub",
+      "slack": "Slack",
+      "activityWatch": "ActivityWatch",
+      "projectsRoot": "Projects directory"
+    },
+    "fields": {
+      "apiToken": "API token",
+      "baseUrl": "Base URL",
+      "email": "Email",
+      "username": "Username",
+      "accountId": "Account ID",
+      "save": "Save settings"
+    },
+    "toast": {
+      "saved": "Settings saved",
+      "saveError": "Failed to save settings",
+      "testSuccess": "Connection OK",
+      "testError": "Connection error"
+    }
+  },
+  "connections": {
+    "title": "Connections",
+    "subtitle": "Manage your external service integrations",
+    "checkAll": "Check All",
+    "summary": {
+      "connected": "Connected",
+      "errors": "Errors",
+      "notConfigured": "Not Configured"
+    },
+    "serviceStatus": {
+      "title": "Service Status",
+      "description": "Current connection status for all external services"
+    },
+    "loading": "Checking connections...",
+    "noData": "No connection data available",
+    "help": {
+      "title": "Need Help?",
+      "notConfiguredText": "If a service shows as \"Not Configured\", go to",
+      "settingsLink": "Settings",
+      "settingsHint": "to add your API keys.",
+      "errorHint": "If a service shows an error, check that your API keys are valid and the service is accessible."
+    },
+    "status": {
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "error": "Error",
+      "notConfigured": "Not Configured"
+    },
+    "actions": {
+      "connect": "Connect",
+      "disconnect": "Disconnect",
+      "test": "Test"
+    }
+  }
+}

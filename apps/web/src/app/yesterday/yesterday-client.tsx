@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, RefreshCw, Sparkles } from 'lucide-react';
 import { formatMinutes } from '@/lib/morning-format';
@@ -12,6 +13,8 @@ interface Totals {
   commitsCount: number;
   projectsCount: number;
 }
+
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 export function YesterdayHeader({
   date,
@@ -26,6 +29,7 @@ export function YesterdayHeader({
   const sp = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const t = useTranslations('yesterday');
 
   function pushDate(next: string) {
     const params = new URLSearchParams(sp.toString());
@@ -81,7 +85,9 @@ export function YesterdayHeader({
     });
   }
 
-  const dayName = formatDayName(date);
+  const [yy, mm, dd] = date.split('-').map(Number);
+  const dayKey = DAY_KEYS[new Date(yy, mm - 1, dd).getDay()];
+  const dayName = t(`days.${dayKey}`);
 
   return (
     <div className="space-y-3">
@@ -92,7 +98,7 @@ export function YesterdayHeader({
             variant="outline"
             onClick={() => shiftDate(-1)}
             disabled={isPending}
-            title="Poprzedni dzień"
+            title={t('datePicker.prev')}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -104,7 +110,7 @@ export function YesterdayHeader({
             variant="outline"
             onClick={() => shiftDate(1)}
             disabled={isPending}
-            title="Następny dzień"
+            title={t('datePicker.next')}
           >
             <ChevronRight className="size-4" />
           </Button>
@@ -118,7 +124,7 @@ export function YesterdayHeader({
             }}
             disabled={isPending}
             className="ml-2 h-8 rounded-md border border-input bg-background px-2 text-sm tabular-nums"
-            aria-label="Wybierz dowolną datę"
+            aria-label={t('datePicker.pickDate')}
           />
         </div>
 
@@ -128,10 +134,10 @@ export function YesterdayHeader({
             variant={withSummary ? 'default' : 'outline'}
             onClick={toggleSummary}
             disabled={isPending}
-            title="Wygeneruj 1-2 zdaniowe streszczenie per projekt (Gemini)"
+            title={t('summary.tooltip')}
           >
             <Sparkles className="size-4" />
-            {withSummary ? 'Streszczenie ON' : 'Streszczenie'}
+            {withSummary ? t('summary.on') : t('summary.off')}
           </Button>
           <Button size="sm" variant="outline" onClick={refresh} disabled={isPending || isRefreshing}>
             <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -140,27 +146,27 @@ export function YesterdayHeader({
       </div>
 
       <div className="flex items-center gap-1 flex-wrap text-xs">
-        <span className="text-muted-foreground mr-1">Skok:</span>
+        <span className="text-muted-foreground mr-1">{t('datePicker.jumpLabel')}</span>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={jumpToYesterday} disabled={isPending}>
-          Wczoraj
+          {t('datePicker.yesterday')}
         </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => jumpToLastWeekday(1)} disabled={isPending}>
-          Pn
+          {t('datePicker.monday')}
         </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => jumpToLastWeekday(5)} disabled={isPending}>
-          Pt
+          {t('datePicker.friday')}
         </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => jumpDaysAgo(7)} disabled={isPending}>
-          Tydzień temu
+          {t('datePicker.weekAgo')}
         </Button>
       </div>
 
       <div className="rounded-lg border bg-card px-4 py-3 flex items-center gap-6 text-sm flex-wrap">
         <div className="text-2xl font-bold">🌅</div>
-        <Stat label="Czas (AW)" value={formatMinutes(totals.trackedMinutes)} />
-        <Stat label="Projekty BC" value={String(totals.projectsCount)} />
-        <Stat label="Commity" value={String(totals.commitsCount)} />
-        <Stat label="Tempo" value={formatMinutes(totals.tempoMinutes)} />
+        <Stat label={t('stats.awTime')} value={formatMinutes(totals.trackedMinutes)} />
+        <Stat label={t('stats.projects')} value={String(totals.projectsCount)} />
+        <Stat label={t('stats.commits')} value={String(totals.commitsCount)} />
+        <Stat label={t('stats.tempo')} value={formatMinutes(totals.tempoMinutes)} />
       </div>
     </div>
   );
@@ -173,12 +179,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <span className="font-semibold tabular-nums">{value}</span>
     </div>
   );
-}
-
-const POLISH_DAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
-function formatDayName(date: string): string {
-  const [y, m, d] = date.split('-').map(Number);
-  return POLISH_DAYS[new Date(y, m - 1, d).getDay()];
 }
 
 function toYmd(d: Date): string {

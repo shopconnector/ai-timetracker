@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import { useTranslations } from 'next-intl';
 import { useSidebar } from '@/lib/providers/SidebarProvider';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -33,18 +34,23 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
+import { LangSwitcher } from './LangSwitcher';
 
-// Map paths to labels
-const pathLabels: Record<string, string> = {
-  '': 'Dashboard',
-  'timesheet': 'Timesheet',
-  'analytics': 'Analytics',
-  'settings': 'Settings',
-  'api': 'API Keys',
-  'mappings': 'Project Mappings',
-  'history': 'Task History',
-  'connections': 'Connections',
-  'admin': 'Admin',
+// Map URL segments to i18n keys under `header.pathLabels`
+const pathKeyMap: Record<string, string> = {
+  '': 'dashboard',
+  yesterday: 'yesterday',
+  timesheet: 'timesheet',
+  'my-issues': 'myIssues',
+  calendar: 'calendar',
+  analytics: 'analytics',
+  activity: 'activity',
+  settings: 'settings',
+  connections: 'connections',
+  api: 'api',
+  mappings: 'mappings',
+  history: 'history',
+  admin: 'admin',
 };
 
 export function Header() {
@@ -56,6 +62,8 @@ export function Header() {
   const [trackingPaused, setTrackingPaused] = useState(false);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingSupported, setTrackingSupported] = useState(true);
+  const tCommon = useTranslations('common');
+  const tHeader = useTranslations('header');
 
   const fetchTrackingState = useCallback(async () => {
     try {
@@ -81,16 +89,20 @@ export function Header() {
       const data = await res.json();
       if (res.ok) {
         setTrackingPaused(data.state === 'paused');
-        toast.success(data.state === 'paused' ? 'Śledzenie wstrzymane' : 'Śledzenie wznowione');
+        toast.success(
+          data.state === 'paused'
+            ? tHeader('toast.trackingPaused')
+            : tHeader('toast.trackingResumed')
+        );
       } else {
-        toast.error(data.error || 'Błąd zmiany stanu śledzenia');
+        toast.error(data.error || tHeader('toast.trackingError'));
       }
     } catch {
-      toast.error('Błąd połączenia z serwerem');
+      toast.error(tHeader('toast.connectionError'));
     } finally {
       setTrackingLoading(false);
     }
-  }, [trackingPaused, trackingLoading]);
+  }, [trackingPaused, trackingLoading, tHeader]);
 
   useEffect(() => {
     setMounted(true);
@@ -113,14 +125,17 @@ export function Header() {
   const segments = pathname.split('/').filter(Boolean);
   const breadcrumbs = segments.map((segment, index) => {
     const href = '/' + segments.slice(0, index + 1).join('/');
-    const label = pathLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1);
+    const key = pathKeyMap[segment];
+    const label = key
+      ? tHeader(`pathLabels.${key}`)
+      : segment.charAt(0).toUpperCase() + segment.slice(1);
     const isLast = index === segments.length - 1;
     return { href, label, isLast };
   });
 
   // Add home if we're on a subpage
   if (breadcrumbs.length > 0) {
-    breadcrumbs.unshift({ href: '/', label: 'Dashboard', isLast: false });
+    breadcrumbs.unshift({ href: '/', label: tHeader('pathLabels.dashboard'), isLast: false });
   }
 
   return (
@@ -148,7 +163,7 @@ export function Header() {
               {breadcrumbs.length === 0 ? (
                 <BreadcrumbItem>
                   <BreadcrumbPage className="text-slate-900 dark:text-slate-100">
-                    Dashboard
+                    {tHeader('pathLabels.dashboard')}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               ) : (
@@ -176,7 +191,7 @@ export function Header() {
           </Breadcrumb>
         </div>
 
-        {/* Right side: Status + Theme */}
+        {/* Right side: Status + Theme + Language */}
         <div className="flex items-center gap-2">
           {/* Connection status */}
           <div className={cn(
@@ -188,12 +203,12 @@ export function Header() {
             {isOnline ? (
               <>
                 <Wifi className="h-3 w-3" />
-                <span className="hidden sm:inline">Online</span>
+                <span className="hidden sm:inline">{tCommon('online')}</span>
               </>
             ) : (
               <>
                 <WifiOff className="h-3 w-3" />
-                <span className="hidden sm:inline">Offline</span>
+                <span className="hidden sm:inline">{tCommon('offline')}</span>
               </>
             )}
           </div>
@@ -203,7 +218,7 @@ export function Header() {
             <button
               onClick={toggleTracking}
               disabled={trackingLoading}
-              title={trackingPaused ? 'Wznów śledzenie (uruchom ActivityWatch)' : 'Wstrzymaj śledzenie (zatrzymaj ActivityWatch)'}
+              title={trackingPaused ? tCommon('resumeTooltip') : tCommon('pauseTooltip')}
               className={cn(
                 'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60',
                 trackingPaused
@@ -219,10 +234,13 @@ export function Header() {
                 <Pause className="h-3 w-3" />
               )}
               <span className="hidden sm:inline">
-                {trackingLoading ? '...' : trackingPaused ? 'Wznów' : 'Wstrzymaj'}
+                {trackingLoading ? '...' : trackingPaused ? tCommon('resume') : tCommon('pause')}
               </span>
             </button>
           )}
+
+          {/* Language switcher */}
+          {mounted && <LangSwitcher />}
 
           {/* Theme toggle */}
           {mounted && (
@@ -241,15 +259,15 @@ export function Header() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setTheme('light')}>
                   <Sun className="mr-2 h-4 w-4" />
-                  Light
+                  {tCommon('theme.light')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme('dark')}>
                   <Moon className="mr-2 h-4 w-4" />
-                  Dark
+                  {tCommon('theme.dark')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme('system')}>
                   <Monitor className="mr-2 h-4 w-4" />
-                  System
+                  {tCommon('theme.system')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

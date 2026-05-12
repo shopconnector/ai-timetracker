@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -138,6 +139,7 @@ function getPriorityColor(priority: string): string {
 }
 
 export default function MyIssuesPage() {
+  const t = useTranslations('myIssues');
   const [issues, setIssues] = useState<JiraIssueItem[]>([]);
   const [timeByIssueKey, setTimeByIssueKey] = useState<Record<string, number>>({});
   const [timeByIssueId, setTimeByIssueId] = useState<Record<string, number>>({});
@@ -564,21 +566,19 @@ export default function MyIssuesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Moje Zadania Jira</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{t('title')}</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            {scope === 'assigned'
-              ? 'Zadania przypisane do mnie \u2014 sledz postep i dodawaj notatki'
-              : 'Wszystkie zadania z moich projektow \u2014 pelny widok hierarchii'}
+            {scope === 'assigned' ? t('subtitleAssigned') : t('subtitleAll')}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { tempoLoaded.current = false; loadData(); loadSideData(); }} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Odswiez
+            {t('buttons.refresh')}
           </Button>
           <Button onClick={handleExportCSV} disabled={filteredIssues.length === 0}>
             <Download className="mr-2 h-4 w-4" />
-            Eksport CSV
+            {t('buttons.exportCsv')}
           </Button>
         </div>
       </div>
@@ -591,7 +591,7 @@ export default function MyIssuesPage() {
           className="gap-2"
         >
           <User className="h-4 w-4" />
-          Moje zadania
+          {t('scope.assigned')}
           {scope === 'assigned' && !loading && (
             <Badge variant="secondary" className="ml-1 text-xs">
               {issues.length}
@@ -604,7 +604,7 @@ export default function MyIssuesPage() {
           className="gap-2"
         >
           <Users className="h-4 w-4" />
-          Wszystkie z projektow
+          {t('scope.projectAll')}
           {scope === 'project_all' && !loading && (
             <Badge variant="secondary" className="ml-1 text-xs">
               {issues.length}
@@ -621,7 +621,7 @@ export default function MyIssuesPage() {
               <ClipboardList className="h-8 w-8 text-blue-500" />
               <div>
                 <div className="text-2xl font-bold">{stats.total}</div>
-                <div className="text-xs text-gray-500">Wszystkich zadan</div>
+                <div className="text-xs text-gray-500">{t('stats.total')}</div>
               </div>
             </div>
           </CardContent>
@@ -632,7 +632,7 @@ export default function MyIssuesPage() {
               <CheckCircle2 className="h-8 w-8 text-green-500" />
               <div>
                 <div className="text-2xl font-bold">{stats.doneCount}</div>
-                <div className="text-xs text-gray-500">Zrobionych</div>
+                <div className="text-xs text-gray-500">{t('stats.done')}</div>
               </div>
             </div>
           </CardContent>
@@ -643,7 +643,7 @@ export default function MyIssuesPage() {
               <AlertCircle className="h-8 w-8 text-yellow-500" />
               <div>
                 <div className="text-2xl font-bold">{stats.todoCount}</div>
-                <div className="text-xs text-gray-500">Do zrobienia</div>
+                <div className="text-xs text-gray-500">{t('stats.toDo')}</div>
               </div>
             </div>
           </CardContent>
@@ -654,7 +654,7 @@ export default function MyIssuesPage() {
               <Clock className="h-8 w-8 text-blue-500" />
               <div>
                 <div className="text-2xl font-bold">{formatSeconds(stats.totalJiraTime)}</div>
-                <div className="text-xs text-gray-500">Czas w Jirze</div>
+                <div className="text-xs text-gray-500">{t('stats.jiraTime')}</div>
               </div>
             </div>
           </CardContent>
@@ -665,7 +665,7 @@ export default function MyIssuesPage() {
               <Clock className="h-8 w-8 text-green-500" />
               <div>
                 <div className="text-2xl font-bold">{formatSeconds(stats.totalTempoTime)}</div>
-                <div className="text-xs text-gray-500">Czas w Tempo</div>
+                <div className="text-xs text-gray-500">{t('stats.tempoTime')}</div>
               </div>
             </div>
           </CardContent>
@@ -678,7 +678,7 @@ export default function MyIssuesPage() {
                 <div className="text-2xl font-bold">
                   {readinessStats.greenCount}/{readinessStats.totalWithRC}
                 </div>
-                <div className="text-xs text-gray-500">Readiness OK</div>
+                <div className="text-xs text-gray-500">{t('stats.readinessOk')}</div>
               </div>
             </div>
           </CardContent>
@@ -693,7 +693,7 @@ export default function MyIssuesPage() {
                     {Math.floor(slackSummary.totalMinutes / 60)}h {slackSummary.totalMinutes % 60}m
                   </div>
                   <div className="text-xs text-gray-500">
-                    {slackSummary.conversationCount} rozmów dziś
+                    {t('stats.slackToday', { count: slackSummary.conversationCount })}
                   </div>
                 </div>
               </div>
@@ -707,13 +707,13 @@ export default function MyIssuesPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <Filter className="h-5 w-5 text-gray-600" />
-            <CardTitle className="text-lg">Filtry</CardTitle>
+            <CardTitle className="text-lg">{t('filters')}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <label className="mb-1 block text-sm text-gray-500">Projekt</label>
+              <label className="mb-1 block text-sm text-gray-500">{t('filterFields.project')}</label>
               <Select value={filterProject} onValueChange={setFilterProject}>
                 <SelectTrigger className="w-32">
                   <SelectValue />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { X, Download, ExternalLink, RefreshCw } from 'lucide-react';
 import { apiUrl } from '@/lib/api';
 
@@ -32,6 +33,7 @@ const DISMISS_KEY = 'timetracker-update-dismissed';
 const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function UpdateBanner() {
+  const t = useTranslations('updateBanner');
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [downloadState, setDownloadState] = useState<DownloadState>({ status: 'idle', progress: 0, error: null });
   const [selfUpdate, setSelfUpdate] = useState<SelfUpdateState>({ status: 'idle', step: '', steps: [], error: null });
@@ -69,12 +71,12 @@ export function UpdateBanner() {
 
     // Non-Windows: selfupdate via git pull + build + pm2 restart
     if (versionInfo.platform !== 'win32') {
-      setSelfUpdate({ status: 'running', step: 'Rozpoczynanie...', steps: [], error: null });
+      setSelfUpdate({ status: 'running', step: t('startingStep'), steps: [], error: null });
       try {
         await fetch(apiUrl('/api/update?action=selfupdate'), { method: 'POST' });
         pollSelfUpdateStatus();
       } catch {
-        setSelfUpdate({ status: 'error', step: '', steps: [], error: 'Nie udalo sie rozpoczac aktualizacji' });
+        setSelfUpdate({ status: 'error', step: '', steps: [], error: t('errors.selfUpdateStart') });
       }
       return;
     }
@@ -86,7 +88,7 @@ export function UpdateBanner() {
       try {
         await fetch(apiUrl('/api/update?action=apply'), { method: 'POST' });
       } catch {
-        setDownloadState({ status: 'error', progress: 0, error: 'Nie udalo sie uruchomic instalatora' });
+        setDownloadState({ status: 'error', progress: 0, error: t('errors.installerStart') });
       }
       return;
     }
@@ -98,7 +100,7 @@ export function UpdateBanner() {
       // Poll for progress
       pollDownloadStatus();
     } catch {
-      setDownloadState({ status: 'error', progress: 0, error: 'Nie udalo sie rozpoczac pobierania' });
+      setDownloadState({ status: 'error', progress: 0, error: t('errors.downloadStart') });
     }
   };
 
@@ -157,8 +159,8 @@ export function UpdateBanner() {
           <RefreshCw className={`h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 ${isSelfUpdating ? 'animate-spin' : ''}`} />
           <span className="text-sm text-amber-800 dark:text-amber-200 truncate">
             {isSelfUpdating
-              ? `Aktualizacja: ${selfUpdate.step || 'Rozpoczynanie...'}`
-              : <>Dostepna nowa wersja <strong>v{versionInfo.latest}</strong></>
+              ? t('updating', { step: selfUpdate.step || t('startingStep') })
+              : <>{t('newVersion')} <strong>v{versionInfo.latest}</strong></>
             }
           </span>
         </div>
@@ -184,7 +186,7 @@ export function UpdateBanner() {
 
           {selfUpdate.status === 'done' && (
             <span className="text-xs text-green-600 dark:text-green-400">
-              Aktualizacja zakonczona. Restartowanie...
+              {t('done')}
             </span>
           )}
 
@@ -210,7 +212,7 @@ export function UpdateBanner() {
 
           {downloadState.status === 'applying' && (
             <span className="text-xs text-amber-700 dark:text-amber-300">
-              Instalowanie... Aplikacja zrestartuje sie automatycznie.
+              {t('installing')}
             </span>
           )}
 
@@ -226,7 +228,7 @@ export function UpdateBanner() {
             rel="noopener noreferrer"
             className="text-xs text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1"
           >
-            Szczegoly
+            {t('details')}
             <ExternalLink className="h-3 w-3" />
           </a>
 
@@ -238,15 +240,15 @@ export function UpdateBanner() {
             >
               <Download className="h-3 w-3" />
               {downloadState.status === 'ready'
-                ? 'Zainstaluj'
-                : 'Aktualizuj'}
+                ? t('install')
+                : t('update')}
             </button>
           )}
 
           <button
             onClick={handleDismiss}
             className="p-1 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
-            title="Przypomni za 24h"
+            title={t('dismiss')}
           >
             <X className="h-4 w-4" />
           </button>

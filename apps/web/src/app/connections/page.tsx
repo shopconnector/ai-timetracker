@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ const API_LINKS: Record<string, string> = {
 };
 
 export default function ConnectionsPage() {
+  const t = useTranslations('connections');
   const [apis, setApis] = useState<APIStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -65,11 +67,11 @@ export default function ConnectionsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ok':
-        return <Badge className="bg-green-500 text-white">Connected</Badge>;
+        return <Badge className="bg-green-500 text-white">{t('status.connected')}</Badge>;
       case 'error':
-        return <Badge variant="destructive">Error</Badge>;
+        return <Badge variant="destructive">{t('status.error')}</Badge>;
       default:
-        return <Badge variant="secondary">Not Configured</Badge>;
+        return <Badge variant="secondary">{t('status.notConfigured')}</Badge>;
     }
   };
 
@@ -81,14 +83,14 @@ export default function ConnectionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Connections</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{t('title')}</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Manage your external service integrations
+            {t('subtitle')}
           </p>
         </div>
         <Button onClick={fetchStatus} disabled={loading} variant="outline">
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Check All
+          {t('checkAll')}
         </Button>
       </div>
 
@@ -97,13 +99,13 @@ export default function ConnectionsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-green-600">{connectedCount}</div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Connected</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('summary.connected')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-red-600">{errorCount}</div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Errors</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('summary.errors')}</p>
           </CardContent>
         </Card>
         <Card>
@@ -111,7 +113,7 @@ export default function ConnectionsPage() {
             <div className="text-2xl font-bold text-slate-600 dark:text-slate-400">
               {apis.length - connectedCount - errorCount}
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Not Configured</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{t('summary.notConfigured')}</p>
           </CardContent>
         </Card>
       </div>
@@ -119,9 +121,9 @@ export default function ConnectionsPage() {
       {/* Connections List */}
       <Card>
         <CardHeader>
-          <CardTitle>Service Status</CardTitle>
+          <CardTitle>{t('serviceStatus.title')}</CardTitle>
           <CardDescription>
-            Current connection status for all external services
+            {t('serviceStatus.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -129,11 +131,11 @@ export default function ConnectionsPage() {
             {loading && apis.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2" />
-                Checking connections...
+                {t('loading')}
               </div>
             ) : apis.length === 0 ? (
               <div className="text-center py-8 text-slate-500">
-                No connection data available
+                {t('noData')}
               </div>
             ) : (
               apis.map((api, index) => (
@@ -177,19 +179,18 @@ export default function ConnectionsPage() {
       {/* Help */}
       <Card>
         <CardHeader>
-          <CardTitle>Need Help?</CardTitle>
+          <CardTitle>{t('help.title')}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-slate-500 dark:text-slate-400 space-y-2">
           <p>
-            If a service shows as &quot;Not Configured&quot;, go to{' '}
+            {t('help.notConfiguredText')}{' '}
             <a href="/settings" className="text-blue-500 hover:underline">
-              Settings
+              {t('help.settingsLink')}
             </a>{' '}
-            to add your API keys.
+            {t('help.settingsHint')}
           </p>
           <p>
-            If a service shows an error, check that your API keys are valid and the
-            service is accessible.
+            {t('help.errorHint')}
           </p>
         </CardContent>
       </Card>

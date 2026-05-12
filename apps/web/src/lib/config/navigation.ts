@@ -12,70 +12,36 @@ import {
 } from 'lucide-react';
 
 export interface NavItem {
-  title: string;
+  /** i18n key under the `nav` namespace */
+  titleKey: string;
   href: string;
   icon: LucideIcon;
   children?: NavItem[];
 }
 
 export interface NavSection {
-  title?: string;
+  /** i18n key under the `nav` namespace (section header) */
+  titleKey?: string;
   items: NavItem[];
 }
 
 export const navigation: NavSection[] = [
   {
     items: [
-      {
-        title: 'Dashboard',
-        href: '/',
-        icon: LayoutDashboard,
-      },
-      {
-        title: 'Wczoraj',
-        href: '/yesterday',
-        icon: Sunrise,
-      },
-      {
-        title: 'Timesheet',
-        href: '/timesheet',
-        icon: Clock,
-      },
-      {
-        title: 'My Issues',
-        href: '/my-issues',
-        icon: ClipboardList,
-      },
-      {
-        title: 'Calendar',
-        href: '/calendar',
-        icon: Calendar,
-      },
-      {
-        title: 'Analytics',
-        href: '/analytics',
-        icon: BarChart3,
-      },
-      {
-        title: 'Activity',
-        href: '/activity',
-        icon: Github,
-      },
+      { titleKey: 'dashboard', href: '/', icon: LayoutDashboard },
+      { titleKey: 'yesterday', href: '/yesterday', icon: Sunrise },
+      { titleKey: 'timesheet', href: '/timesheet', icon: Clock },
+      { titleKey: 'myIssues', href: '/my-issues', icon: ClipboardList },
+      { titleKey: 'calendar', href: '/calendar', icon: Calendar },
+      { titleKey: 'analytics', href: '/analytics', icon: BarChart3 },
+      { titleKey: 'activity', href: '/activity', icon: Github },
     ],
   },
   {
-    title: 'Configuration',
+    titleKey: 'configuration',
     items: [
-      {
-        title: 'Settings',
-        href: '/settings',
-        icon: Settings,
-      },
-      {
-        title: 'Connections',
-        href: '/connections',
-        icon: Plug,
-      },
+      { titleKey: 'settings', href: '/settings', icon: Settings },
+      { titleKey: 'connections', href: '/connections', icon: Plug },
     ],
   },
 ];

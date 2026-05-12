@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -125,6 +126,7 @@ function HelpGuide({ title, children }: { title: string; children: React.ReactNo
 }
 
 export default function SettingsPage() {
+  const t = useTranslations('settings');
   const [apiStatus, setApiStatus] = useState<APIStatus[]>([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
 
@@ -716,8 +718,8 @@ export default function SettingsPage() {
     <div className="max-w-4xl space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Settings</h1>
-        <p className="text-slate-500 dark:text-slate-400">Configure your TimeTracker integrations</p>
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{t('title')}</h1>
+        <p className="text-slate-500 dark:text-slate-400">{t('subtitle')}</p>
       </div>
 
         {/* Version & Updates */}

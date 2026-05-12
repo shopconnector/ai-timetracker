@@ -1,0 +1,518 @@
+{
+  "updateBanner": {
+    "updating": "Aktualizacja: {step}",
+    "startingStep": "Rozpoczynanie...",
+    "newVersion": "Dostępna nowa wersja",
+    "installing": "Instalowanie... Aplikacja zrestartuje się automatycznie.",
+    "details": "Szczegóły",
+    "install": "Zainstaluj",
+    "update": "Aktualizuj",
+    "dismiss": "Przypomnij za 24h",
+    "done": "Aktualizacja zakończona. Restartowanie...",
+    "errors": {
+      "selfUpdateStart": "Nie udało się rozpocząć aktualizacji",
+      "installerStart": "Nie udało się uruchomić instalatora",
+      "downloadStart": "Nie udało się rozpocząć pobierania"
+    }
+  },
+  "common": {
+    "meta": {
+      "title": "TimeTracker",
+      "description": "Śledź swój czas i synchronizuj z Tempo"
+    },
+    "appName": "TimeTracker",
+    "loading": "Ładowanie...",
+    "saving": "Zapisywanie...",
+    "save": "Zapisz",
+    "cancel": "Anuluj",
+    "close": "Zamknij",
+    "delete": "Usuń",
+    "edit": "Edytuj",
+    "add": "Dodaj",
+    "remove": "Usuń",
+    "refresh": "Odśwież",
+    "retry": "Spróbuj ponownie",
+    "yes": "Tak",
+    "no": "Nie",
+    "ok": "OK",
+    "back": "Wstecz",
+    "next": "Dalej",
+    "previous": "Poprzedni",
+    "noData": "Brak danych",
+    "search": "Szukaj",
+    "filter": "Filtr",
+    "all": "Wszystkie",
+    "none": "Brak",
+    "today": "Dzisiaj",
+    "yesterday": "Wczoraj",
+    "thisWeek": "Ten tydzień",
+    "lastWeek": "Zeszły tydzień",
+    "online": "Online",
+    "offline": "Offline",
+    "pause": "Wstrzymaj",
+    "resume": "Wznów",
+    "pauseTooltip": "Wstrzymaj śledzenie (zatrzymaj ActivityWatch)",
+    "resumeTooltip": "Wznów śledzenie (uruchom ActivityWatch)",
+    "collapse": "Zwiń",
+    "expand": "Rozwiń",
+    "theme": {
+      "light": "Jasny",
+      "dark": "Ciemny",
+      "system": "Systemowy"
+    },
+    "language": {
+      "label": "Język",
+      "pl": "Polski",
+      "en": "English"
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "yesterday": "Wczoraj",
+    "timesheet": "Karta czasu",
+    "myIssues": "Moje zadania",
+    "calendar": "Kalendarz",
+    "analytics": "Analityka",
+    "activity": "Aktywność",
+    "settings": "Ustawienia",
+    "connections": "Połączenia",
+    "configuration": "Konfiguracja"
+  },
+  "header": {
+    "pathLabels": {
+      "dashboard": "Dashboard",
+      "yesterday": "Wczoraj",
+      "timesheet": "Karta czasu",
+      "myIssues": "Moje zadania",
+      "calendar": "Kalendarz",
+      "analytics": "Analityka",
+      "activity": "Aktywność",
+      "settings": "Ustawienia",
+      "connections": "Połączenia",
+      "api": "Klucze API",
+      "mappings": "Mapowania projektów",
+      "history": "Historia zadań",
+      "admin": "Admin"
+    },
+    "toast": {
+      "trackingPaused": "Śledzenie wstrzymane",
+      "trackingResumed": "Śledzenie wznowione",
+      "trackingError": "Błąd zmiany stanu śledzenia",
+      "connectionError": "Błąd połączenia z serwerem"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "ActivityWatch + Tempo — analityka",
+    "quickLog": {
+      "title": "Szybkie logowanie",
+      "hours": "Godziny",
+      "description": "Opis",
+      "ticket": "Ticket",
+      "submit": "Zaloguj teraz",
+      "submitting": "Logowanie...",
+      "selectTicket": "Wybierz ticket",
+      "descriptionPlaceholder": "Nad czym pracowałeś?",
+      "hoursPlaceholder": "1.5",
+      "noRecent": "Brak ostatnio logowanych tasków. Zaloguj czas w",
+      "noRecentTail": "a ostatnio używane tickety pojawią się tutaj.",
+      "loggedHours": "✓ Zalogowano {hours}h!",
+      "connectionErrorPrefix": "✗ Błąd połączenia",
+      "errorPrefix": "✗ {message}"
+    },
+    "cards": {
+      "activityWatch": "ActivityWatch",
+      "tempoLogged": "Tempo zalogowane",
+      "efficiency": "Efektywność",
+      "weekTotal": "Suma tygodnia",
+      "dailyAverage": "Średnia dzienna",
+      "activities": "{count} aktywności",
+      "worklogs": "{count} worklogów",
+      "loggedVsTracked": "zalogowane vs śledzone",
+      "workDays": "{count} dni roboczych",
+      "target8h": "cel: 8h"
+    },
+    "slack": {
+      "activityHeader": "Aktywność na Slacku — {date}",
+      "conversations": "konwersacje",
+      "huddles": "huddle"
+    },
+    "charts": {
+      "hourlyActivity": "Aktywność godzinowa — {date}",
+      "appUsage": "Użycie aplikacji — {date}",
+      "weeklyComparison": "Porównanie tygodniowe",
+      "topActivities": "Top aktywności",
+      "todaysWorklogs": "Dzisiejsze worklogi",
+      "apiStatus": "Status API",
+      "weekOverview": "Przegląd tygodnia",
+      "tempoSeries": "Tempo zalogowane",
+      "awSeries": "ActivityWatch",
+      "targetSeries": "Cel (8h)",
+      "minutes": "min",
+      "hours": "godz."
+    },
+    "buttons": {
+      "refresh": "Odśwież",
+      "loading": "Ładowanie...",
+      "check": "Sprawdź"
+    },
+    "events": "zdarzenia",
+    "logs": "wpisów",
+    "empty": {
+      "activities": "Brak aktywności",
+      "worklogs": "Brak worklogów",
+      "data": "Brak danych"
+    },
+    "status": {
+      "ok": "OK",
+      "error": "Błąd",
+      "unconfigured": "Nieskonfigurowane"
+    },
+    "toast": {
+      "logged": "Zalogowano {hours}h!",
+      "missingDescription": "Podaj opis!",
+      "missingHours": "Podaj liczbę godzin!",
+      "invalidHours": "Czas musi wynosić od 0.01 do 24 godzin",
+      "missingTicket": "Wybierz ticket!",
+      "logError": "Błąd logowania czasu",
+      "connectionError": "Błąd połączenia"
+    }
+  },
+  "yesterday": {
+    "title": "Wczoraj",
+    "datePicker": {
+      "prev": "Poprzedni dzień",
+      "next": "Następny dzień",
+      "pickDate": "Wybierz dowolną datę",
+      "jumpLabel": "Skok:",
+      "yesterday": "Wczoraj",
+      "monday": "Pn",
+      "friday": "Pt",
+      "weekAgo": "Tydzień temu"
+    },
+    "summary": {
+      "on": "Streszczenie ON",
+      "off": "Streszczenie",
+      "tooltip": "Wygeneruj 1-2 zdaniowe streszczenie per projekt (Gemini)"
+    },
+    "days": {
+      "sun": "niedz.",
+      "mon": "pon.",
+      "tue": "wt.",
+      "wed": "śr.",
+      "thu": "czw.",
+      "fri": "pt.",
+      "sat": "sob."
+    },
+    "stats": {
+      "awTime": "Czas (AW)",
+      "projects": "Projekty BC",
+      "commits": "Commity",
+      "tempo": "Tempo"
+    },
+    "warnings": "Ostrzeżenia źródeł:",
+    "sections": {
+      "awActivity": "Aktywność (AW)",
+      "commits": "Commity",
+      "tempoWorklogs": "Worklogi Tempo",
+      "slack": "Slack",
+      "plans": "Plany Claude",
+      "changedFiles": "Zmienione pliki ({count})",
+      "filesMore": "+ {count} więcej",
+      "proposalForToday": "Propozycja na dziś",
+      "proposalLabel": "Dokończ plan: {title}",
+      "proposalSource": "(plan Claude)",
+      "proposalTempo": "(Tempo)"
+    },
+    "noActivity": "Brak aktywności",
+    "noActivityHeadline": "Brak aktywności BeeCommerce w tym dniu",
+    "noActivityHint": "Spróbuj innej daty albo sprawdź czy ActivityWatch i Slack są uruchomione.",
+    "error": {
+      "headline": "Błąd generowania raportu",
+      "dateLabel": "Data: {date}",
+      "hint": "Sprawdź czy ActivityWatch (`localhost:5600`), Slack i Tempo są skonfigurowane w {settingsLink}. Każde źródło z osobna jest opcjonalne — jeśli któryś fetch wybucha tu zbiorczo, zgłoś bug."
+    },
+    "tempoLabel": "Tempo {value}",
+    "footer": {
+      "generated": "Wygenerowano {datetime} · Filtr:",
+      "filterBeeCommerce": "tylko BeeCommerce",
+      "filterAll": "wszystkie projekty"
+    },
+    "toast": {
+      "reportError": "Błąd generowania raportu"
+    }
+  },
+  "calendar": {
+    "title": "Kalendarz",
+    "weekLabel": "Tydzień {week}",
+    "today": "Dzisiaj",
+    "prevWeek": "Poprzedni tydzień",
+    "nextWeek": "Następny tydzień",
+    "loading": "Ładowanie danych kalendarza...",
+    "noActivities": "Brak aktywności w tym dniu",
+    "columns": {
+      "time": "Czas",
+      "activity": "Aktywność",
+      "duration": "Czas trwania",
+      "project": "Projekt",
+      "actions": "Akcje"
+    },
+    "weekSummary": "Tydzień: {logged}h / {target}h zalogowane",
+    "weekSummarySlack": "💬 {h}h {m}m Slack",
+    "showOther": "Pokaż „Other\"",
+    "logAll": "Zaloguj wszystkie aktywności",
+    "loadingWeek": "Ładowanie tygodnia...",
+    "legend": {
+      "awToLog": "ActivityWatch (do zalogowania)",
+      "tempoLogged": "Tempo (zalogowane)",
+      "calendar": "Kalendarz",
+      "slack": "Slack",
+      "otherNotLoggable": "Inne (nie do zalogowania)"
+    },
+    "toast": {
+      "loadError": "Nie udało się załadować danych kalendarza",
+      "worklogCreated": "Worklog utworzony pomyślnie",
+      "worklogFailed": "Nie udało się utworzyć worklog'a",
+      "cannotLogToTempo": "Tej aktywności nie można zalogować do Tempo (oznaczona jako „Other\")",
+      "overlap": "Nakładający się czas!",
+      "noActivitiesToLog": "Brak aktywności do zalogowania",
+      "bulkComingSoon": "Znaleziono {count} aktywności do zalogowania — masowe logowanie wkrótce",
+      "editWorklogComingSoon": "Edycja worklog'a {id} — wkrótce",
+      "calendarEventInfo": "Wydarzenie kalendarzowe: {title}",
+      "slackInfo": "💬 Slack: {title} ({minutes}m)"
+    }
+  },
+  "analytics": {
+    "title": "Analityka",
+    "loading": "Ładowanie danych analitycznych...",
+    "period": {
+      "label": "Okres",
+      "today": "Dziś",
+      "7d": "Ostatnie 7 dni",
+      "30d": "Ostatnie 30 dni",
+      "wtd": "Ten tydzień",
+      "mtd": "Ten miesiąc"
+    },
+    "refresh": {
+      "off": "Wyłączone",
+      "seconds": "{n} sekund",
+      "minute": "1 minuta",
+      "minutes": "{n} minut",
+      "refreshing": "Odświeżanie...",
+      "refresh": "Odśwież"
+    },
+    "kpis": {
+      "totalAW": "ActivityWatch",
+      "totalTempo": "Tempo zalogowane",
+      "avgDaily": "Średnia/dzień",
+      "avgDailyAWHint": "AW: {value}",
+      "target": "Cel (8h)",
+      "captureRate": "Capture rate",
+      "productivity": "Produktywność",
+      "slack": "Slack",
+      "workdays": "{count} dni roboczych",
+      "worklogs": "{count} worklogów",
+      "daysOk": "{ok}/{total} dni OK",
+      "loggedVsTracked": "zalogowane / śledzone",
+      "peakAt": "Peak: {hour}",
+      "conversationsHuddles": "{conv} rozmów, {huddles} huddle",
+      "previous": "poprzednio: {value}"
+    },
+    "charts": {
+      "dailyComparison": "Porównanie dzienne (AW vs Tempo)",
+      "daysStatus": "Status dni",
+      "hourlyDistribution": "Rozkład godzinowy",
+      "productivity": "Produktywność",
+      "heatmap": "Heatmapa aktywności (AW)",
+      "gapAnalysis": "Analiza luk (niezalogowany czas)",
+      "topApps": "Top aplikacje",
+      "dailyDetails": "Szczegóły dzienne",
+      "less": "Mniej",
+      "more": "Więcej"
+    },
+    "daysStatus": {
+      "okLabel": "OK (7h+)",
+      "warningLabel": "Warning (4-7h)",
+      "missingLabel": "Missing (<4h)",
+      "ok": "OK",
+      "warning": "Warning",
+      "missing": "Missing",
+      "onTarget": "dni na targecie"
+    },
+    "productivity": {
+      "productive": "Produktywne",
+      "neutral": "Neutralne",
+      "distracting": "Rozpraszające"
+    },
+    "table": {
+      "day": "Dzień",
+      "aw": "AW",
+      "tempo": "Tempo",
+      "slack": "Slack",
+      "gap": "Gap",
+      "logs": "Logi",
+      "status": "Status"
+    },
+    "series": {
+      "activityWatch": "ActivityWatch",
+      "tempo": "Tempo",
+      "slack": "Slack",
+      "target8h": "Cel 8h",
+      "logged": "Zalogowane",
+      "notLogged": "Niezalogowane",
+      "gap": "Gap",
+      "tracked": "Śledzone"
+    },
+    "trend": {
+      "up": "wzrost {percent}%",
+      "down": "spadek {percent}%",
+      "flat": "bez zmian"
+    }
+  },
+  "activity": {
+    "title": "Aktywność — commity GitHub",
+    "noCommits": "Brak commitów w tym zakresie",
+    "week": "Tydz",
+    "summary": "{total} commitów w {repos} repo, zakres {from} → {to}",
+    "errorPrefix": "Błąd: {message}",
+    "commitsCount": "{count} commits",
+    "filters": {
+      "dateRange": "Zakres dat",
+      "from": "Od",
+      "to": "Do",
+      "repo": "Repozytorium"
+    },
+    "configHint": "PROJECTS_ROOT nie jest ustawiony. Otwórz Ustawienia → Git / Aktywność i wskaż katalog z lokalnymi repozytoriami."
+  },
+  "timesheet": {
+    "title": "Karta czasu",
+    "columns": {
+      "date": "Data",
+      "activity": "Aktywność",
+      "duration": "Czas",
+      "project": "Projekt",
+      "description": "Opis",
+      "actions": "Akcje"
+    },
+    "actions": {
+      "logTime": "Zaloguj czas",
+      "mergeSplit": "Połącz / Podziel",
+      "refresh": "Odśwież"
+    },
+    "toast": {
+      "activitiesRefreshed": "Aktywności odświeżone",
+      "loadError": "Błąd pobierania aktywności",
+      "worklogsLoadError": "Błąd pobierania worklogów",
+      "dataRefreshed": "Dane odświeżone",
+      "refreshError": "Błąd odświeżania",
+      "searchError": "Błąd wyszukiwania",
+      "ticketsLoadError": "Błąd ładowania ticketów",
+      "suggestionsGenerated": "Sugestie wygenerowane",
+      "suggestionsError": "Błąd generowania sugestii",
+      "cannotLog": "Nie można zalogować",
+      "overlap": "Nakładający się czas!",
+      "logged": "Czas zalogowany",
+      "logError": "Błąd logowania czasu",
+      "invalidTime": "Nieprawidłowy czas",
+      "activitiesMerged": "Aktywności scalone",
+      "mergeError": "Błąd scalania",
+      "activitySplit": "Aktywność podzielona",
+      "partialSuccess": "Częściowy sukces",
+      "missingDescription": "Podaj opis!",
+      "invalidDuration": "Czas musi wynosić co najmniej 0.1h"
+    }
+  },
+  "myIssues": {
+    "title": "Moje zadania (Jira)",
+    "subtitleAssigned": "Zadania przypisane do mnie — śledź postęp i dodawaj notatki",
+    "subtitleAll": "Wszystkie zadania z moich projektów — pełny widok hierarchii",
+    "noIssues": "Brak zadań",
+    "loadError": "Błąd pobierania zadań",
+    "buttons": {
+      "refresh": "Odśwież",
+      "exportCsv": "Eksport CSV"
+    },
+    "scope": {
+      "assigned": "Moje zadania",
+      "projectAll": "Wszystkie z projektów"
+    },
+    "stats": {
+      "total": "Wszystkich zadań",
+      "done": "Zrobionych",
+      "inProgress": "W trakcie",
+      "toDo": "Do zrobienia",
+      "withWorklogs": "Z worklogami",
+      "withoutWorklogs": "Bez worklogów",
+      "watching": "Obserwowane",
+      "jiraTime": "Czas w Jirze",
+      "tempoTime": "Czas w Tempo",
+      "readinessOk": "Readiness OK",
+      "slackToday": "{count} rozmów dziś"
+    },
+    "filters": "Filtry",
+    "filterFields": {
+      "project": "Projekt"
+    }
+  },
+  "settings": {
+    "title": "Ustawienia",
+    "subtitle": "Skonfiguruj integracje TimeTrackera",
+    "sections": {
+      "general": "Ogólne",
+      "tempo": "Tempo",
+      "jira": "JIRA",
+      "github": "GitHub",
+      "slack": "Slack",
+      "activityWatch": "ActivityWatch",
+      "projectsRoot": "Katalog projektów"
+    },
+    "fields": {
+      "apiToken": "Token API",
+      "baseUrl": "Bazowy URL",
+      "email": "E-mail",
+      "username": "Nazwa użytkownika",
+      "accountId": "Account ID",
+      "save": "Zapisz ustawienia"
+    },
+    "toast": {
+      "saved": "Ustawienia zapisane",
+      "saveError": "Błąd zapisu ustawień",
+      "testSuccess": "Połączenie OK",
+      "testError": "Błąd połączenia"
+    }
+  },
+  "connections": {
+    "title": "Połączenia",
+    "subtitle": "Zarządzaj integracjami z zewnętrznymi usługami",
+    "checkAll": "Sprawdź wszystkie",
+    "summary": {
+      "connected": "Połączone",
+      "errors": "Błędy",
+      "notConfigured": "Nieskonfigurowane"
+    },
+    "serviceStatus": {
+      "title": "Status usług",
+      "description": "Aktualny stan połączeń ze wszystkimi zewnętrznymi serwisami"
+    },
+    "loading": "Sprawdzanie połączeń...",
+    "noData": "Brak danych o połączeniach",
+    "help": {
+      "title": "Potrzebujesz pomocy?",
+      "notConfiguredText": "Jeśli usługa pokazuje „Nieskonfigurowane\", przejdź do",
+      "settingsLink": "Ustawień",
+      "settingsHint": "aby dodać klucze API.",
+      "errorHint": "Jeśli usługa zgłasza błąd, sprawdź czy klucze API są poprawne i czy usługa jest dostępna."
+    },
+    "status": {
+      "connected": "Połączono",
+      "disconnected": "Rozłączono",
+      "error": "Błąd",
+      "notConfigured": "Nieskonfigurowane"
+    },
+    "actions": {
+      "connect": "Połącz",
+      "disconnect": "Rozłącz",
+      "test": "Testuj"
+    }
+  }
+}

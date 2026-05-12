@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { navigation } from '@/lib/config/navigation';
 import { useSidebar } from '@/lib/providers/SidebarProvider';
@@ -26,6 +27,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const { isCollapsed, setCollapsed } = useSidebar();
   const [expandedItems, setExpandedItems] = useState<string[]>(['/settings']);
+  const tNav = useTranslations('nav');
+  const tCommon = useTranslations('common');
 
   const toggleExpand = (href: string) => {
     setExpandedItems((prev) =>
@@ -53,7 +56,7 @@ export function Sidebar() {
           {!isCollapsed && (
             <Link href="/" className="flex items-center gap-2">
               <Clock className="h-6 w-6 text-blue-500" />
-              <span className="font-semibold text-lg">TimeTracker</span>
+              <span className="font-semibold text-lg">{tCommon('appName')}</span>
             </Link>
           )}
           {isCollapsed && (
@@ -68,14 +71,14 @@ export function Sidebar() {
           <nav className="space-y-2 p-2">
             {navigation.map((section, sectionIndex) => (
               <div key={sectionIndex}>
-                {section.title && !isCollapsed && (
+                {section.titleKey && !isCollapsed && (
                   <div className="px-3 py-2">
                     <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                      {section.title}
+                      {tNav(section.titleKey)}
                     </span>
                   </div>
                 )}
-                {section.title && isCollapsed && (
+                {section.titleKey && isCollapsed && (
                   <Separator className="my-2 bg-slate-800" />
                 )}
                 {section.items.map((item) => (
@@ -103,7 +106,7 @@ export function Sidebar() {
                           </Link>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="bg-slate-800 text-slate-100 border-slate-700">
-                          {item.title}
+                          {tNav(item.titleKey)}
                         </TooltipContent>
                       </Tooltip>
                     ) : (
@@ -123,7 +126,7 @@ export function Sidebar() {
                         )}
                       >
                         <item.icon className="h-5 w-5 flex-shrink-0" />
-                        <span className="flex-1 truncate">{item.title}</span>
+                        <span className="flex-1 truncate">{tNav(item.titleKey)}</span>
                         {item.children && (
                           <ChevronDown
                             className={cn(
@@ -150,7 +153,7 @@ export function Sidebar() {
                             )}
                           >
                             <child.icon className="h-4 w-4" />
-                            <span>{child.title}</span>
+                            <span>{tNav(child.titleKey)}</span>
                           </Link>
                         ))}
                       </div>
@@ -175,7 +178,7 @@ export function Sidebar() {
             ) : (
               <>
                 <ChevronLeft className="h-4 w-4 mr-2" />
-                <span>Collapse</span>
+                <span>{tCommon('collapse')}</span>
               </>
             )}
           </Button>

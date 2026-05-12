@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,26 +106,7 @@ interface AnalyticsData {
   timestamp: string;
 }
 
-const PERIODS = [
-  { value: 'today', label: 'Dziś' },
-  { value: 'wtd', label: 'Ten tydzień' },
-  { value: '7d', label: 'Ostatnie 7 dni' },
-  { value: 'mtd', label: 'Ten miesiąc' },
-  { value: '30d', label: 'Ostatnie 30 dni' },
-];
-
-const REFRESH_INTERVALS = [
-  { value: 0, label: 'Wyłączone' },
-  { value: 30, label: '30 sekund' },
-  { value: 60, label: '1 minuta' },
-  { value: 300, label: '5 minut' },
-];
-
-const PRODUCTIVITY_COLORS = {
-  productive: '#22c55e',
-  neutral: '#eab308',
-  distracting: '#ef4444'
-};
+const PERIOD_VALUES = ['today', 'wtd', '7d', 'mtd', '30d'] as const;
 
 const APP_COLORS = [
   '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#22c55e',
@@ -132,12 +114,20 @@ const APP_COLORS = [
 ];
 
 export default function AnalyticsPage() {
+  const t = useTranslations('analytics');
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('7d');
   const [refreshInterval, setRefreshInterval] = useState(60);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [, setLastRefresh] = useState<Date | null>(null);
   const [countdown, setCountdown] = useState(0);
+
+  const refreshOptions = [
+    { value: 0, label: t('refresh.off') },
+    { value: 30, label: t('refresh.seconds', { n: 30 }) },
+    { value: 60, label: t('refresh.minute') },
+    { value: 300, label: t('refresh.minutes', { n: 5 }) },
+  ];
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -222,7 +212,7 @@ export default function AnalyticsPage() {
             <div className="text-3xl font-bold text-white mt-1">{value}</div>
             {subtitle && <div className="text-xs text-slate-500 mt-1">{subtitle}</div>}
             {prevValue && (
-              <div className="text-xs text-slate-500 mt-1">poprzednio: {prevValue}</div>
+              <div className="text-xs text-slate-500 mt-1">{t('kpis.previous', { value: prevValue })}</div>
             )}
           </div>
           <div className="flex flex-col items-end">
@@ -252,7 +242,7 @@ export default function AnalyticsPage() {
   if (!data && loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Ładowanie danych analitycznych...</div>
+        <div className="text-white text-xl">{t('loading')}</div>
       </div>
     );
   }
@@ -264,7 +254,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Analytics</h1>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{t('title')}</h1>
           <p className="text-slate-500 dark:text-slate-400">
             {data?.dateRange.start} - {data?.dateRange.end}
           </p>
@@ -273,17 +263,17 @@ export default function AnalyticsPage() {
         <div className="flex items-center gap-4 flex-wrap">
           {/* Period selector */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 rounded-lg p-1">
-            {PERIODS.map(p => (
+            {PERIOD_VALUES.map(p => (
               <button
-                key={p.value}
-                onClick={() => setPeriod(p.value)}
+                key={p}
+                onClick={() => setPeriod(p)}
                 className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  period === p.value
+                  period === p
                     ? 'bg-blue-500 text-white'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                {p.label}
+                {t(`period.${p}`)}
               </button>
             ))}
           </div>
@@ -295,7 +285,7 @@ export default function AnalyticsPage() {
               onChange={(e) => setRefreshInterval(Number(e.target.value))}
               className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-700 dark:text-slate-300"
             >
-              {REFRESH_INTERVALS.map(r => (
+              {refreshOptions.map(r => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
             </select>
@@ -312,7 +302,7 @@ export default function AnalyticsPage() {
               size="sm"
               variant="outline"
             >
-              {loading ? 'Loading...' : 'Refresh'}
+              {loading ? t('refresh.refreshing') : t('refresh.refresh')}
             </Button>
           </div>
         </div>
@@ -325,58 +315,58 @@ export default function AnalyticsPage() {
             {/* KPI Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
               <KPICard
-                title="ActivityWatch"
+                title={t('kpis.totalAW')}
                 value={data.kpis.totalAW.formatted}
                 icon="👁️"
                 color="purple"
                 trend={data.kpis.totalAW.trend}
                 prevValue={data.kpis.totalAW.prevFormatted}
-                subtitle={`${data.dateRange.workdays} dni roboczych`}
+                subtitle={t('kpis.workdays', { count: data.dateRange.workdays })}
               />
               <KPICard
-                title="Tempo Logged"
+                title={t('kpis.totalTempo')}
                 value={data.kpis.totalTempo.formatted}
                 icon="⏱️"
                 color="blue"
                 trend={data.kpis.totalTempo.trend}
                 prevValue={data.kpis.totalTempo.prevFormatted}
-                subtitle={`${data.kpis.totalWorklogs} worklogów`}
+                subtitle={t('kpis.worklogs', { count: data.kpis.totalWorklogs })}
               />
               <KPICard
-                title="Średnia/dzień"
+                title={t('kpis.avgDaily')}
                 value={data.kpis.avgDailyTempo.formatted}
                 icon="📈"
                 color="cyan"
-                subtitle={`AW: ${data.kpis.avgDailyAW.formatted}`}
+                subtitle={t('kpis.avgDailyAWHint', { value: data.kpis.avgDailyAW.formatted })}
               />
               <KPICard
-                title="Target (8h)"
+                title={t('kpis.target')}
                 value={`${data.kpis.targetAchievement}%`}
                 icon="🎯"
                 color={data.kpis.targetAchievement >= 100 ? 'green' : 'orange'}
-                subtitle={`${data.daysSummary.onTarget}/${data.daysSummary.total} dni OK`}
+                subtitle={t('kpis.daysOk', { ok: data.daysSummary.onTarget, total: data.daysSummary.total })}
               />
               <KPICard
-                title="Capture Rate"
+                title={t('kpis.captureRate')}
                 value={`${data.kpis.captureRate}%`}
                 icon="📥"
                 color="green"
-                subtitle="logged / tracked"
+                subtitle={t('kpis.loggedVsTracked')}
               />
               <KPICard
-                title="Productivity"
+                title={t('kpis.productivity')}
                 value={`${data.kpis.productivityScore}%`}
                 icon="🚀"
                 color={data.kpis.productivityScore >= 70 ? 'green' : data.kpis.productivityScore >= 50 ? 'orange' : 'purple'}
-                subtitle={`Peak: ${data.kpis.peakAWHour}`}
+                subtitle={t('kpis.peakAt', { hour: data.kpis.peakAWHour })}
               />
               {data.kpis.totalSlack && (
                 <KPICard
-                  title="Slack"
+                  title={t('kpis.slack')}
                   value={data.kpis.totalSlack.formatted}
                   icon="💬"
                   color="purple"
-                  subtitle={`${data.kpis.totalSlack.conversations} rozmów, ${data.kpis.totalSlack.huddles} huddle`}
+                  subtitle={t('kpis.conversationsHuddles', { conv: data.kpis.totalSlack.conversations, huddles: data.kpis.totalSlack.huddles })}
                 />
               )}
             </div>
@@ -387,7 +377,7 @@ export default function AnalyticsPage() {
               <Card className="lg:col-span-2 bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-white text-base flex items-center gap-2">
-                    📅 Porównanie dzienne (AW vs Tempo)
+                    📅 {t('charts.dailyComparison')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -409,15 +399,15 @@ export default function AnalyticsPage() {
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                         formatter={(value, name) => [
                           `${Math.floor(Number(value) / 3600)}h ${Math.floor((Number(value) % 3600) / 60)}m`,
-                          name === 'awSeconds' ? 'ActivityWatch' : name === 'slackSeconds' ? 'Slack' : 'Tempo'
+                          name === 'awSeconds' ? t('series.activityWatch') : name === 'slackSeconds' ? t('series.slack') : t('series.tempo')
                         ]}
                         labelFormatter={(_, payload) => payload[0]?.payload?.date || ''}
                       />
                       <Legend />
-                      <Bar dataKey="awSeconds" name="ActivityWatch" fill="#8b5cf6" radius={[4, 4, 0, 0]} opacity={0.7} />
-                      <Bar dataKey="tempoSeconds" name="Tempo" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="slackSeconds" name="Slack" fill="#a855f7" radius={[4, 4, 0, 0]} opacity={0.6} />
-                      <Line type="monotone" dataKey={() => 8 * 3600} name="Target 8h" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} />
+                      <Bar dataKey="awSeconds" name={t('series.activityWatch')} fill="#8b5cf6" radius={[4, 4, 0, 0]} opacity={0.7} />
+                      <Bar dataKey="tempoSeconds" name={t('series.tempo')} fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="slackSeconds" name={t('series.slack')} fill="#a855f7" radius={[4, 4, 0, 0]} opacity={0.6} />
+                      <Line type="monotone" dataKey={() => 8 * 3600} name={t('series.target8h')} stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -426,7 +416,7 @@ export default function AnalyticsPage() {
               {/* Days Status */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">📊 Status dni</CardTitle>
+                  <CardTitle className="text-white text-base">📊 {t('charts.daysStatus')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -435,9 +425,9 @@ export default function AnalyticsPage() {
                         <PieChart>
                           <Pie
                             data={[
-                              { name: 'OK (7h+)', value: data.daysSummary.onTarget, fill: '#22c55e' },
-                              { name: 'Warning (4-7h)', value: data.daysSummary.warning, fill: '#eab308' },
-                              { name: 'Missing (<4h)', value: data.daysSummary.missing, fill: '#ef4444' },
+                              { name: t('daysStatus.okLabel'), value: data.daysSummary.onTarget, fill: '#22c55e' },
+                              { name: t('daysStatus.warningLabel'), value: data.daysSummary.warning, fill: '#eab308' },
+                              { name: t('daysStatus.missingLabel'), value: data.daysSummary.missing, fill: '#ef4444' },
                             ]}
                             cx="50%"
                             cy="50%"
@@ -456,20 +446,20 @@ export default function AnalyticsPage() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="bg-green-500/20 rounded-lg p-2">
                         <div className="text-2xl font-bold text-green-400">{data.daysSummary.onTarget}</div>
-                        <div className="text-xs text-green-300">OK</div>
+                        <div className="text-xs text-green-300">{t('daysStatus.ok')}</div>
                       </div>
                       <div className="bg-yellow-500/20 rounded-lg p-2">
                         <div className="text-2xl font-bold text-yellow-400">{data.daysSummary.warning}</div>
-                        <div className="text-xs text-yellow-300">Warning</div>
+                        <div className="text-xs text-yellow-300">{t('daysStatus.warning')}</div>
                       </div>
                       <div className="bg-red-500/20 rounded-lg p-2">
                         <div className="text-2xl font-bold text-red-400">{data.daysSummary.missing}</div>
-                        <div className="text-xs text-red-300">Missing</div>
+                        <div className="text-xs text-red-300">{t('daysStatus.missing')}</div>
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-white">{data.daysSummary.onTargetPercent}%</div>
-                      <div className="text-xs text-slate-400">dni na targecie</div>
+                      <div className="text-xs text-slate-400">{t('daysStatus.onTarget')}</div>
                     </div>
                   </div>
                 </CardContent>
@@ -481,7 +471,7 @@ export default function AnalyticsPage() {
               {/* Hourly Distribution */}
               <Card className="lg:col-span-2 bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🕐 Rozkład godzinowy</CardTitle>
+                  <CardTitle className="text-white text-base">🕐 {t('charts.hourlyDistribution')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={240}>
@@ -494,8 +484,8 @@ export default function AnalyticsPage() {
                         formatter={(value) => [`${value} min`, '']}
                       />
                       <Legend />
-                      <Area type="monotone" dataKey="awMinutes" name="ActivityWatch" fill="#8b5cf6" fillOpacity={0.3} stroke="#8b5cf6" strokeWidth={2} />
-                      <Area type="monotone" dataKey="tempoMinutes" name="Tempo" fill="#3b82f6" fillOpacity={0.3} stroke="#3b82f6" strokeWidth={2} />
+                      <Area type="monotone" dataKey="awMinutes" name={t('series.activityWatch')} fill="#8b5cf6" fillOpacity={0.3} stroke="#8b5cf6" strokeWidth={2} />
+                      <Area type="monotone" dataKey="tempoMinutes" name={t('series.tempo')} fill="#3b82f6" fillOpacity={0.3} stroke="#3b82f6" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -504,7 +494,7 @@ export default function AnalyticsPage() {
               {/* Productivity Breakdown */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🎯 Produktywność</CardTitle>
+                  <CardTitle className="text-white text-base">🎯 {t('charts.productivity')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -532,19 +522,19 @@ export default function AnalyticsPage() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded bg-green-500" />
-                        <span className="text-sm text-slate-300 flex-1">Produktywne</span>
+                        <span className="text-sm text-slate-300 flex-1">{t('productivity.productive')}</span>
                         <span className="text-sm font-mono text-slate-400">{data.productivity.productive.formatted}</span>
                         <span className="text-sm font-bold text-green-400 w-12 text-right">{data.productivity.productive.percent}%</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded bg-yellow-500" />
-                        <span className="text-sm text-slate-300 flex-1">Neutralne</span>
+                        <span className="text-sm text-slate-300 flex-1">{t('productivity.neutral')}</span>
                         <span className="text-sm font-mono text-slate-400">{data.productivity.neutral.formatted}</span>
                         <span className="text-sm font-bold text-yellow-400 w-12 text-right">{data.productivity.neutral.percent}%</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded bg-red-500" />
-                        <span className="text-sm text-slate-300 flex-1">Rozpraszające</span>
+                        <span className="text-sm text-slate-300 flex-1">{t('productivity.distracting')}</span>
                         <span className="text-sm font-mono text-slate-400">{data.productivity.distracting.formatted}</span>
                         <span className="text-sm font-bold text-red-400 w-12 text-right">{data.productivity.distracting.percent}%</span>
                       </div>
@@ -559,7 +549,7 @@ export default function AnalyticsPage() {
               {/* Heatmap */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🗓️ Heatmapa aktywności (AW)</CardTitle>
+                  <CardTitle className="text-white text-base">🗓️ {t('charts.heatmap')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
@@ -585,7 +575,7 @@ export default function AnalyticsPage() {
                       ))}
                       {/* Legend */}
                       <div className="flex items-center gap-2 mt-4 ml-12">
-                        <span className="text-xs text-slate-500">Mniej</span>
+                        <span className="text-xs text-slate-500">{t('charts.less')}</span>
                         {[0.1, 0.3, 0.5, 0.7, 0.9].map((a, i) => (
                           <div
                             key={i}
@@ -593,7 +583,7 @@ export default function AnalyticsPage() {
                             style={{ backgroundColor: `rgba(139, 92, 246, ${a})` }}
                           />
                         ))}
-                        <span className="text-xs text-slate-500">Więcej</span>
+                        <span className="text-xs text-slate-500">{t('charts.more')}</span>
                       </div>
                     </div>
                   </div>
@@ -603,7 +593,7 @@ export default function AnalyticsPage() {
               {/* Gap Analysis */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🔍 Gap Analysis (niezalogowany czas)</CardTitle>
+                  <CardTitle className="text-white text-base">🔍 {t('charts.gapAnalysis')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={260}>
@@ -622,12 +612,12 @@ export default function AnalyticsPage() {
                         contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                         formatter={(value, name) => [
                           `${value}h`,
-                          name === 'gapHours' ? 'Gap' : name === 'tempoHours' ? 'Logged' : 'Tracked'
+                          name === 'gapHours' ? t('series.gap') : name === 'tempoHours' ? t('series.logged') : t('series.tracked')
                         ]}
                       />
                       <Legend />
-                      <Bar dataKey="tempoHours" name="Zalogowane" fill="#3b82f6" stackId="a" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="gapHours" name="Niezalogowane" fill="#ef4444" stackId="a" radius={[0, 4, 4, 0]} opacity={0.7} />
+                      <Bar dataKey="tempoHours" name={t('series.logged')} fill="#3b82f6" stackId="a" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="gapHours" name={t('series.notLogged')} fill="#ef4444" stackId="a" radius={[0, 4, 4, 0]} opacity={0.7} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -639,7 +629,7 @@ export default function AnalyticsPage() {
               {/* Top Apps */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">🏆 Top Aplikacje</CardTitle>
+                  <CardTitle className="text-white text-base">🏆 {t('charts.topApps')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
@@ -690,20 +680,20 @@ export default function AnalyticsPage() {
               {/* Daily Details Table */}
               <Card className="bg-slate-900/50 border-slate-800">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-base">📋 Szczegóły dzienne</CardTitle>
+                  <CardTitle className="text-white text-base">📋 {t('charts.dailyDetails')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-slate-400 border-b border-slate-700">
-                          <th className="text-left py-2 font-medium">Dzień</th>
-                          <th className="text-right py-2 font-medium">AW</th>
-                          <th className="text-right py-2 font-medium">Tempo</th>
-                          <th className="text-right py-2 font-medium">Slack</th>
-                          <th className="text-right py-2 font-medium">Gap</th>
-                          <th className="text-right py-2 font-medium">Logs</th>
-                          <th className="text-center py-2 font-medium">Status</th>
+                          <th className="text-left py-2 font-medium">{t('table.day')}</th>
+                          <th className="text-right py-2 font-medium">{t('table.aw')}</th>
+                          <th className="text-right py-2 font-medium">{t('table.tempo')}</th>
+                          <th className="text-right py-2 font-medium">{t('table.slack')}</th>
+                          <th className="text-right py-2 font-medium">{t('table.gap')}</th>
+                          <th className="text-right py-2 font-medium">{t('table.logs')}</th>
+                          <th className="text-center py-2 font-medium">{t('table.status')}</th>
                         </tr>
                       </thead>
                       <tbody>

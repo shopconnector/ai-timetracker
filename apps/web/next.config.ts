@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const packageJson = require("./package.json");
@@ -17,4 +18,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+
+export default withNextIntl(nextConfig);

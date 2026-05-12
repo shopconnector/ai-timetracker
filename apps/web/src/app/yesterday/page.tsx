@@ -1,3 +1,4 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buildYesterdayReport, formatMinutes, type ProjectSection } from '@/lib/morning-summary';
@@ -24,6 +25,9 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const date = isValidDate(sp.date) ? sp.date! : previousWorkday();
   const withSummary = sp.summary === '1';
+  const t = await getTranslations('yesterday');
+  const locale = await getLocale();
+  const dateFmtLocale = locale === 'pl' ? 'pl-PL' : 'en-GB';
 
   let report;
   try {
@@ -33,17 +37,15 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
       <div className="space-y-4">
         <Card className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30">
           <CardHeader>
-            <CardTitle className="text-red-900 dark:text-red-200">Błąd generowania raportu</CardTitle>
+            <CardTitle className="text-red-900 dark:text-red-200">{t('error.headline')}</CardTitle>
           </CardHeader>
           <CardContent className="px-6 text-sm text-red-900 dark:text-red-200">
-            <div>Data: {date}</div>
+            <div>{t('error.dateLabel', { date })}</div>
             <pre className="mt-2 whitespace-pre-wrap text-xs">
               {error instanceof Error ? error.message : String(error)}
             </pre>
             <div className="mt-3 text-muted-foreground">
-              Sprawdź czy ActivityWatch (`localhost:5600`), Slack i Tempo są skonfigurowane
-              w <code>/settings</code>. Każde źródło z osobna jest opcjonalne — jeśli któryś
-              fetch wybucha tu zbiorczo, zgłoś bug.
+              {t('error.hint', { settingsLink: '/settings' })}
             </div>
           </CardContent>
         </Card>
@@ -58,7 +60,7 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
       {report.warnings.length > 0 && (
         <Card className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
           <CardContent className="px-6 text-sm">
-            <div className="font-medium mb-1">Ostrzeżenia źródeł:</div>
+            <div className="font-medium mb-1">{t('warnings')}</div>
             <ul className="list-disc pl-5 space-y-0.5 text-amber-900 dark:text-amber-200">
               {report.warnings.map((w, i) => (
                 <li key={i}>{w}</li>
@@ -72,9 +74,9 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
         <Card>
           <CardContent className="px-6 py-10 text-center text-muted-foreground">
             <div className="text-4xl mb-3">🌴</div>
-            <div className="font-medium">Brak aktywności BeeCommerce w tym dniu</div>
+            <div className="font-medium">{t('noActivityHeadline')}</div>
             <div className="text-sm mt-1">
-              Spróbuj innej daty albo sprawdź czy ActivityWatch i Slack są uruchomione.
+              {t('noActivityHint')}
             </div>
           </CardContent>
         </Card>
@@ -90,7 +92,7 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="size-5" /> Propozycja na dziś
+              <Sparkles className="size-5" /> {t('sections.proposalForToday')}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-6">
@@ -103,7 +105,7 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
                   <span>
                     {item.item}
                     <span className="text-muted-foreground text-xs ml-2">
-                      ({item.source === 'plan' ? 'plan Claude' : 'Tempo'})
+                      {item.source === 'plan' ? t('sections.proposalSource') : t('sections.proposalTempo')}
                     </span>
                   </span>
                 </li>
@@ -114,14 +116,17 @@ export default async function YesterdayPage({ searchParams }: PageProps) {
       )}
 
       <div className="text-xs text-muted-foreground text-center">
-        Wygenerowano {new Date(report.generatedAt).toLocaleString('pl-PL')} ·{' '}
-        Filtr: <strong>tylko BeeCommerce</strong>
+        {t('footer.generated', { datetime: new Date(report.generatedAt).toLocaleString(dateFmtLocale) })}{' '}
+        <strong>{t('footer.filterBeeCommerce')}</strong>
       </div>
     </div>
   );
 }
 
-function ProjectCard({ project }: { project: ProjectSection }) {
+async function ProjectCard({ project }: { project: ProjectSection }) {
+  const t = await getTranslations('yesterday');
+  const locale = await getLocale();
+  const timeFmtLocale = locale === 'pl' ? 'pl-PL' : 'en-GB';
   const totalCommits = project.sources.git.reduce((s, r) => s + r.commits.length, 0);
   const totalTempo = project.sources.tempo.reduce((s, t) => s + t.minutes, 0);
 
@@ -144,7 +149,7 @@ function ProjectCard({ project }: { project: ProjectSection }) {
             )}
             {totalTempo > 0 && (
               <span className="inline-flex items-center gap-1">
-                <ScrollText className="size-3.5" /> Tempo {formatMinutes(totalTempo)}
+                <ScrollText className="size-3.5" /> {t('tempoLabel', { value: formatMinutes(totalTempo) })}
               </span>
             )}
           </div>
@@ -159,7 +164,7 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.aw.length > 0 && (
-          <Section icon={<Activity className="size-3.5" />} title="Aktywność (AW)">
+          <Section icon={<Activity className="size-3.5" />} title={t('sections.awActivity')}>
             <ul className="space-y-1">
               {project.sources.aw.map((a, i) => (
                 <li key={i} className="flex justify-between gap-3">
@@ -177,7 +182,7 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.git.length > 0 && (
-          <Section icon={<GitCommit className="size-3.5" />} title="Commity">
+          <Section icon={<GitCommit className="size-3.5" />} title={t('sections.commits')}>
             {project.sources.git.map((g) => (
               <div key={g.repo} className="space-y-1">
                 <div className="text-xs text-muted-foreground">{g.repo}</div>
@@ -195,18 +200,18 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.tempo.length > 0 && (
-          <Section icon={<ScrollText className="size-3.5" />} title="Worklogi Tempo">
+          <Section icon={<ScrollText className="size-3.5" />} title={t('sections.tempoWorklogs')}>
             <ul className="space-y-1">
-              {project.sources.tempo.map((t, i) => (
+              {project.sources.tempo.map((tw, i) => (
                 <li key={i} className="flex justify-between gap-3">
                   <span className="truncate">
                     <Badge variant="outline" className="mr-2 font-mono text-xs">
-                      {t.issueKey}
+                      {tw.issueKey}
                     </Badge>
-                    {t.description ? truncate(t.description, 80) : '—'}
+                    {tw.description ? truncate(tw.description, 80) : '—'}
                   </span>
                   <span className="shrink-0 tabular-nums text-muted-foreground">
-                    {formatMinutes(t.minutes)}
+                    {formatMinutes(tw.minutes)}
                   </span>
                 </li>
               ))}
@@ -215,7 +220,7 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.slack.length > 0 && (
-          <Section icon={<MessageSquare className="size-3.5" />} title="Slack">
+          <Section icon={<MessageSquare className="size-3.5" />} title={t('sections.slack')}>
             <ul className="space-y-1">
               {project.sources.slack.map((s, i) => (
                 <li key={i} className="flex justify-between gap-3">
@@ -230,12 +235,12 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.plans.length > 0 && (
-          <Section icon={<ScrollText className="size-3.5" />} title="Plany Claude">
+          <Section icon={<ScrollText className="size-3.5" />} title={t('sections.plans')}>
             <ul className="space-y-1">
               {project.sources.plans.map((p, i) => (
                 <li key={i} className="text-xs">
                   <span className="text-muted-foreground">
-                    {new Date(p.mtime).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(p.mtime).toLocaleTimeString(timeFmtLocale, { hour: '2-digit', minute: '2-digit' })}
                   </span>{' '}
                   {truncate(p.title, 100)}
                 </li>
@@ -245,13 +250,16 @@ function ProjectCard({ project }: { project: ProjectSection }) {
         )}
 
         {project.sources.files.length > 0 && (
-          <Section icon={<FileEdit className="size-3.5" />} title={`Zmienione pliki (${project.sources.files.length})`}>
+          <Section
+            icon={<FileEdit className="size-3.5" />}
+            title={t('sections.changedFiles', { count: project.sources.files.length })}
+          >
             <ul className="space-y-0.5 text-xs font-mono text-muted-foreground">
               {project.sources.files.slice(0, 8).map((f, i) => (
                 <li key={i} className="truncate">{shortenPath(f.path)}</li>
               ))}
               {project.sources.files.length > 8 && (
-                <li className="italic">+ {project.sources.files.length - 8} więcej</li>
+                <li className="italic">{t('sections.filesMore', { count: project.sources.files.length - 8 })}</li>
               )}
             </ul>
           </Section>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ interface WorklogResponse {
 }
 
 export default function TimesheetPage() {
+  const tToast = useTranslations('timesheet.toast');
   const [date, setDate] = useState<Date>(new Date());
   const [activities, setActivities] = useState<Activity[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -143,12 +145,12 @@ export default function TimesheetPage() {
       const { awCount, slackCount, mergedCount } = data.stats || {};
       const slackInfo = slackCount > 0 ? ` + ${slackCount} Slack` : '';
       const mergeInfo = mergedCount > 0 ? ` (${mergedCount} merged)` : '';
-      toast.success('Aktywności odświeżone', {
+      toast.success(tToast('activitiesRefreshed'), {
         description: `${awCount} AW${slackInfo}${mergeInfo} na ${dateStr}`
       });
     } catch (error) {
       setAwStatus('error');
-      toast.error('Błąd pobierania aktywności', {
+      toast.error(tToast('loadError'), {
         description: error instanceof Error ? error.message : 'Sprawdź czy ActivityWatch jest uruchomiony'
       });
     } finally {
@@ -209,7 +211,7 @@ export default function TimesheetPage() {
         setTickets(worklogsData.availableTickets || []);
       }
     } catch (error) {
-      toast.error('Błąd pobierania worklogów', {
+      toast.error(tToast('worklogsLoadError'), {
         description: error instanceof Error ? error.message : 'Sprawdź połączenie z Tempo'
       });
     }
@@ -221,11 +223,11 @@ export default function TimesheetPage() {
     setRefreshingAll(true);
     try {
       await Promise.all([fetchActivities(), fetchWorklogs()]);
-      toast.success('Dane odświeżone', {
+      toast.success(tToast('dataRefreshed'), {
         description: 'ActivityWatch i Tempo zaktualizowane'
       });
     } catch (error) {
-      toast.error('Błąd odświeżania', {
+      toast.error(tToast('refreshError'), {
         description: error instanceof Error ? error.message : 'Spróbuj ponownie'
       });
     } finally {
@@ -254,7 +256,7 @@ export default function TimesheetPage() {
         });
       }
     } catch (error) {
-      toast.error('Błąd wyszukiwania', {
+      toast.error(tToast('searchError'), {
         description: error instanceof Error ? error.message : 'Spróbuj ponownie'
       });
     }
@@ -284,7 +286,7 @@ export default function TimesheetPage() {
         setTickets([...recentTickets, ...allTickets]);
       }
     } catch (error) {
-      toast.error('Błąd ładowania ticketów', {
+      toast.error(tToast('ticketsLoadError'), {
         description: error instanceof Error ? error.message : 'Sprawdź połączenie z Jira'
       });
     }
@@ -362,12 +364,12 @@ export default function TimesheetPage() {
           }
           return activity;
         }));
-        toast.success('Sugestie wygenerowane', {
+        toast.success(tToast('suggestionsGenerated'), {
           description: `LLM zasugerował tickety dla ${suggestionCount} aktywności`
         });
       }
     } catch (error) {
-      toast.error('Błąd generowania sugestii', {
+      toast.error(tToast('suggestionsError'), {
         description: error instanceof Error ? error.message : 'Problem z LLM API'
       });
     } finally {
@@ -397,7 +399,7 @@ export default function TimesheetPage() {
 
     // Validation: totalSeconds must be > 0
     if (!activity.totalSeconds || activity.totalSeconds <= 0) {
-      toast.error('Nie można zalogować', {
+      toast.error(tToast('cannotLog'), {
         description: 'Czas aktywności musi być większy niż 0'
       });
       return;
@@ -405,7 +407,7 @@ export default function TimesheetPage() {
 
     // Validation: ticketKey must be provided
     if (!ticketKey) {
-      toast.error('Nie można zalogować', {
+      toast.error(tToast('cannotLog'), {
         description: 'Wybierz ticket przed zalogowaniem'
       });
       return;
@@ -440,7 +442,7 @@ export default function TimesheetPage() {
           const conflicts = overlapData.conflictingWorklogs
             .map((c: { issueKey: string; startTime: string; endTime: string }) => `${c.issueKey} (${c.startTime}-${c.endTime})`)
             .join(', ');
-          toast.warning('Nakładający się czas!', {
+          toast.warning(tToast('overlap'), {
             description: `Konflikt z: ${conflicts}. Użyj szczegółów aby zmienić czas.`,
             duration: 5000
           });
@@ -491,17 +493,17 @@ export default function TimesheetPage() {
           activity.suggestedTicket ? 'llm' : undefined
         );
 
-        toast.success('Czas zalogowany', {
+        toast.success(tToast('logged'), {
           description: `${ticketKey}: ${Math.round(activity.totalSeconds / 60)} min`
         });
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Nieznany błąd' }));
-        toast.error('Błąd logowania czasu', {
+        toast.error(tToast('logError'), {
           description: errorData.error || 'Nieznany błąd'
         });
       }
     } catch (error) {
-      toast.error('Błąd logowania czasu', {
+      toast.error(tToast('logError'), {
         description: error instanceof Error ? error.message : 'Sprawdź połączenie z Tempo'
       });
     } finally {
@@ -525,7 +527,7 @@ export default function TimesheetPage() {
 
     // Validate time spent
     if (!Number.isFinite(data.timeSpentSeconds) || data.timeSpentSeconds < 60 || data.timeSpentSeconds > 86400) {
-      toast.error('Nieprawidłowy czas', {
+      toast.error(tToast('invalidTime'), {
         description: 'Czas pracy musi wynosić od 1 minuty do 24 godzin'
       });
       return;
@@ -559,17 +561,17 @@ export default function TimesheetPage() {
         setDialogOpen(false);
         setDialogActivity(null);
 
-        toast.success('Czas zalogowany', {
+        toast.success(tToast('logged'), {
           description: `${data.ticketKey}: ${Math.round(data.timeSpentSeconds / 60)} min`
         });
       } else {
         const errorData = await response.json();
-        toast.error('Błąd logowania czasu', {
+        toast.error(tToast('logError'), {
           description: errorData.error || 'Nieznany błąd'
         });
       }
     } catch (error) {
-      toast.error('Błąd logowania czasu', {
+      toast.error(tToast('logError'), {
         description: error instanceof Error ? error.message : 'Sprawdź połączenie z Tempo'
       });
     } finally {
@@ -661,7 +663,7 @@ export default function TimesheetPage() {
           data.totalSeconds
         );
 
-        toast.success('Aktywności scalone', {
+        toast.success(tToast('activitiesMerged'), {
           description: `${data.ticketKey}: ${Math.round(data.totalSeconds / 60)} min (${data.activities.length} połączonych)`
         });
 
@@ -670,12 +672,12 @@ export default function TimesheetPage() {
         setSelectedIds(new Set());
       } else {
         const errorData = await response.json();
-        toast.error('Błąd scalania', {
+        toast.error(tToast('mergeError'), {
           description: errorData.error || 'Nieznany błąd'
         });
       }
     } catch (error) {
-      toast.error('Błąd scalania', {
+      toast.error(tToast('mergeError'), {
         description: error instanceof Error ? error.message : 'Sprawdź połączenie'
       });
     }
@@ -735,11 +737,11 @@ export default function TimesheetPage() {
         parts.map(p => ({ ticketKey: p.ticketKey, seconds: p.seconds }))
       );
 
-      toast.success('Aktywność podzielona', {
+      toast.success(tToast('activitySplit'), {
         description: `${parts.length} części, łącznie ${Math.round(totalLogged / 60)} min`
       });
     } else {
-      toast.warning('Częściowy sukces', {
+      toast.warning(tToast('partialSuccess'), {
         description: 'Niektóre części nie zostały zalogowane'
       });
     }

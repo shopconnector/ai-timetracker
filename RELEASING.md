@@ -1,5 +1,7 @@
 # Releasing TimeTracker
 
+> 🌐 **English only** — release-process documentation for developers. Polish UI translations live in `apps/web/messages/`.
+
 ## Quick Release (Recommended)
 
 1. Update version in `package.json`:

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { WeekView } from '@/components/calendar/WeekView';
 import { TimeBlockData } from '@/components/calendar/TimeBlock';
@@ -51,6 +52,7 @@ function getWeekDates(date: Date): { start: string; end: string } {
 }
 
 export default function CalendarPage() {
+  const tToast = useTranslations('calendar.toast');
   const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -79,7 +81,7 @@ export default function CalendarPage() {
       setWeekData(data);
     } catch (error) {
       console.error('Error fetching week:', error);
-      toast.error('Failed to load calendar data');
+      toast.error(tToast('loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -121,24 +123,22 @@ export default function CalendarPage() {
 
   const handleBlockClick = (block: TimeBlockData) => {
     if (block.source === 'tempo') {
-      // Edit existing worklog
-      toast.info(`Edit worklog ${block.tempoWorklogId} - coming soon`);
+      toast.info(tToast('editWorklogComingSoon', { id: String(block.tempoWorklogId) }));
       return;
     }
 
     if (block.source === 'calendar') {
-      // View-only for calendar events
-      toast.info(`Calendar event: ${block.title}`);
+      toast.info(tToast('calendarEventInfo', { title: block.title }));
       return;
     }
 
     if (block.source === 'slack') {
-      toast.info(`💬 Slack: ${block.title} (${block.durationMinutes}m)`);
+      toast.info(tToast('slackInfo', { title: block.title, minutes: block.durationMinutes }));
       return;
     }
 
     if (!block.canLogToTempo) {
-      toast.info('This activity cannot be logged to Tempo (marked as "Other")');
+      toast.info(tToast('cannotLogToTempo'));
       return;
     }
 
@@ -170,11 +170,11 @@ export default function CalendarPage() {
     );
 
     if (loggableActivities.length === 0) {
-      toast.info('No activities to log');
+      toast.info(tToast('noActivitiesToLog'));
       return;
     }
 
-    toast.info(`Found ${loggableActivities.length} activities to log - bulk logging coming soon`);
+    toast.info(tToast('bulkComingSoon', { count: loggableActivities.length }));
   };
 
   const handleDialogSubmit = async (data: {
@@ -213,15 +213,15 @@ export default function CalendarPage() {
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to create worklog');
+        throw new Error(error.error || tToast('worklogFailed'));
       }
 
-      toast.success('Worklog created successfully');
+      toast.success(tToast('worklogCreated'));
       setShowDialog(false);
       fetchWeekData(currentWeekStart);
     } catch (error) {
       console.error('Error creating worklog:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to create worklog');
+      toast.error(error instanceof Error ? error.message : tToast('worklogFailed'));
     }
   };
 

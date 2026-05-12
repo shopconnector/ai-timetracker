@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { apiUrl } from '@/lib/api';
 import { getRecentTasks, type TaskUsage } from '@/lib/taskHistory';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
   Line,
   Area,
   AreaChart
@@ -110,6 +110,8 @@ interface DetailedData {
 
 
 export default function DashboardPage() {
+  const t = useTranslations('dashboard');
+  const tNav = useTranslations('nav');
   const [apis, setApis] = useState<ApiStatus[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [detailed, setDetailed] = useState<DetailedData | null>(null);
@@ -190,13 +192,13 @@ export default function DashboardPage() {
 
   const handleQuickLog = async () => {
     if (!quickLogDesc.trim()) {
-      setQuickLogMessage('Podaj opis!');
+      setQuickLogMessage(t('toast.missingDescription'));
       return;
     }
 
     const hours = parseFloat(quickLogHours);
     if (!Number.isFinite(hours) || hours < 0.01 || hours > 24) {
-      setQuickLogMessage('Czas musi wynosić od 0.01 do 24 godzin');
+      setQuickLogMessage(t('toast.invalidHours'));
       return;
     }
 
@@ -222,16 +224,16 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setQuickLogMessage(`✓ Zalogowano ${hours}h!`);
+        setQuickLogMessage(t('quickLog.loggedHours', { hours: String(hours) }));
         setQuickLogDesc('');
         setQuickTickets(getRecentTasks(8));
         fetchDashboard();
         fetchDetailed(selectedDate);
       } else {
-        setQuickLogMessage(`✗ ${data.error}`);
+        setQuickLogMessage(t('quickLog.errorPrefix', { message: data.error || '' }));
       }
-    } catch (error) {
-      setQuickLogMessage('✗ Błąd połączenia');
+    } catch {
+      setQuickLogMessage(t('quickLog.connectionErrorPrefix'));
     } finally {
       setQuickLogLoading(false);
     }
@@ -241,6 +243,7 @@ export default function DashboardPage() {
     setLoading(true);
     Promise.all([fetchStatus(), fetchDashboard(), fetchDetailed(selectedDate), fetchSlackSummary(selectedDate)])
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -251,19 +254,11 @@ export default function DashboardPage() {
   const getStatusBadge = (status: ApiStatus['status']) => {
     switch (status) {
       case 'ok':
-        return <Badge className="bg-green-500 text-white">OK</Badge>;
+        return <Badge className="bg-green-500 text-white">{t('status.ok')}</Badge>;
       case 'error':
-        return <Badge className="bg-red-500 text-white">Error</Badge>;
+        return <Badge className="bg-red-500 text-white">{t('status.error')}</Badge>;
       case 'unconfigured':
-        return <Badge className="bg-yellow-500 text-white">Not Set</Badge>;
-    }
-  };
-
-  const getDayStatusColor = (status: DayStats['status']) => {
-    switch (status) {
-      case 'ok': return 'bg-green-100 border-green-300';
-      case 'warning': return 'bg-yellow-100 border-yellow-300';
-      case 'missing': return 'bg-red-100 border-red-300';
+        return <Badge className="bg-yellow-500 text-white">{t('status.unconfigured')}</Badge>;
     }
   };
 
@@ -280,8 +275,8 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">ActivityWatch + Tempo Analytics</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{t('title')}</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</p>
         </div>
         <input
           type="date"
@@ -295,21 +290,21 @@ export default function DashboardPage() {
         <Card className="mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 border-0 shadow-xl">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg text-white flex items-center gap-2">
-              <span className="text-2xl">⚡</span> Quick Log
+              <span className="text-2xl">⚡</span> {t('quickLog.title')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {quickTickets.length === 0 ? (
               <div className="text-sm text-blue-100">
-                Brak ostatnio logowanych tasków. Zaloguj czas w{' '}
-                <a href="/timetracker/timesheet" className="underline text-white font-medium">Timesheet</a>,
-                a ostatnio używane tickety pojawią się tutaj.
+                {t('quickLog.noRecent')}{' '}
+                <a href="/timetracker/timesheet" className="underline text-white font-medium">{tNav('timesheet')}</a>
+                {' '}{t('quickLog.noRecentTail')}
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap gap-4 items-end">
                   <div className="flex-1 min-w-48">
-                    <label className="block text-sm text-blue-100 mb-1">Ticket</label>
+                    <label className="block text-sm text-blue-100 mb-1">{t('quickLog.ticket')}</label>
                     <select
                       value={quickLogTicket}
                       onChange={(e) => setQuickLogTicket(e.target.value)}
@@ -323,7 +318,7 @@ export default function DashboardPage() {
                     </select>
                   </div>
                   <div className="w-24">
-                    <label className="block text-sm text-blue-100 mb-1">Hours</label>
+                    <label className="block text-sm text-blue-100 mb-1">{t('quickLog.hours')}</label>
                     <input
                       type="number"
                       step="0.5"
@@ -335,12 +330,12 @@ export default function DashboardPage() {
                     />
                   </div>
                   <div className="flex-1 min-w-64">
-                    <label className="block text-sm text-blue-100 mb-1">Description</label>
+                    <label className="block text-sm text-blue-100 mb-1">{t('quickLog.description')}</label>
                     <input
                       type="text"
                       value={quickLogDesc}
                       onChange={(e) => setQuickLogDesc(e.target.value)}
-                      placeholder="What did you work on?"
+                      placeholder={t('quickLog.descriptionPlaceholder')}
                       className="w-full p-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-blue-200"
                     />
                   </div>
@@ -349,7 +344,7 @@ export default function DashboardPage() {
                     disabled={quickLogLoading || quickTickets.length === 0}
                     className="bg-white text-blue-600 hover:bg-blue-50 font-semibold px-6"
                   >
-                    {quickLogLoading ? 'Logging...' : 'Log Now'}
+                    {quickLogLoading ? t('quickLog.submitting') : t('quickLog.submit')}
                   </Button>
                 </div>
                 {quickLogMessage && (
@@ -367,41 +362,41 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
               <CardContent className="pt-6">
-                <div className="text-sm font-medium text-slate-400">ActivityWatch</div>
+                <div className="text-sm font-medium text-slate-400">{t('cards.activityWatch')}</div>
                 <div className="text-3xl font-bold text-purple-400">{detailed.summary.awTotalFormatted}</div>
-                <div className="text-xs text-slate-500 mt-1">{detailed.summary.activitiesCount} activities</div>
+                <div className="text-xs text-slate-500 mt-1">{t('cards.activities', { count: detailed.summary.activitiesCount })}</div>
               </CardContent>
             </Card>
             <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
               <CardContent className="pt-6">
-                <div className="text-sm font-medium text-slate-400">Tempo Logged</div>
+                <div className="text-sm font-medium text-slate-400">{t('cards.tempoLogged')}</div>
                 <div className="text-3xl font-bold text-blue-400">{detailed.summary.tempoTotalFormatted}</div>
-                <div className="text-xs text-slate-500 mt-1">{detailed.summary.worklogsCount} worklogs</div>
+                <div className="text-xs text-slate-500 mt-1">{t('cards.worklogs', { count: detailed.summary.worklogsCount })}</div>
               </CardContent>
             </Card>
             <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
               <CardContent className="pt-6">
-                <div className="text-sm font-medium text-slate-400">Efficiency</div>
+                <div className="text-sm font-medium text-slate-400">{t('cards.efficiency')}</div>
                 <div className={`text-3xl font-bold ${detailed.summary.efficiency > 100 ? 'text-green-400' : detailed.summary.efficiency > 70 ? 'text-yellow-400' : 'text-red-400'}`}>
                   {detailed.summary.efficiency}%
                 </div>
-                <div className="text-xs text-slate-500 mt-1">logged vs tracked</div>
+                <div className="text-xs text-slate-500 mt-1">{t('cards.loggedVsTracked')}</div>
               </CardContent>
             </Card>
             {dashboard && (
               <>
                 <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
                   <CardContent className="pt-6">
-                    <div className="text-sm font-medium text-slate-400">Week Total</div>
+                    <div className="text-sm font-medium text-slate-400">{t('cards.weekTotal')}</div>
                     <div className="text-3xl font-bold text-emerald-400">{dashboard.summary.totalTempoFormatted}</div>
-                    <div className="text-xs text-slate-500 mt-1">{dashboard.summary.daysCount} work days</div>
+                    <div className="text-xs text-slate-500 mt-1">{t('cards.workDays', { count: dashboard.summary.daysCount })}</div>
                   </CardContent>
                 </Card>
                 <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
                   <CardContent className="pt-6">
-                    <div className="text-sm font-medium text-slate-400">Daily Average</div>
+                    <div className="text-sm font-medium text-slate-400">{t('cards.dailyAverage')}</div>
                     <div className="text-3xl font-bold text-cyan-400">{dashboard.summary.avgTempoFormatted}</div>
-                    <div className="text-xs text-slate-500 mt-1">target: 8h</div>
+                    <div className="text-xs text-slate-500 mt-1">{t('cards.target8h')}</div>
                   </CardContent>
                 </Card>
               </>
@@ -416,7 +411,7 @@ export default function DashboardPage() {
               <div className="flex items-center gap-6">
                 <div className="text-4xl">💬</div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-purple-100">Slack Activity — {selectedDate}</div>
+                  <div className="text-sm font-medium text-purple-100">{t('slack.activityHeader', { date: selectedDate })}</div>
                   <div className="text-2xl font-bold text-white">
                     {Math.floor(slackSummary.totalMinutes / 60)}h {slackSummary.totalMinutes % 60}m
                   </div>
@@ -424,12 +419,12 @@ export default function DashboardPage() {
                 <div className="flex gap-6">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-white">{slackSummary.conversationCount}</div>
-                    <div className="text-xs text-purple-200">conversations</div>
+                    <div className="text-xs text-purple-200">{t('slack.conversations')}</div>
                   </div>
                   {slackSummary.huddleCount > 0 && (
                     <div className="text-center">
                       <div className="text-2xl font-bold text-white">{slackSummary.huddleCount}</div>
-                      <div className="text-xs text-purple-200">huddles</div>
+                      <div className="text-xs text-purple-200">{t('slack.huddles')}</div>
                     </div>
                   )}
                 </div>
@@ -444,7 +439,7 @@ export default function DashboardPage() {
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <span>📊</span> Hourly Activity - {selectedDate}
+                <span>📊</span> {t('charts.hourlyActivity', { date: selectedDate })}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -460,7 +455,7 @@ export default function DashboardPage() {
                     <YAxis
                       stroke="#94a3b8"
                       tick={{ fill: '#94a3b8', fontSize: 11 }}
-                      label={{ value: 'min', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
+                      label={{ value: t('charts.minutes'), angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
                     />
                     <Tooltip
                       contentStyle={{
@@ -474,7 +469,7 @@ export default function DashboardPage() {
                     <Area
                       type="monotone"
                       dataKey="awMinutes"
-                      name="ActivityWatch"
+                      name={t('charts.awSeries')}
                       fill="#a855f7"
                       fillOpacity={0.3}
                       stroke="#a855f7"
@@ -483,7 +478,7 @@ export default function DashboardPage() {
                     <Area
                       type="monotone"
                       dataKey="tempoMinutes"
-                      name="Tempo"
+                      name={t('charts.tempoSeries')}
                       fill="#3b82f6"
                       fillOpacity={0.3}
                       stroke="#3b82f6"
@@ -492,7 +487,7 @@ export default function DashboardPage() {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-64 flex items-center justify-center text-slate-500">Loading...</div>
+                <div className="h-64 flex items-center justify-center text-slate-500">{t('buttons.loading')}</div>
               )}
             </CardContent>
           </Card>
@@ -501,7 +496,7 @@ export default function DashboardPage() {
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <span>🥧</span> App Usage - {selectedDate}
+                <span>🥧</span> {t('charts.appUsage', { date: selectedDate })}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -548,7 +543,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="h-64 flex items-center justify-center text-slate-500">No data</div>
+                <div className="h-64 flex items-center justify-center text-slate-500">{t('empty.data')}</div>
               )}
             </CardContent>
           </Card>
@@ -558,7 +553,7 @@ export default function DashboardPage() {
         <Card className="mb-6 bg-slate-800/50 border-slate-700 backdrop-blur">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-white text-lg flex items-center gap-2">
-              <span>📈</span> Weekly Comparison
+              <span>📈</span> {t('charts.weeklyComparison')}
             </CardTitle>
             <Button
               onClick={fetchDashboard}
@@ -567,7 +562,7 @@ export default function DashboardPage() {
               variant="outline"
               className="border-slate-600 text-slate-300 hover:bg-slate-700"
             >
-              {dashboardLoading ? 'Loading...' : 'Refresh'}
+              {dashboardLoading ? t('buttons.loading') : t('buttons.refresh')}
             </Button>
           </CardHeader>
           <CardContent>
@@ -583,7 +578,7 @@ export default function DashboardPage() {
                   <YAxis
                     stroke="#94a3b8"
                     tick={{ fill: '#94a3b8', fontSize: 12 }}
-                    label={{ value: 'hours', angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
+                    label={{ value: t('charts.hours'), angle: -90, position: 'insideLeft', fill: '#94a3b8' }}
                   />
                   <Tooltip
                     contentStyle={{
@@ -594,13 +589,13 @@ export default function DashboardPage() {
                     labelStyle={{ color: '#f8fafc' }}
                   />
                   <Legend />
-                  <Bar dataKey="tempo" name="Tempo Logged" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="aw" name="ActivityWatch" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                  <Line type="monotone" dataKey="target" name="Target (8h)" stroke="#22c55e" strokeDasharray="5 5" />
+                  <Bar dataKey="tempo" name={t('charts.tempoSeries')} fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="aw" name={t('charts.awSeries')} fill="#a855f7" radius={[4, 4, 0, 0]} />
+                  <Line type="monotone" dataKey="target" name={t('charts.targetSeries')} stroke="#22c55e" strokeDasharray="5 5" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-64 flex items-center justify-center text-slate-500">Loading...</div>
+              <div className="h-64 flex items-center justify-center text-slate-500">{t('buttons.loading')}</div>
             )}
           </CardContent>
         </Card>
@@ -611,7 +606,7 @@ export default function DashboardPage() {
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <span>🏆</span> Top Activities
+                <span>🏆</span> {t('charts.topActivities')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -626,13 +621,13 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-purple-400">{activity.minutes}m</div>
-                        <div className="text-xs text-slate-500">{activity.events} events</div>
+                        <div className="text-xs text-slate-500">{activity.events} {t('events')}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-500">No activities</div>
+                <div className="text-center py-8 text-slate-500">{t('empty.activities')}</div>
               )}
             </CardContent>
           </Card>
@@ -641,7 +636,7 @@ export default function DashboardPage() {
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <span>📝</span> Today&apos;s Worklogs
+                <span>📝</span> {t('charts.todaysWorklogs')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -660,7 +655,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-500">No worklogs</div>
+                <div className="text-center py-8 text-slate-500">{t('empty.worklogs')}</div>
               )}
             </CardContent>
           </Card>
@@ -669,7 +664,7 @@ export default function DashboardPage() {
           <Card className="bg-slate-800/50 border-slate-700 backdrop-blur">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <span>🔌</span> API Status
+                <span>🔌</span> {t('charts.apiStatus')}
               </CardTitle>
               <Button
                 onClick={fetchStatus}
@@ -678,7 +673,7 @@ export default function DashboardPage() {
                 variant="outline"
                 className="border-slate-600 text-slate-300 hover:bg-slate-700"
               >
-                Check
+                {t('buttons.check')}
               </Button>
             </CardHeader>
             <CardContent>
@@ -727,7 +722,7 @@ export default function DashboardPage() {
         <Card className="mt-6 bg-slate-800/50 border-slate-700 backdrop-blur">
           <CardHeader>
             <CardTitle className="text-white text-lg flex items-center gap-2">
-              <span>📅</span> Week Overview
+              <span>📅</span> {t('charts.weekOverview')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -754,12 +749,12 @@ export default function DashboardPage() {
                     }`}>
                       {day.tempoFormatted}
                     </div>
-                    <div className="text-xs text-slate-500">{day.worklogsCount} logs</div>
+                    <div className="text-xs text-slate-500">{day.worklogsCount} {t('logs')}</div>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-slate-500">Loading...</div>
+              <div className="text-center py-8 text-slate-500">{t('buttons.loading')}</div>
             )}
           </CardContent>
         </Card>

@@ -1,5 +1,7 @@
 # Code Signing Setup — Azure Trusted Signing
 
+> 🌐 **English only** — DevOps/build documentation. UI translations live in `apps/web/messages/`.
+
 This guide explains how to configure Azure Trusted Signing (Artifact Signing)
 to digitally sign the TimeTracker Windows installer, eliminating the
 Windows SmartScreen "Unknown publisher" warning.

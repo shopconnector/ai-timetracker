@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ThemeProvider } from "@/lib/providers/ThemeProvider";
 import { SidebarProvider } from "@/lib/providers/SidebarProvider";
 import { Sidebar } from "@/components/admin/Sidebar";
@@ -19,32 +21,40 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "TimeTracker",
-  description: "Track your time and sync with Tempo",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common.meta");
+  return {
+    title: t("title"),
+    description: t("description"),
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider>
-          <SidebarProvider>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-              <UpdateBanner />
-              <Sidebar />
-              <Header />
-              <MainContent>{children}</MainContent>
-            </div>
-          </SidebarProvider>
-          <Toaster richColors position="top-right" />
-        </ThemeProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ThemeProvider>
+            <SidebarProvider>
+              <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+                <UpdateBanner />
+                <Sidebar />
+                <Header />
+                <MainContent>{children}</MainContent>
+              </div>
+            </SidebarProvider>
+            <Toaster richColors position="top-right" />
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

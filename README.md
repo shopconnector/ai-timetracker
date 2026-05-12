@@ -1,5 +1,7 @@
 # AI TimeTracker
 
+> 🌐 **English** · [Polski](./README.pl.md)
+
 **Intelligent time tracking system — Jira + Tempo + ActivityWatch + Slack + AI (Gemini)**
 
 ## Download (Windows)
