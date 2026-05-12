@@ -123,6 +123,14 @@ export function UpdateBanner() {
   }, []);
 
   const pollSelfUpdateStatus = useCallback(async () => {
+    // Force a cache-busting reload — plain reload() can serve cached HTML/RSC
+    // chunks from before the upgrade, leaving the user on the old version.
+    const hardReload = () => {
+      const u = new URL(window.location.href);
+      u.searchParams.set('_v', String(Date.now()));
+      window.location.replace(u.toString());
+    };
+
     const poll = async () => {
       try {
         const res = await fetch(apiUrl('/api/update?action=selfupdate-status'), { method: 'POST' });
@@ -134,11 +142,11 @@ export function UpdateBanner() {
           setTimeout(poll, 1000);
         } else if (data.status === 'done') {
           // Server is restarting — wait a moment then reload
-          setTimeout(() => window.location.reload(), 5000);
+          setTimeout(hardReload, 5000);
         }
       } catch {
         // Server might be restarting — try reload after delay
-        setTimeout(() => window.location.reload(), 5000);
+        setTimeout(hardReload, 5000);
       }
     };
     poll();
