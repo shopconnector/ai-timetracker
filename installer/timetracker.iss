@@ -274,6 +274,14 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Log('WMIC targeted kill result: ' + IntToStr(ResultCode));
 
+  // Step 2.5: Fallback — if port :5666 still LISTENING after targeted kill,
+  // assume another node.exe holds it (service host, VBS-launched, etc.)
+  // and kill ALL node.exe. Only fires when targeted kill missed something.
+  Sleep(1500);
+  Exec('cmd.exe', '/c netstat -ano | findstr ":5666 " | findstr LISTENING >nul && (taskkill /F /IM node.exe & echo KILLED_FALLBACK) || echo PORT_FREE',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Log('Port :5666 fallback check result: ' + IntToStr(ResultCode));
+
   // Step 3: Kill ActivityWatch
   Exec('taskkill', '/F /IM aw-qt.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill', '/F /IM aw-server.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
