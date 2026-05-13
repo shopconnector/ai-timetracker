@@ -232,6 +232,19 @@ export async function POST(request: Request) {
 
     console.log(`[generate-note] ${activities.length} raw activities -> ${aggregated.length} aggregated slots`);
 
+    // Guard: if min-duration filter removed everything, do NOT call the LLM —
+    // empty `DANE:` makes Gemini fabricate a full template work day
+    // ("08:00-17:00 Spotkanie zespołu / projektem X / Lunch / ...").
+    // See: regression introduced in v0.8.0 (commit 22cb8c6).
+    if (aggregated.length === 0) {
+      return NextResponse.json({
+        note: '',
+        activitiesCount: activities.length,
+        totalMinutes,
+        message: `Wszystkie ${activities.length} aktywnosci ponizej progu ${Math.round(minDuration / 60)} min (lacznie ${totalMinutes} min) — brak danych do wygenerowania notatki. Obniz "Min czas aktywnosci" w ustawieniach.`,
+      });
+    }
+
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 
@@ -240,6 +253,12 @@ export async function POST(request: Request) {
     const prompt = `Przepisz ponizsze aktywnosci jako notatke z dnia pracy.
 Format: HH:MM-HH:MM opis (po polsku, krotko).
 Polacz nakladajace sie aktywnosci. Tylko linie HH:MM-HH:MM opis, bez naglowkow.
+
+ZASADY (krytyczne):
+- NIE WYMYSLAJ aktywnosci, ktorych nie ma w sekcji DANE.
+- NIE dodawaj genericznych placeholderow ("Spotkanie zespolu", "projekt X", "Lunch", "Przerwa na kawe", "Planowanie") jesli nie wynikaja z DANE.
+- Uzywaj WYLACZNIE godzin i opisow obecnych w DANE.
+- Jesli DANE sa puste lub niewystarczajace — zwroc pusty wynik (nic nie pisz).
 ${truncated ? '(Dane obciete do 30 wpisow)\n' : ''}
 DANE:
 ${activitiesText}`;
