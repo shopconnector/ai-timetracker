@@ -5,7 +5,11 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "env": [
+        "ATLASSIAN_OAUTH_CLIENT_SECRET",
+        "TEMPO_OAUTH_CLIENT_SECRET"
+      ]
     },
     "dev": {
       "cache": false,
