@@ -30,6 +30,16 @@ const DEFAULT_REDIRECT_URI = 'http://localhost:5666/timetracker/api/auth/tempo/c
 const DEFAULT_CLIENT_ID = 'YNLXgTdx6fvPxSnfWrN61qgOTstp2ILdxpA8kVv0Ak0mtblrzq';
 const DEFAULT_SITE_URL = 'https://beecommerce.atlassian.net';
 
+/** Filter .env.example placeholder values so they never override defaults. */
+function realValue(v: string | undefined, ...placeholders: string[]): string | undefined {
+  if (!v) return undefined;
+  const lower = v.toLowerCase();
+  for (const p of placeholders) {
+    if (lower.includes(p.toLowerCase())) return undefined;
+  }
+  return v;
+}
+
 // ---------- Types ----------
 
 export interface TempoTokenResponse {
@@ -135,9 +145,12 @@ function writeTempoEnv(updates: Record<string, string | null>): void {
 
 export function loadTempoOAuthEnv(): TempoOAuthEnv {
   return {
-    clientId: process.env.TEMPO_OAUTH_CLIENT_ID || DEFAULT_CLIENT_ID,
-    clientSecret: process.env.TEMPO_OAUTH_CLIENT_SECRET || undefined,
-    siteUrl: process.env.TEMPO_OAUTH_SITE_URL || process.env.ATLASSIAN_OAUTH_SITE_URL || DEFAULT_SITE_URL,
+    clientId: realValue(process.env.TEMPO_OAUTH_CLIENT_ID, 'your-', 'placeholder') || DEFAULT_CLIENT_ID,
+    clientSecret: realValue(process.env.TEMPO_OAUTH_CLIENT_SECRET, 'your-', 'placeholder'),
+    siteUrl:
+      realValue(process.env.TEMPO_OAUTH_SITE_URL, 'your-company', 'your-tenant', 'example.atlassian') ||
+      realValue(process.env.ATLASSIAN_OAUTH_SITE_URL, 'your-company', 'your-tenant', 'example.atlassian') ||
+      DEFAULT_SITE_URL,
     redirectUri: process.env.TEMPO_OAUTH_REDIRECT_URI || DEFAULT_REDIRECT_URI,
     accessToken: process.env.TEMPO_OAUTH_ACCESS_TOKEN || undefined,
     refreshToken: process.env.TEMPO_OAUTH_REFRESH_TOKEN || undefined,

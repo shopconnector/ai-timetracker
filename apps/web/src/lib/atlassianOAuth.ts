@@ -58,6 +58,20 @@ const DEFAULT_SITE_URL = 'https://beecommerce.atlassian.net';
 // Override via ATLASSIAN_OAUTH_CLIENT_ID env if running against another tenant.
 const DEFAULT_CLIENT_ID = '1zuJd04NRQsFJJkwVoWDmIvmDW2Mrakz';
 
+/**
+ * Filter out .env.example placeholder values. Prevents the bug where a fresh
+ * install copies .env.example to .env.local with stale "your-company.atlassian.net"
+ * placeholders, which would otherwise override the embedded defaults.
+ */
+function realValue(v: string | undefined, ...placeholders: string[]): string | undefined {
+  if (!v) return undefined;
+  const lower = v.toLowerCase();
+  for (const p of placeholders) {
+    if (lower.includes(p.toLowerCase())) return undefined;
+  }
+  return v;
+}
+
 // ---------- Types ----------
 
 export interface OAuthTokenResponse {
@@ -180,9 +194,9 @@ function writeAtlassianEnv(updates: Record<string, string | null>): void {
 
 export function loadOAuthEnv(): OAuthEnv {
   return {
-    clientId: process.env.ATLASSIAN_OAUTH_CLIENT_ID || DEFAULT_CLIENT_ID,
-    clientSecret: process.env.ATLASSIAN_OAUTH_CLIENT_SECRET || undefined,
-    siteUrl: process.env.ATLASSIAN_OAUTH_SITE_URL || DEFAULT_SITE_URL,
+    clientId: realValue(process.env.ATLASSIAN_OAUTH_CLIENT_ID, 'your-', 'placeholder') || DEFAULT_CLIENT_ID,
+    clientSecret: realValue(process.env.ATLASSIAN_OAUTH_CLIENT_SECRET, 'your-', 'placeholder'),
+    siteUrl: realValue(process.env.ATLASSIAN_OAUTH_SITE_URL, 'your-company', 'your-tenant', 'example.atlassian') || DEFAULT_SITE_URL,
     redirectUri: process.env.ATLASSIAN_OAUTH_REDIRECT_URI || DEFAULT_REDIRECT_URI,
     accessToken: process.env.ATLASSIAN_OAUTH_ACCESS_TOKEN || undefined,
     refreshToken: process.env.ATLASSIAN_OAUTH_REFRESH_TOKEN || undefined,
