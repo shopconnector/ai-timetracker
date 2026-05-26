@@ -25,6 +25,7 @@ import { randomBytes, createHash } from 'crypto';
 export const ATLASSIAN_OAUTH_SCOPES = [
   'offline_access',
   'read:me',
+  'read:jira-user', // required for /rest/api/3/myself (test connection + status)
   'read:jira-work',
   'write:jira-work',
   'read:confluence-space.summary',

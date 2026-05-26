@@ -1,4 +1,9 @@
-// Tempo API Client — uses TEMPO_API_TOKEN (personal token) Bearer auth
+// Tempo API Client
+// Supports two auth modes (preferred order):
+//   1) OAuth 2.0 (3LO) — Bearer access token via Tempo OAuth flow (auto-refresh)
+//   2) Personal API token (legacy) — Bearer with TEMPO_API_TOKEN env
+
+import { getValidTempoAccessToken, isTempoOAuthConfigured } from './tempoOAuth';
 
 const TEMPO_URL = 'https://api.tempo.io/4';
 
@@ -51,11 +56,18 @@ export interface TempoError {
   }>;
 }
 
-// Get auth header
+// Get auth header — OAuth Bearer when configured, fallback to static TEMPO_API_TOKEN
 async function getAuthHeader(): Promise<HeadersInit> {
+  if (isTempoOAuthConfigured()) {
+    const token = await getValidTempoAccessToken();
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  }
   const token = process.env.TEMPO_API_TOKEN;
   if (!token) {
-    throw new Error('TEMPO_API_TOKEN not set');
+    throw new Error('TEMPO_API_TOKEN not set and Tempo OAuth not connected');
   }
   return {
     'Authorization': `Bearer ${token}`,

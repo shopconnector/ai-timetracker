@@ -233,9 +233,17 @@ export default function SettingsPage() {
     cloudId: string | null;
     scopes: string | null;
   }>({ connected: false, userEmail: null, userName: null, expiresAt: null, cloudId: null, scopes: null });
+  const [tempoOauthStatus, setTempoOauthStatus] = useState<{
+    connected: boolean;
+    expiresAt: string | null;
+    scopes: string | null;
+  }>({ connected: false, expiresAt: null, scopes: null });
   const [oauthBanner, setOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [tempoOauthBanner, setTempoOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [connectingOauth, setConnectingOauth] = useState(false);
   const [disconnectingOauth, setDisconnectingOauth] = useState(false);
+  const [connectingTempoOauth, setConnectingTempoOauth] = useState(false);
+  const [disconnectingTempoOauth, setDisconnectingTempoOauth] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
@@ -246,21 +254,32 @@ export default function SettingsPage() {
     checkForUpdates();
   }, []);
 
-  // Pick up Atlassian OAuth callback feedback from URL (?atlassian=connected|error&msg=...)
+  // Pick up Atlassian + Tempo OAuth callback feedback from URL
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    const status = params.get('atlassian');
-    if (!status) return;
-    if (status === 'connected') {
+    const atlassianStatus = params.get('atlassian');
+    const tempoStatus = params.get('tempo');
+
+    if (atlassianStatus === 'connected') {
       setOauthBanner({ type: 'success', msg: 'Połączono z Atlassian Cloud przez OAuth 2.0.' });
-    } else if (status === 'error') {
+    } else if (atlassianStatus === 'error') {
       const msg = params.get('msg') || 'Nieznany błąd autoryzacji.';
-      setOauthBanner({ type: 'error', msg: `Połączenie OAuth nie powiodło się: ${msg}` });
+      setOauthBanner({ type: 'error', msg: `Atlassian OAuth nie powiodło się: ${msg}` });
     }
-    const url = new URL(window.location.href);
-    url.search = '';
-    window.history.replaceState({}, '', url.toString());
+
+    if (tempoStatus === 'connected') {
+      setTempoOauthBanner({ type: 'success', msg: 'Połączono z Tempo Cloud przez OAuth 2.0.' });
+    } else if (tempoStatus === 'error') {
+      const msg = params.get('msg') || 'Nieznany błąd autoryzacji.';
+      setTempoOauthBanner({ type: 'error', msg: `Tempo OAuth nie powiodło się: ${msg}` });
+    }
+
+    if (atlassianStatus || tempoStatus) {
+      const url = new URL(window.location.href);
+      url.search = '';
+      window.history.replaceState({}, '', url.toString());
+    }
   }, []);
 
   const loadAllData = useCallback(async () => {
@@ -325,6 +344,11 @@ export default function SettingsPage() {
           expiresAt: settings.oauthExpiresAt || null,
           cloudId: settings.oauthCloudId || null,
           scopes: settings.oauthScopes || null,
+        });
+        setTempoOauthStatus({
+          connected: !!settings.tempoOauthConnected,
+          expiresAt: settings.tempoOauthExpiresAt || null,
+          scopes: settings.tempoOauthScopes || null,
         });
       }
     } catch (error) {
@@ -444,6 +468,32 @@ export default function SettingsPage() {
     setConnectingOauth(true);
     setOauthBanner(null);
     window.location.href = apiUrl('/api/auth/atlassian/start');
+  };
+
+  const handleTempoConnect = () => {
+    setConnectingTempoOauth(true);
+    setTempoOauthBanner(null);
+    window.location.href = apiUrl('/api/auth/tempo/start');
+  };
+
+  const handleTempoDisconnect = async () => {
+    if (!confirm('Rozłączyć Tempo OAuth? Tokeny zostaną usunięte.')) return;
+    setDisconnectingTempoOauth(true);
+    setTempoOauthBanner(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/tempo/disconnect'), { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setTempoOauthBanner({ type: 'error', msg: `Disconnect nie powiódł się: ${data.error || res.status}` });
+      } else {
+        setTempoOauthStatus({ connected: false, expiresAt: null, scopes: null });
+        setTempoOauthBanner({ type: 'success', msg: 'Rozłączono Tempo OAuth.' });
+      }
+    } catch (err) {
+      setTempoOauthBanner({ type: 'error', msg: `Błąd: ${err instanceof Error ? err.message : 'unknown'}` });
+    } finally {
+      setDisconnectingTempoOauth(false);
+    }
   };
 
   const handleAtlassianDisconnect = async () => {
@@ -1765,11 +1815,77 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </div>
             )}
 
-            {/* Tempo Configuration */}
+            {/* Tempo OAuth 2.0 — zalecane */}
+            <div className="space-y-3 p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                  Tempo OAuth 2.0 <span className="text-xs text-purple-600 dark:text-purple-400">(zalecane)</span>
+                </h3>
+                {tempoOauthStatus.connected && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    Połączono
+                  </span>
+                )}
+              </div>
+
+              {tempoOauthBanner && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    tempoOauthBanner.type === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {tempoOauthBanner.msg}
+                </div>
+              )}
+
+              {tempoOauthStatus.connected ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-500 dark:text-gray-400">Access expires:</div>
+                    <div className="text-xs">
+                      {tempoOauthStatus.expiresAt
+                        ? new Date(tempoOauthStatus.expiresAt).toLocaleString('pl')
+                        : '—'}
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Scopes:</div>
+                    <div className="text-xs font-mono break-all">{tempoOauthStatus.scopes || '—'}</div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" variant="outline" onClick={handleTempoConnect} disabled={connectingTempoOauth}>
+                      {connectingTempoOauth ? 'Łączenie...' : 'Reconnect'}
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={handleTempoDisconnect} disabled={disconnectingTempoOauth}>
+                      {disconnectingTempoOauth ? 'Rozłączanie...' : 'Disconnect'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Połącz konto Tempo Cloud jednym kliknięciem. Client ID i Secret są wbudowane w aplikację.
+                  </p>
+                  <Button size="sm" onClick={handleTempoConnect} disabled={connectingTempoOauth}>
+                    {connectingTempoOauth ? 'Łączenie...' : 'Connect with Tempo'}
+                  </Button>
+                </>
+              )}
+
+              <HelpGuide title="Co się stanie po kliknięciu Connect with Tempo?">
+                <p>1. Browser przekieruje na Tempo (przez Jira tenant) — Tempo poprosi o zgodę na uprawnienia: <strong>Worklogs: Manage</strong>, <strong>Work attributes: View</strong>, <strong>Accounts: View</strong>.</p>
+                <p>2. Kliknij <strong>Allow</strong> / <strong>Authorize</strong>.</p>
+                <p>3. Wracasz tutaj automatycznie — pojawi się &quot;Połączono&quot; + szczegóły access tokenu.</p>
+                <p className="text-xs text-gray-500">Tempo OAuth jest osobny od Atlassian OAuth — osobne tokeny, osobny consent screen.</p>
+              </HelpGuide>
+            </div>
+
+            {/* Tempo Configuration — legacy Personal Token */}
             <div className="space-y-3">
               <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                Tempo API
+                Tempo API <span className="text-xs text-gray-500 dark:text-gray-400">(legacy — Personal Token)</span>
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>

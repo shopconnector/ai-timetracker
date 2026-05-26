@@ -9,6 +9,11 @@ import {
   isOAuthConfigured,
   loadOAuthEnv,
 } from '@/lib/atlassianOAuth';
+import {
+  getValidTempoAccessToken,
+  isTempoOAuthConfigured,
+  loadTempoOAuthEnv,
+} from '@/lib/tempoOAuth';
 
 /**
  * Detect the correct .env.local path.
@@ -168,6 +173,7 @@ export async function GET() {
     const gitAuthorFilter = process.env.GIT_AUTHOR_FILTER;
     const githubToken = process.env.GITHUB_TOKEN;
     const oauth = loadOAuthEnv();
+    const tempoOauth = loadTempoOAuthEnv();
 
     return NextResponse.json({
       // API Config (masked)
@@ -206,6 +212,11 @@ export async function GET() {
       oauthCloudId: oauth.cloudId || null,
       oauthScopes: oauth.scopes || null,
 
+      // Tempo OAuth 2.0 (separate auth system from Atlassian)
+      tempoOauthConnected: isTempoOAuthConfigured(),
+      tempoOauthExpiresAt: tempoOauth.expiresAt || null,
+      tempoOauthScopes: tempoOauth.scopes || null,
+
       // Diagnostics — helps users see WHERE we're reading/writing
       envFilePath: getEnvFilePath(),
       dataDir: process.env.TIMETRACKER_DATA_DIR || null,
@@ -229,12 +240,32 @@ export async function POST(request: Request) {
 
     const results: Record<string, { success: boolean; message: string }> = {};
 
-    // Test Tempo API
+    // Test Tempo API — OAuth first if connected, else legacy Personal Token
     if (testType === 'tempo' || testType === 'all') {
-      const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
-      const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
+      if (isTempoOAuthConfigured()) {
+        try {
+          const accessToken = await getValidTempoAccessToken();
+          const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.ok) {
+            results.tempo = { success: true, message: 'Połączono z Tempo API [OAuth]' };
+          } else {
+            const bodyText = await res.text().catch(() => '');
+            results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
+          }
+        } catch (e) {
+          results.tempo = {
+            success: false,
+            message: `Błąd Tempo OAuth: ${e instanceof Error ? e.message : String(e)}`,
+          };
+        }
+      } else {
+        const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
+        const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
 
-      if (tempoApiToken && tempoAccountId) {
+        if (tempoApiToken && tempoAccountId) {
         try {
           const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
             headers: {
@@ -252,11 +283,12 @@ export async function POST(request: Request) {
         } catch (e) {
           results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
         }
-      } else {
-        results.tempo = {
-          success: false,
-          message: 'Brak konfiguracji Tempo (wymagane: TEMPO_API_TOKEN i TEMPO_ACCOUNT_ID)',
-        };
+        } else {
+          results.tempo = {
+            success: false,
+            message: 'Brak konfiguracji Tempo (wymagane: TEMPO_API_TOKEN i TEMPO_ACCOUNT_ID)',
+          };
+        }
       }
     }
 

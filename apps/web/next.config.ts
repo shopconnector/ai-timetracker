@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
     // Used ONLY by lib/atlassianOAuth.ts which is imported only by server routes,
     // so this string does not leak into the client bundle.
     ATLASSIAN_OAUTH_CLIENT_SECRET: process.env.ATLASSIAN_OAUTH_CLIENT_SECRET || "",
+    // Same pattern for Tempo OAuth client_secret. Tempo OAuth doesn't support PKCE,
+    // so secret is required.
+    TEMPO_OAUTH_CLIENT_SECRET: process.env.TEMPO_OAUTH_CLIENT_SECRET || "",
   },
 
   // Standalone output for production deployment without node_modules

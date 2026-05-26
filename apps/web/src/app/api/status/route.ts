@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { awFetch } from '@/lib/activitywatch';
 import { getGithubUser } from '@/lib/github';
 import { getJiraOAuthBase, getValidAccessToken, isOAuthConfigured } from '@/lib/atlassianOAuth';
+import { getValidTempoAccessToken, isTempoOAuthConfigured } from '@/lib/tempoOAuth';
 
 interface ApiStatus {
   name: string;
@@ -30,6 +31,28 @@ async function checkActivityWatch(): Promise<ApiStatus> {
 }
 
 async function checkTempo(): Promise<ApiStatus> {
+  // OAuth 2.0 first if connected
+  if (isTempoOAuthConfigured()) {
+    try {
+      const token = await getValidTempoAccessToken();
+      const response = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) {
+        return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected [OAuth]' };
+      }
+      return { name: 'Tempo', configured: true, status: 'error', message: `OAuth HTTP ${response.status}` };
+    } catch (err) {
+      return {
+        name: 'Tempo',
+        configured: true,
+        status: 'error',
+        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+      };
+    }
+  }
+
   const token = process.env.TEMPO_API_TOKEN;
   if (!token) {
     return { name: 'Tempo', configured: false, status: 'unconfigured' };
