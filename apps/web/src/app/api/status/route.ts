@@ -3,6 +3,8 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { awFetch } from '@/lib/activitywatch';
 import { getGithubUser } from '@/lib/github';
+import { getJiraOAuthBase, getValidAccessToken, isOAuthConfigured } from '@/lib/atlassianOAuth';
+import { getValidTempoAccessToken, isTempoOAuthConfigured } from '@/lib/tempoOAuth';
 
 interface ApiStatus {
   name: string;
@@ -29,6 +31,33 @@ async function checkActivityWatch(): Promise<ApiStatus> {
 }
 
 async function checkTempo(): Promise<ApiStatus> {
+  // OAuth 2.0 path takes precedence
+  if (isTempoOAuthConfigured()) {
+    try {
+      const token = await getValidTempoAccessToken();
+      const response = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) {
+        return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected [OAuth]' };
+      }
+      return {
+        name: 'Tempo',
+        configured: true,
+        status: 'error',
+        message: `OAuth HTTP ${response.status}`,
+      };
+    } catch (err) {
+      return {
+        name: 'Tempo',
+        configured: true,
+        status: 'error',
+        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+      };
+    }
+  }
+
   const token = process.env.TEMPO_API_TOKEN;
   if (!token) {
     return { name: 'Tempo', configured: false, status: 'unconfigured' };
@@ -40,7 +69,7 @@ async function checkTempo(): Promise<ApiStatus> {
       signal: AbortSignal.timeout(5000)
     });
     if (response.ok) {
-      return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected' };
+      return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected [Personal Token]' };
     }
     return { name: 'Tempo', configured: true, status: 'error', message: `HTTP ${response.status}` };
   } catch {
@@ -49,6 +78,34 @@ async function checkTempo(): Promise<ApiStatus> {
 }
 
 async function checkJira(): Promise<ApiStatus> {
+  // OAuth 2.0 path takes precedence when configured
+  if (isOAuthConfigured()) {
+    try {
+      const token = await getValidAccessToken();
+      const response = await fetch(`${getJiraOAuthBase()}/rest/api/3/myself`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          name: 'Jira',
+          configured: true,
+          status: 'ok',
+          message: `${data.displayName || 'Connected'} [OAuth]`,
+        };
+      }
+      return { name: 'Jira', configured: true, status: 'error', message: `OAuth HTTP ${response.status}` };
+    } catch (err) {
+      return {
+        name: 'Jira',
+        configured: true,
+        status: 'error',
+        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+      };
+    }
+  }
+
   const email = process.env.JIRA_SERVICE_EMAIL;
   const apiKey = process.env.JIRA_API_KEY;
   const baseUrl = process.env.JIRA_BASE_URL;
@@ -68,7 +125,7 @@ async function checkJira(): Promise<ApiStatus> {
     });
     if (response.ok) {
       const data = await response.json();
-      return { name: 'Jira', configured: true, status: 'ok', message: data.displayName || 'Connected' };
+      return { name: 'Jira', configured: true, status: 'ok', message: `${data.displayName || 'Connected'} [API Token]` };
     }
     return { name: 'Jira', configured: true, status: 'error', message: `HTTP ${response.status}` };
   } catch {

@@ -1,6 +1,17 @@
 // Jira API Client
+// Supports two auth modes (preferred order):
+//   1) OAuth 2.0 (3LO) — Bearer token, base URL https://api.atlassian.com/ex/jira/{cloudid}
+//   2) Basic Auth (legacy scoped API token) — email + token, base URL JIRA_BASE_URL env
 
-const JIRA_BASE_URL = process.env.JIRA_BASE_URL || 'https://beecommerce.atlassian.net';
+import { getJiraOAuthBase, getValidAccessToken, isOAuthConfigured } from './atlassianOAuth';
+
+const JIRA_BASIC_BASE_URL = process.env.JIRA_BASE_URL || 'https://beecommerce.atlassian.net';
+
+/** Resolve the Jira API base URL for the active auth mode. */
+function getJiraApiBase(): string {
+  if (isOAuthConfigured()) return getJiraOAuthBase();
+  return JIRA_BASIC_BASE_URL;
+}
 
 export interface JiraIssue {
   id: string;
@@ -119,8 +130,18 @@ export interface PaginatedSearchResult {
   nextPageToken?: string;
 }
 
-// Get auth header for Jira API
-function getAuthHeader(): HeadersInit {
+// Get auth header for Jira API.
+// Prefers OAuth Bearer when configured; falls back to Basic Auth otherwise.
+async function getAuthHeader(): Promise<HeadersInit> {
+  if (isOAuthConfigured()) {
+    const token = await getValidAccessToken();
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+  }
+
   const email = process.env.JIRA_SERVICE_EMAIL;
   const apiKey = process.env.JIRA_API_KEY;
 
@@ -132,7 +153,7 @@ function getAuthHeader(): HeadersInit {
   return {
     'Authorization': `Basic ${auth}`,
     'Content-Type': 'application/json',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
   };
 }
 
@@ -196,11 +217,11 @@ export async function searchIssues(
   maxResults = 50,
   fields: string[] = JIRA_FIELDS
 ): Promise<JiraSearchResult> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/search/jql`;
+  const url = `${getJiraApiBase()}/rest/api/3/search/jql`;
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     body: JSON.stringify({
       jql,
       maxResults,
@@ -225,7 +246,7 @@ export async function searchIssuesPaginated(
   nextPageToken?: string,
   fields: string[] = JIRA_FIELDS
 ): Promise<PaginatedSearchResult> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/search/jql`;
+  const url = `${getJiraApiBase()}/rest/api/3/search/jql`;
 
   const body: Record<string, unknown> = {
     jql,
@@ -240,7 +261,7 @@ export async function searchIssuesPaginated(
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
   });
@@ -325,10 +346,10 @@ export async function getAllProjectsIssues(maxTotal = 300): Promise<JiraIssue[]>
 
 // Get issue by key
 export async function getIssue(issueKey: string): Promise<JiraIssue> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`;
+  const url = `${getJiraApiBase()}/rest/api/3/issue/${issueKey}`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     signal: AbortSignal.timeout(10000),
   });
 
@@ -376,9 +397,9 @@ export async function ensureIssueTempoAccount(
   issueKey: string,
   tempoAccountId: number,
 ): Promise<{ updated: boolean; reason: string }> {
-  const getUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}?fields=customfield_10048`;
+  const getUrl = `${getJiraApiBase()}/rest/api/3/issue/${issueKey}?fields=customfield_10048`;
   const getRes = await fetch(getUrl, {
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     signal: AbortSignal.timeout(10000),
   });
   if (!getRes.ok) {
@@ -390,10 +411,11 @@ export async function ensureIssueTempoAccount(
     return { updated: false, reason: 'already set' };
   }
 
-  const putUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${issueKey}`;
+  const putUrl = `${getJiraApiBase()}/rest/api/3/issue/${issueKey}`;
+  const putAuth = await getAuthHeader();
   const putRes = await fetch(putUrl, {
     method: 'PUT',
-    headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
+    headers: { ...putAuth, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { customfield_10048: tempoAccountId } }),
     signal: AbortSignal.timeout(10000),
   });
@@ -406,10 +428,10 @@ export async function ensureIssueTempoAccount(
 
 // Get issue key by numeric ID
 export async function getIssueKeyById(issueId: number | string): Promise<string> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/issue/${issueId}?fields=key`;
+  const url = `${getJiraApiBase()}/rest/api/3/issue/${issueId}?fields=key`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     signal: AbortSignal.timeout(10000),
   });
 
@@ -450,10 +472,10 @@ export async function getIssueKeysByIds(issueIds: (number | string)[]): Promise<
 
 // Get current user info
 export async function getCurrentUser(): Promise<JiraUser> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/myself`;
+  const url = `${getJiraApiBase()}/rest/api/3/myself`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     signal: AbortSignal.timeout(10000),
   });
 
@@ -466,10 +488,10 @@ export async function getCurrentUser(): Promise<JiraUser> {
 
 // Get all projects accessible to the user
 export async function getAllProjects(): Promise<JiraProject[]> {
-  const url = `${JIRA_BASE_URL}/rest/api/3/project/search?maxResults=100&orderBy=name`;
+  const url = `${getJiraApiBase()}/rest/api/3/project/search?maxResults=100&orderBy=name`;
 
   const response = await fetch(url, {
-    headers: getAuthHeader(),
+    headers: await getAuthHeader(),
     signal: AbortSignal.timeout(10000),
   });
 

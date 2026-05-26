@@ -162,23 +162,57 @@ After installing the app, open **Settings** (gear icon in the sidebar). You'll s
 
 > **Tip:** every field in the app has an inline **"How to get this?"** help guide next to it. The steps below mirror those guides — use whichever is more convenient.
 
-#### 1. Jira API Key (required)
+#### 1. Atlassian OAuth 2.0 (recommended — covers Jira + Confluence) **OR** API Key (legacy)
 
-You need this for TimeTracker to access your Jira issues.
+You can authenticate to Jira (and Confluence) in two ways. **OAuth 2.0 is recommended** — single Connect button, no email/token to copy around, and it unlocks Confluence R/W (for report exports).
+
+##### Option A — OAuth 2.0 (3LO)
+
+1. Open **https://developer.atlassian.com/console/myapps/** → **Create app** → **OAuth 2.0 integration**.
+2. **Permissions** → add **Jira API** and **Confluence API** → click **Configure** on each → tick the scopes:
+   ```
+   offline_access, read:me, read:jira-work, write:jira-work,
+   read:confluence-space.summary, read:confluence-content.summary,
+   read:confluence-content.all, write:confluence-content, read:confluence-user
+   ```
+3. **Authorization** → Callback URL: `http://localhost:5666/timetracker/api/auth/atlassian/callback`.
+4. Copy **Client ID** and **Client Secret**.
+5. In TimeTracker **Settings** → section **Atlassian OAuth 2.0** → paste Client ID/Secret + Site URL (e.g. `https://yourcompany.atlassian.net`) → click **Save & Connect**.
+6. Atlassian asks for consent → **Accept** → you land back on Settings with a green "Połączono" badge.
+
+##### Option B — Legacy API Token (Basic Auth)
+
+You need this for TimeTracker to access your Jira issues without OAuth.
 
 1. Open this link in your browser: **https://id.atlassian.com/manage-profile/security/api-tokens**
 2. Log in with your Atlassian account (the same one you use for Jira)
 3. Click the blue **"Create API token"** button
 4. In the popup, type a label like `TimeTracker` and click **Create**
 5. **Copy the token** (click the copy icon — you won't be able to see it again!)
-6. Go back to TimeTracker **Settings** and paste it into the **Jira API Key** field
+6. Go back to TimeTracker **Settings** → section **Jira API (legacy)** → paste it into the **Jira API Key** field
 7. Also fill in:
    - **Jira Base URL** — your company's Jira address, e.g. `https://yourcompany.atlassian.net`
-   - **Jira Email** — the email you use to log into Jira
+   - **Jira Email** — the email you use to log into Jira (must be the email of the token's owner)
 
-#### 2. Tempo API Token + Account ID (required)
+#### 2. Tempo OAuth 2.0 (recommended) **OR** Tempo API Token (legacy)
 
-You need these for TimeTracker to read and create worklogs.
+You need this for TimeTracker to read and create worklogs.
+
+> **Note:** Tempo OAuth is a **separate** auth system from Atlassian OAuth — you register a separate app inside the Tempo plugin (not on developer.atlassian.com).
+
+##### Option A — Tempo OAuth 2.0 (3LO)
+
+Requires Tempo Admin + Jira Admin permissions to register the app (once).
+
+1. In Jira open **Apps → Tempo → Settings → Data Access → OAuth 2.0 Applications**.
+2. Click **New Application** → choose **Authorization Code Grant**.
+3. Redirect URI: `http://localhost:5666/timetracker/api/auth/tempo/callback`.
+4. Scopes (matrix): **Worklogs: Manage**, **Work attributes: View**, **Accounts: View**.
+5. Copy **Client ID** and **Client Secret**.
+6. In TimeTracker **Settings** → section **Tempo OAuth 2.0** → paste Client ID/Secret + Jira Site URL → click **Save & Connect**.
+7. Consent → **Accept** → land back on Settings with "Połączono" badge.
+
+##### Option B — Legacy Personal Token
 
 **Tempo API Token:**
 

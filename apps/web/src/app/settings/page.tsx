@@ -220,7 +220,35 @@ export default function SettingsPage() {
     gitAuthorFilter: '',
     githubToken: '',
     aiProvider: 'gemini' as 'gemini' | 'openrouter',
+    // Atlassian OAuth 2.0 — alternative to Basic Auth for Jira + enables Confluence
+    atlassianClientId: '',
+    atlassianClientSecret: '',
+    atlassianSiteUrl: '',
+    atlassianRedirectUri: '',
+    tempoOauthClientId: '',
+    tempoOauthClientSecret: '',
+    tempoOauthSiteUrl: '',
+    tempoOauthRedirectUri: '',
   });
+  const [oauthStatus, setOauthStatus] = useState<{
+    connected: boolean;
+    userEmail: string | null;
+    userName: string | null;
+    expiresAt: string | null;
+    cloudId: string | null;
+    scopes: string | null;
+  }>({ connected: false, userEmail: null, userName: null, expiresAt: null, cloudId: null, scopes: null });
+  const [tempoOauthStatus, setTempoOauthStatus] = useState<{
+    connected: boolean;
+    expiresAt: string | null;
+    scopes: string | null;
+  }>({ connected: false, expiresAt: null, scopes: null });
+  const [oauthBanner, setOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [tempoOauthBanner, setTempoOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [connectingOauth, setConnectingOauth] = useState(false);
+  const [disconnectingOauth, setDisconnectingOauth] = useState(false);
+  const [connectingTempoOauth, setConnectingTempoOauth] = useState(false);
+  const [disconnectingTempoOauth, setDisconnectingTempoOauth] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
@@ -229,6 +257,34 @@ export default function SettingsPage() {
   useEffect(() => {
     loadAllData();
     checkForUpdates();
+  }, []);
+
+  // Pick up Atlassian + Tempo OAuth callback feedback from URL
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const atlassianStatus = params.get('atlassian');
+    const tempoStatus = params.get('tempo');
+
+    if (atlassianStatus === 'connected') {
+      setOauthBanner({ type: 'success', msg: 'Połączono z Atlassian Cloud przez OAuth 2.0.' });
+    } else if (atlassianStatus === 'error') {
+      const msg = params.get('msg') || 'Nieznany błąd autoryzacji.';
+      setOauthBanner({ type: 'error', msg: `Atlassian OAuth nie powiodło się: ${msg}` });
+    }
+
+    if (tempoStatus === 'connected') {
+      setTempoOauthBanner({ type: 'success', msg: 'Połączono z Tempo Cloud przez OAuth 2.0.' });
+    } else if (tempoStatus === 'error') {
+      const msg = params.get('msg') || 'Nieznany błąd autoryzacji.';
+      setTempoOauthBanner({ type: 'error', msg: `Tempo OAuth nie powiodło się: ${msg}` });
+    }
+
+    if (atlassianStatus || tempoStatus) {
+      const url = new URL(window.location.href);
+      url.search = '';
+      window.history.replaceState({}, '', url.toString());
+    }
   }, []);
 
   const loadAllData = useCallback(async () => {
@@ -282,6 +338,27 @@ export default function SettingsPage() {
           gitAuthorFilter: settings.gitAuthorFilter || '',
           githubToken: settings.githubToken || '',
           aiProvider: settings.aiProvider || 'gemini',
+          atlassianClientId: settings.atlassianClientId || '',
+          atlassianClientSecret: settings.atlassianClientSecret || '',
+          atlassianSiteUrl: settings.atlassianSiteUrl || 'https://beecommerce.atlassian.net',
+          atlassianRedirectUri: settings.atlassianRedirectUri || '',
+          tempoOauthClientId: settings.tempoOauthClientId || '',
+          tempoOauthClientSecret: settings.tempoOauthClientSecret || '',
+          tempoOauthSiteUrl: settings.tempoOauthSiteUrl || settings.atlassianSiteUrl || 'https://beecommerce.atlassian.net',
+          tempoOauthRedirectUri: settings.tempoOauthRedirectUri || '',
+        });
+        setOauthStatus({
+          connected: !!settings.oauthConnected,
+          userEmail: settings.oauthUserEmail || null,
+          userName: settings.oauthUserName || null,
+          expiresAt: settings.oauthExpiresAt || null,
+          cloudId: settings.oauthCloudId || null,
+          scopes: settings.oauthScopes || null,
+        });
+        setTempoOauthStatus({
+          connected: !!settings.tempoOauthConnected,
+          expiresAt: settings.tempoOauthExpiresAt || null,
+          scopes: settings.tempoOauthScopes || null,
         });
       }
     } catch (error) {
@@ -387,6 +464,155 @@ export default function SettingsPage() {
     } catch {
       setUpdateStatus('error');
       setUpdateError('Nie udalo sie uruchomic instalatora');
+    }
+  };
+
+  /**
+   * Atlassian OAuth — Connect: save client_id/secret/site_url, then redirect to /start
+   * which will redirect to Atlassian consent screen. After the user accepts,
+   * Atlassian redirects to /callback which persists tokens and bounces back here.
+   */
+  const handleAtlassianConnect = async () => {
+    if (!apiConfig.atlassianClientId || !apiConfig.atlassianClientSecret) {
+      setOauthBanner({ type: 'error', msg: 'Wypełnij Client ID i Client Secret przed połączeniem.' });
+      return;
+    }
+    setConnectingOauth(true);
+    setOauthBanner(null);
+    try {
+      // Persist client_id/secret/site_url BEFORE redirect (callback handler reads from env)
+      const saveRes = await fetch(apiUrl('/api/settings'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          atlassianClientId: apiConfig.atlassianClientId,
+          atlassianClientSecret: apiConfig.atlassianClientSecret,
+          atlassianSiteUrl: apiConfig.atlassianSiteUrl || 'https://beecommerce.atlassian.net',
+          atlassianRedirectUri:
+            apiConfig.atlassianRedirectUri ||
+            `${window.location.origin}/timetracker/api/auth/atlassian/callback`,
+        }),
+      });
+      if (!saveRes.ok) {
+        const data = await saveRes.json().catch(() => ({}));
+        setOauthBanner({ type: 'error', msg: `Nie udało się zapisać konfiguracji: ${data.error || saveRes.status}` });
+        setConnectingOauth(false);
+        return;
+      }
+      // Now jump into the OAuth flow — browser will land back on /settings via callback.
+      window.location.href = apiUrl('/api/auth/atlassian/start');
+    } catch (err) {
+      setOauthBanner({
+        type: 'error',
+        msg: `Błąd: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+      setConnectingOauth(false);
+    }
+  };
+
+  const handleTempoConnect = async () => {
+    if (
+      !apiConfig.tempoOauthClientId ||
+      !apiConfig.tempoOauthClientSecret ||
+      !apiConfig.tempoOauthSiteUrl
+    ) {
+      setTempoOauthBanner({
+        type: 'error',
+        msg: 'Wypełnij Client ID, Client Secret i Site URL (Jira tenant) przed połączeniem.',
+      });
+      return;
+    }
+    setConnectingTempoOauth(true);
+    setTempoOauthBanner(null);
+    try {
+      const saveRes = await fetch(apiUrl('/api/settings'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tempoOauthClientId: apiConfig.tempoOauthClientId,
+          tempoOauthClientSecret: apiConfig.tempoOauthClientSecret,
+          tempoOauthSiteUrl: apiConfig.tempoOauthSiteUrl,
+          tempoOauthRedirectUri:
+            apiConfig.tempoOauthRedirectUri ||
+            `${window.location.origin}/timetracker/api/auth/tempo/callback`,
+        }),
+      });
+      if (!saveRes.ok) {
+        const data = await saveRes.json().catch(() => ({}));
+        setTempoOauthBanner({
+          type: 'error',
+          msg: `Nie udało się zapisać konfiguracji: ${data.error || saveRes.status}`,
+        });
+        setConnectingTempoOauth(false);
+        return;
+      }
+      window.location.href = apiUrl('/api/auth/tempo/start');
+    } catch (err) {
+      setTempoOauthBanner({
+        type: 'error',
+        msg: `Błąd: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+      setConnectingTempoOauth(false);
+    }
+  };
+
+  const handleTempoDisconnect = async () => {
+    if (!confirm('Rozłączyć Tempo OAuth? Tokeny zostaną usunięte (Client ID/Secret pozostaną).')) {
+      return;
+    }
+    setDisconnectingTempoOauth(true);
+    setTempoOauthBanner(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/tempo/disconnect'), { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setTempoOauthBanner({
+          type: 'error',
+          msg: `Disconnect nie powiódł się: ${data.error || res.status}`,
+        });
+      } else {
+        setTempoOauthStatus({ connected: false, expiresAt: null, scopes: null });
+        setTempoOauthBanner({ type: 'success', msg: 'Rozłączono Tempo OAuth.' });
+      }
+    } catch (err) {
+      setTempoOauthBanner({
+        type: 'error',
+        msg: `Błąd sieci: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+    } finally {
+      setDisconnectingTempoOauth(false);
+    }
+  };
+
+  const handleAtlassianDisconnect = async () => {
+    if (!confirm('Rozłączyć Atlassian OAuth? Tokeny zostaną usunięte (Client ID/Secret pozostaną).')) {
+      return;
+    }
+    setDisconnectingOauth(true);
+    setOauthBanner(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/atlassian/disconnect'), { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setOauthBanner({ type: 'error', msg: `Disconnect nie powiódł się: ${data.error || res.status}` });
+      } else {
+        setOauthStatus({
+          connected: false,
+          userEmail: null,
+          userName: null,
+          expiresAt: null,
+          cloudId: null,
+          scopes: null,
+        });
+        setOauthBanner({ type: 'success', msg: 'Rozłączono Atlassian OAuth.' });
+      }
+    } catch (err) {
+      setOauthBanner({
+        type: 'error',
+        msg: `Błąd sieci: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+    } finally {
+      setDisconnectingOauth(false);
     }
   };
 
@@ -1677,11 +1903,120 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </div>
             )}
 
+            {/* Tempo OAuth 2.0 — alternatywa dla Personal Token */}
+            <div className="space-y-3 p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                  Tempo OAuth 2.0 <span className="text-xs text-purple-600 dark:text-purple-400">(zalecane)</span>
+                </h3>
+                {tempoOauthStatus.connected && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    Połączono
+                  </span>
+                )}
+              </div>
+
+              {tempoOauthBanner && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    tempoOauthBanner.type === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {tempoOauthBanner.msg}
+                </div>
+              )}
+
+              {tempoOauthStatus.connected ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-500 dark:text-gray-400">Access expires:</div>
+                    <div className="text-xs">
+                      {tempoOauthStatus.expiresAt
+                        ? new Date(tempoOauthStatus.expiresAt).toLocaleString('pl')
+                        : '—'}
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Scopes:</div>
+                    <div className="text-xs font-mono break-all">{tempoOauthStatus.scopes || '—'}</div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleTempoConnect}
+                      disabled={connectingTempoOauth}
+                    >
+                      {connectingTempoOauth ? 'Łączenie...' : 'Reconnect'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleTempoDisconnect}
+                      disabled={disconnectingTempoOauth}
+                    >
+                      {disconnectingTempoOauth ? 'Rozłączanie...' : 'Disconnect'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Client ID</label>
+                      <Input
+                        placeholder="z Tempo → Settings → OAuth Apps"
+                        value={apiConfig.tempoOauthClientId}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, tempoOauthClientId: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Client Secret</label>
+                      <Input
+                        type="password"
+                        placeholder="Client Secret"
+                        value={apiConfig.tempoOauthClientSecret}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, tempoOauthClientSecret: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Jira Site URL</label>
+                      <Input
+                        placeholder="https://your-company.atlassian.net"
+                        value={apiConfig.tempoOauthSiteUrl}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, tempoOauthSiteUrl: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={handleTempoConnect} disabled={connectingTempoOauth}>
+                    {connectingTempoOauth ? 'Łączenie...' : 'Save & Connect'}
+                  </Button>
+                </>
+              )}
+
+              <HelpGuide title="Jak skonfigurować Tempo OAuth 2.0?">
+                <p>Tempo OAuth to <strong>osobny system</strong> niż Atlassian OAuth — własna rejestracja aplikacji w panelu Tempo (nie w developer.atlassian.com).</p>
+                <p>1. W Jirze otwórz <strong>Apps → Tempo → Settings → Data Access → OAuth 2.0 Applications</strong></p>
+                <p>2. Kliknij <strong>New Application</strong> → wybierz <strong>Authorization Code Grant</strong></p>
+                <p>3. Redirect URI: <code className="text-xs">http://localhost:5666/timetracker/api/auth/tempo/callback</code></p>
+                <p>4. Scopes (matrix): zaznacz <strong>Worklogs: Manage</strong>, <strong>Work attributes: View</strong>, <strong>Accounts: View</strong></p>
+                <p>5. Skopiuj Client ID i Client Secret → wpisz wyżej + Site URL (Jira tenant) → <strong>Save &amp; Connect</strong></p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">Wymaga roli: Tempo Admin + Jira Admin (do rejestracji aplikacji). Sam OAuth login działa dla każdego użytkownika.</p>
+              </HelpGuide>
+            </div>
+
             {/* Tempo Configuration */}
             <div className="space-y-3">
               <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                Tempo API
+                Tempo API <span className="text-xs text-gray-500 dark:text-gray-400">(legacy — Personal Token)</span>
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1717,11 +2052,124 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </HelpGuide>
             </div>
 
+            {/* Atlassian OAuth 2.0 — alternatywa dla Basic Auth + Confluence R/W */}
+            <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  Atlassian OAuth 2.0 <span className="text-xs text-blue-600 dark:text-blue-400">(zalecane — Jira + Confluence)</span>
+                </h3>
+                {oauthStatus.connected && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    Połączono
+                  </span>
+                )}
+              </div>
+
+              {oauthBanner && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    oauthBanner.type === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {oauthBanner.msg}
+                </div>
+              )}
+
+              {oauthStatus.connected ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-500 dark:text-gray-400">User:</div>
+                    <div className="font-medium">
+                      {oauthStatus.userName || '—'}{' '}
+                      <span className="text-gray-500 dark:text-gray-400">({oauthStatus.userEmail || '—'})</span>
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Cloud ID:</div>
+                    <div className="font-mono text-xs">{oauthStatus.cloudId || '—'}</div>
+                    <div className="text-gray-500 dark:text-gray-400">Access expires:</div>
+                    <div className="text-xs">
+                      {oauthStatus.expiresAt ? new Date(oauthStatus.expiresAt).toLocaleString('pl') : '—'}
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Scopes:</div>
+                    <div className="text-xs font-mono break-all">{oauthStatus.scopes || '—'}</div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAtlassianConnect}
+                      disabled={connectingOauth}
+                    >
+                      {connectingOauth ? 'Łączenie...' : 'Reconnect'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleAtlassianDisconnect}
+                      disabled={disconnectingOauth}
+                    >
+                      {disconnectingOauth ? 'Rozłączanie...' : 'Disconnect'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Client ID</label>
+                      <Input
+                        placeholder="z developer.atlassian.com"
+                        value={apiConfig.atlassianClientId}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, atlassianClientId: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Client Secret</label>
+                      <Input
+                        type="password"
+                        placeholder="Client Secret"
+                        value={apiConfig.atlassianClientSecret}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, atlassianClientSecret: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Site URL</label>
+                      <Input
+                        placeholder="https://your-company.atlassian.net"
+                        value={apiConfig.atlassianSiteUrl}
+                        onChange={(e) =>
+                          setApiConfig({ ...apiConfig, atlassianSiteUrl: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={handleAtlassianConnect} disabled={connectingOauth}>
+                    {connectingOauth ? 'Łączenie...' : 'Save & Connect'}
+                  </Button>
+                </>
+              )}
+
+              <HelpGuide title="Jak skonfigurować OAuth 2.0?">
+                <p>1. Otwórz <strong>https://developer.atlassian.com/console/myapps/</strong> → <strong>Create app</strong> → <strong>OAuth 2.0 integration</strong></p>
+                <p>2. <strong>Permissions</strong> → dodaj <strong>Jira API</strong> + <strong>Confluence API</strong> → Configure → zaznacz scope&apos;y:</p>
+                <p className="pl-3 font-mono text-xs break-all">offline_access, read:me, read:jira-work, write:jira-work, read:confluence-space.summary, read:confluence-content.summary, read:confluence-content.all, write:confluence-content, read:confluence-user</p>
+                <p>3. <strong>Authorization</strong> → Callback URL: <code className="text-xs">http://localhost:5666/timetracker/api/auth/atlassian/callback</code></p>
+                <p>4. Skopiuj <strong>Client ID</strong> i <strong>Client Secret</strong>, wpisz wyżej i kliknij <strong>Save &amp; Connect</strong></p>
+                <p>5. Atlassian zapyta o zgodę na uprawnienia → <strong>Accept</strong> → wrócisz tutaj jako &quot;Connected&quot;</p>
+              </HelpGuide>
+            </div>
+
             {/* Jira Configuration */}
             <div className="space-y-3">
               <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                Jira API
+                Jira API <span className="text-xs text-gray-500 dark:text-gray-400">(legacy — Basic Auth z API tokenem)</span>
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 <div>

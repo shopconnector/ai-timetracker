@@ -3,6 +3,17 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { getGithubUser } from '@/lib/github';
+import {
+  getJiraOAuthBase,
+  getValidAccessToken,
+  isOAuthConfigured,
+  loadOAuthEnv,
+} from '@/lib/atlassianOAuth';
+import {
+  getValidTempoAccessToken,
+  isTempoOAuthConfigured,
+  loadTempoOAuthEnv,
+} from '@/lib/tempoOAuth';
 
 /**
  * Detect the correct .env.local path.
@@ -86,6 +97,23 @@ function jiraErrorMessage(status: number, body: string): string {
   return `Błąd HTTP ${status}${excerpt}`;
 }
 
+function jiraOAuthErrorMessage(status: number, body: string): string {
+  if (status === 401) {
+    return (
+      'OAuth 401: Access token wygasł i refresh się nie udał. ' +
+      'Kliknij "Reconnect" w Settings → Jira API → OAuth.'
+    );
+  }
+  if (status === 403) {
+    return (
+      'OAuth 403: Brakuje scope\'u w tokenie. ' +
+      'Kliknij "Reconnect" i zatwierdź wszystkie uprawnienia w Atlassianie.'
+    );
+  }
+  const excerpt = body ? ` (${body.slice(0, 120)})` : '';
+  return `OAuth HTTP ${status}${excerpt}`;
+}
+
 function tempoErrorMessage(status: number, body: string): string {
   if (status === 401) {
     return (
@@ -144,6 +172,8 @@ export async function GET() {
     const projectsRoot = process.env.PROJECTS_ROOT;
     const gitAuthorFilter = process.env.GIT_AUTHOR_FILTER;
     const githubToken = process.env.GITHUB_TOKEN;
+    const oauth = loadOAuthEnv();
+    const tempoOauth = loadTempoOAuthEnv();
 
     return NextResponse.json({
       // API Config (masked)
@@ -171,6 +201,27 @@ export async function GET() {
       hasGitConfig: !!projectsRoot,
       hasGithubApiConfig: !!githubToken,
 
+      // Atlassian OAuth 2.0 (3LO) — alternative to JIRA_API_KEY Basic Auth
+      atlassianClientId: oauth.clientId || null,
+      atlassianClientSecret: oauth.clientSecret ? '••••••••' : null,
+      atlassianSiteUrl: oauth.siteUrl,
+      atlassianRedirectUri: oauth.redirectUri,
+      oauthConnected: isOAuthConfigured(),
+      oauthUserEmail: oauth.userEmail || null,
+      oauthUserName: oauth.userName || null,
+      oauthExpiresAt: oauth.expiresAt || null,
+      oauthCloudId: oauth.cloudId || null,
+      oauthScopes: oauth.scopes || null,
+
+      // Tempo OAuth 2.0 (separate from Atlassian — Tempo has its own auth system)
+      tempoOauthClientId: tempoOauth.clientId || null,
+      tempoOauthClientSecret: tempoOauth.clientSecret ? '••••••••' : null,
+      tempoOauthSiteUrl: tempoOauth.siteUrl || null,
+      tempoOauthRedirectUri: tempoOauth.redirectUri,
+      tempoOauthConnected: isTempoOAuthConfigured(),
+      tempoOauthExpiresAt: tempoOauth.expiresAt || null,
+      tempoOauthScopes: tempoOauth.scopes || null,
+
       // Diagnostics — helps users see WHERE we're reading/writing
       envFilePath: getEnvFilePath(),
       dataDir: process.env.TIMETRACKER_DATA_DIR || null,
@@ -194,50 +245,70 @@ export async function POST(request: Request) {
 
     const results: Record<string, { success: boolean; message: string }> = {};
 
-    // Test Tempo API
+    // Test Tempo API — OAuth 2.0 first if configured, else personal token (Bearer)
     if (testType === 'tempo' || testType === 'all') {
-      const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
-      const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
-
-      if (tempoApiToken && tempoAccountId) {
+      if (isTempoOAuthConfigured()) {
         try {
+          const accessToken = await getValidTempoAccessToken();
           const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
             headers: {
-              'Authorization': `Bearer ${tempoApiToken}`,
+              Authorization: `Bearer ${accessToken}`,
               'Content-Type': 'application/json',
             },
             signal: AbortSignal.timeout(5000),
           });
           if (res.ok) {
-            results.tempo = { success: true, message: 'Połączono z Tempo API' };
+            results.tempo = { success: true, message: 'Połączono z Tempo API [OAuth]' };
           } else {
             const bodyText = await res.text().catch(() => '');
             results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
           }
         } catch (e) {
-          results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
+          results.tempo = {
+            success: false,
+            message: `Błąd Tempo OAuth: ${e instanceof Error ? e.message : String(e)}`,
+          };
         }
       } else {
-        results.tempo = {
-          success: false,
-          message: 'Brak konfiguracji Tempo (wymagane: TEMPO_API_TOKEN i TEMPO_ACCOUNT_ID)',
-        };
+        const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
+        const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
+
+        if (tempoApiToken && tempoAccountId) {
+          try {
+            const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
+              headers: {
+                'Authorization': `Bearer ${tempoApiToken}`,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (res.ok) {
+              results.tempo = { success: true, message: 'Połączono z Tempo API [Personal Token]' };
+            } else {
+              const bodyText = await res.text().catch(() => '');
+              results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
+            }
+          } catch (e) {
+            results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
+          }
+        } else {
+          results.tempo = {
+            success: false,
+            message: 'Brak konfiguracji Tempo (OAuth lub TEMPO_API_TOKEN+TEMPO_ACCOUNT_ID)',
+          };
+        }
       }
     }
 
-    // Test Jira API
+    // Test Jira API — OAuth 2.0 first if configured, else Basic Auth
     if (testType === 'jira' || testType === 'all') {
-      const jiraBaseUrl = normalizeBaseUrl(pickCred(credentials.jiraBaseUrl, process.env.JIRA_BASE_URL));
-      const jiraApiToken = pickCred(credentials.jiraApiToken, process.env.JIRA_API_KEY);
-      const jiraEmail = pickCred(credentials.jiraEmail, process.env.JIRA_SERVICE_EMAIL);
-
-      if (jiraBaseUrl && jiraApiToken && jiraEmail) {
+      if (isOAuthConfigured()) {
         try {
-          const credentialsB64 = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64');
-          const res = await fetch(`${jiraBaseUrl}/rest/api/3/myself`, {
+          const accessToken = await getValidAccessToken();
+          const res = await fetch(`${getJiraOAuthBase()}/rest/api/3/myself`, {
             headers: {
-              'Authorization': `Basic ${credentialsB64}`,
-              'Accept': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              Accept: 'application/json',
             },
             signal: AbortSignal.timeout(5000),
           });
@@ -245,21 +316,53 @@ export async function POST(request: Request) {
             const data = await res.json();
             results.jira = {
               success: true,
-              message: `Połączono jako: ${data.displayName} (${data.emailAddress || jiraEmail})`,
+              message: `Połączono jako: ${data.displayName} (${data.emailAddress}) [OAuth]`,
             };
           } else {
             const bodyText = await res.text().catch(() => '');
-            results.jira = { success: false, message: jiraErrorMessage(res.status, bodyText) };
+            results.jira = { success: false, message: jiraOAuthErrorMessage(res.status, bodyText) };
           }
         } catch (e) {
-          results.jira = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
+          results.jira = {
+            success: false,
+            message: `Błąd OAuth: ${e instanceof Error ? e.message : String(e)}`,
+          };
         }
       } else {
-        const missing = [];
-        if (!jiraBaseUrl) missing.push('Base URL');
-        if (!jiraEmail) missing.push('Email');
-        if (!jiraApiToken) missing.push('API Token');
-        results.jira = { success: false, message: `Brak konfiguracji Jira (wymagane: ${missing.join(', ')})` };
+        const jiraBaseUrl = normalizeBaseUrl(pickCred(credentials.jiraBaseUrl, process.env.JIRA_BASE_URL));
+        const jiraApiToken = pickCred(credentials.jiraApiToken, process.env.JIRA_API_KEY);
+        const jiraEmail = pickCred(credentials.jiraEmail, process.env.JIRA_SERVICE_EMAIL);
+
+        if (jiraBaseUrl && jiraApiToken && jiraEmail) {
+          try {
+            const credentialsB64 = Buffer.from(`${jiraEmail}:${jiraApiToken}`).toString('base64');
+            const res = await fetch(`${jiraBaseUrl}/rest/api/3/myself`, {
+              headers: {
+                'Authorization': `Basic ${credentialsB64}`,
+                'Accept': 'application/json',
+              },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              results.jira = {
+                success: true,
+                message: `Połączono jako: ${data.displayName} (${data.emailAddress || jiraEmail}) [API Token]`,
+              };
+            } else {
+              const bodyText = await res.text().catch(() => '');
+              results.jira = { success: false, message: jiraErrorMessage(res.status, bodyText) };
+            }
+          } catch (e) {
+            results.jira = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
+          }
+        } else {
+          const missing = [];
+          if (!jiraBaseUrl) missing.push('Base URL');
+          if (!jiraEmail) missing.push('Email');
+          if (!jiraApiToken) missing.push('API Token');
+          results.jira = { success: false, message: `Brak konfiguracji Jira (wymagane: ${missing.join(', ')})` };
+        }
       }
     }
 
@@ -413,6 +516,14 @@ const FIELD_TO_ENV: Record<string, string> = {
   projectsRoot: 'PROJECTS_ROOT',
   gitAuthorFilter: 'GIT_AUTHOR_FILTER',
   githubToken: 'GITHUB_TOKEN',
+  atlassianClientId: 'ATLASSIAN_OAUTH_CLIENT_ID',
+  atlassianClientSecret: 'ATLASSIAN_OAUTH_CLIENT_SECRET',
+  atlassianSiteUrl: 'ATLASSIAN_OAUTH_SITE_URL',
+  atlassianRedirectUri: 'ATLASSIAN_OAUTH_REDIRECT_URI',
+  tempoOauthClientId: 'TEMPO_OAUTH_CLIENT_ID',
+  tempoOauthClientSecret: 'TEMPO_OAUTH_CLIENT_SECRET',
+  tempoOauthSiteUrl: 'TEMPO_OAUTH_SITE_URL',
+  tempoOauthRedirectUri: 'TEMPO_OAUTH_REDIRECT_URI',
 };
 
 // Section comments for env file organization
@@ -430,6 +541,14 @@ const ENV_SECTIONS: Record<string, string> = {
   PROJECTS_ROOT: '# Git / Activity',
   GIT_AUTHOR_FILTER: '# Git / Activity',
   GITHUB_TOKEN: '# GitHub API (Personal Access Token, scope: repo or public_repo)',
+  ATLASSIAN_OAUTH_CLIENT_ID: '# Atlassian OAuth 2.0',
+  ATLASSIAN_OAUTH_CLIENT_SECRET: '# Atlassian OAuth 2.0',
+  ATLASSIAN_OAUTH_SITE_URL: '# Atlassian OAuth 2.0',
+  ATLASSIAN_OAUTH_REDIRECT_URI: '# Atlassian OAuth 2.0',
+  TEMPO_OAUTH_CLIENT_ID: '# Tempo OAuth 2.0',
+  TEMPO_OAUTH_CLIENT_SECRET: '# Tempo OAuth 2.0',
+  TEMPO_OAUTH_SITE_URL: '# Tempo OAuth 2.0',
+  TEMPO_OAUTH_REDIRECT_URI: '# Tempo OAuth 2.0',
 };
 
 // PUT /api/settings - Save settings to .env.local
@@ -466,13 +585,16 @@ export async function PUT(request: Request) {
       // Skip masked values — don't overwrite real keys with placeholders
       if (typeof value === 'string' && value.includes('••')) continue;
       // Skip empty strings for token/key fields (don't clear existing keys)
-      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken', 'githubToken'].includes(field);
+      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken', 'githubToken', 'atlassianClientSecret', 'tempoOauthClientSecret'].includes(field);
       if (isSecretField && value === '') continue;
       // Skip aiProvider — it's derived, not stored
       if (field === 'aiProvider') continue;
 
       // Normalize URLs — strip trailing slash so fetch builds clean paths
-      if (field === 'jiraBaseUrl' && typeof value === 'string') {
+      if (
+        (field === 'jiraBaseUrl' || field === 'atlassianSiteUrl' || field === 'tempoOauthSiteUrl') &&
+        typeof value === 'string'
+      ) {
         value = normalizeBaseUrl(value) ?? value;
       }
 
