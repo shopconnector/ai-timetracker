@@ -1,16 +1,13 @@
 // AI TimeTracker start-server.js (macOS)
-// Loads env vars from ~/.timetracker/.env.local before starting Next.js server.
+// Loads env vars in priority order:
+//   1. .env.production from the bundle (baked-in defaults — OAuth client secrets etc.)
+//   2. ~/.timetracker/.env.local (user-specific overrides — Jira creds, etc.)
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = process.env.TIMETRACKER_DATA_DIR || path.join(require('os').homedir(), '.timetracker');
-// Export so the Next.js process (settings PUT) writes back to the SAME file we read from.
-// Without this, UI saves to process.cwd()/.env.local which is never read by start-server.
-process.env.TIMETRACKER_DATA_DIR = dataDir;
-const envFile = path.join(dataDir, '.env.local');
-
-if (fs.existsSync(envFile)) {
-  const lines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
+function loadEnvFile(filePath, overwrite) {
+  if (!fs.existsSync(filePath)) return 0;
+  const lines = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
   let loaded = 0;
   for (const line of lines) {
     const trimmed = line.trim();
@@ -22,16 +19,35 @@ if (fs.existsSync(envFile)) {
       if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
-      if (val) {
+      if (val && (overwrite || !process.env[key])) {
         process.env[key] = val;
         loaded++;
       }
     }
   }
-  console.log(`[start-server] Loaded ${loaded} env vars from ${envFile}`);
+  return loaded;
+}
+
+// 1. Bundle defaults from .env.production (do NOT overwrite anything already set)
+const bundleEnvFile = path.join(__dirname, 'app', 'apps', 'web', '.env.production');
+const bundleLoaded = loadEnvFile(bundleEnvFile, false);
+if (bundleLoaded > 0) {
+  console.log(`[start-server] Loaded ${bundleLoaded} baked env vars from ${bundleEnvFile}`);
 } else {
-  console.log(`[start-server] No ${envFile} found — using system env vars only`);
-  console.log('[start-server] First run? Configure your API tokens in ~/.timetracker/.env.local');
+  console.log(`[start-server] No ${bundleEnvFile} (or empty)`);
+}
+
+// 2. User overrides from ~/.timetracker/.env.local
+const dataDir = process.env.TIMETRACKER_DATA_DIR || path.join(require('os').homedir(), '.timetracker');
+// Export so the Next.js process (settings PUT) writes back to the SAME file we read from.
+process.env.TIMETRACKER_DATA_DIR = dataDir;
+const userEnvFile = path.join(dataDir, '.env.local');
+const userLoaded = loadEnvFile(userEnvFile, true);
+if (userLoaded > 0) {
+  console.log(`[start-server] Loaded ${userLoaded} user env vars from ${userEnvFile}`);
+} else if (!fs.existsSync(userEnvFile)) {
+  console.log(`[start-server] No ${userEnvFile} found — using bundle defaults + system env only`);
+  console.log('[start-server] First run? Click Connect with Atlassian/Tempo in Settings to authenticate.');
 }
 
 // Log Jira config status

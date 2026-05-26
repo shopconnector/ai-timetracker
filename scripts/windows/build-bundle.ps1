@@ -141,23 +141,18 @@ New-Item -ItemType Directory -Path "$OutputDir\data" -Force | Out-Null
 # Copy env example
 Copy-Item ".env.example" "$OutputDir\data\.env.example"
 
-# Create start-server.js (loads .env.local from Node.js side — reliable cross-platform)
+# Create start-server.js (loads .env files from Node.js side — reliable cross-platform)
 $StartServerContent = @'
 // TimeTracker start-server.js
-// Loads env vars from data\.env.local before starting the Next.js server.
-// This replaces the fragile batch-file env parser that broke on Windows
-// with values containing special characters or empty values.
+// Loads env vars in priority order:
+//   1. .env.production from the bundle (baked-in defaults — OAuth client secrets etc.)
+//   2. data\.env.local (user-specific overrides)
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data');
-// Export so the Next.js process (settings PUT) writes back to the SAME file we read from.
-// Without this, the UI may write to process.cwd()/.env.local instead of data/.env.local
-// and tokens "disappear" after restart.
-process.env.TIMETRACKER_DATA_DIR = dataDir;
-const envFile = path.join(dataDir, '.env.local');
-if (fs.existsSync(envFile)) {
-  const lines = fs.readFileSync(envFile, 'utf-8').split(/\r?\n/);
+function loadEnvFile(filePath, overwrite) {
+  if (!fs.existsSync(filePath)) return 0;
+  const lines = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
   let loaded = 0;
   for (const line of lines) {
     const trimmed = line.trim();
@@ -166,19 +161,34 @@ if (fs.existsSync(envFile)) {
     if (eqIdx > 0) {
       const key = trimmed.substring(0, eqIdx).trim();
       let val = trimmed.substring(eqIdx + 1).trim();
-      // Strip surrounding quotes if present
       if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
         val = val.slice(1, -1);
       }
-      if (val) {
+      if (val && (overwrite || !process.env[key])) {
         process.env[key] = val;
         loaded++;
       }
     }
   }
-  console.log(`[start-server] Loaded ${loaded} env vars from data/.env.local`);
-} else {
-  console.log('[start-server] No data/.env.local found — using system env vars only');
+  return loaded;
+}
+
+// 1. Bundle defaults from .env.production (do NOT overwrite anything already set)
+const bundleEnvFile = path.join(__dirname, 'app', 'apps', 'web', '.env.production');
+const bundleLoaded = loadEnvFile(bundleEnvFile, false);
+if (bundleLoaded > 0) {
+  console.log(`[start-server] Loaded ${bundleLoaded} baked env vars from .env.production`);
+}
+
+// 2. User overrides from data\.env.local
+const dataDir = path.join(__dirname, 'data');
+process.env.TIMETRACKER_DATA_DIR = dataDir;
+const envFile = path.join(dataDir, '.env.local');
+const userLoaded = loadEnvFile(envFile, true);
+if (userLoaded > 0) {
+  console.log(`[start-server] Loaded ${userLoaded} user env vars from data/.env.local`);
+} else if (!fs.existsSync(envFile)) {
+  console.log('[start-server] No data/.env.local found — using bundle defaults + system env only');
 }
 
 // Log Jira config status (helps diagnose "tasks not loading" issues)
