@@ -63,19 +63,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Create .env.production with OAuth secrets
+        shell: pwsh
+        run: |
+          @"
+          ATLASSIAN_OAUTH_CLIENT_SECRET=${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
+          TEMPO_OAUTH_CLIENT_SECRET=${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          "@ | Out-File -FilePath apps/web/.env.production -Encoding utf8
+
       - name: Build application
         run: pnpm build
         env:
-          # Provide dummy env vars for build
           ACTIVITYWATCH_URL: http://localhost:5600
           TEMPO_API_TOKEN: ""
           JIRA_BASE_URL: ""
           JIRA_SERVICE_EMAIL: ""
           JIRA_API_KEY: ""
-          # Atlassian OAuth client_secret — embedded in build via next.config.ts.
           ATLASSIAN_OAUTH_CLIENT_SECRET: ${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
-          # Tempo OAuth client_secret — same pattern.
           TEMPO_OAUTH_CLIENT_SECRET: ${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+
+      - name: Ensure .env.production is in standalone bundle
+        shell: pwsh
+        run: |
+          if (Test-Path apps/web/.env.production) {
+            Copy-Item apps/web/.env.production -Destination apps/web/.next/standalone/apps/web/.env.production -Force
+            Write-Host "Copied .env.production into standalone bundle"
+            Get-Item apps/web/.next/standalone/apps/web/.env.production
+          }
 
       - name: Verify standalone output
         shell: pwsh

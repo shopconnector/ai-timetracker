@@ -78,6 +78,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Create .env.production with OAuth secrets
+        # Next.js standalone build copies .env.production into the bundle, so
+        # server.js reads these via process.env at runtime. Without this file
+        # the downloaded DMG/EXE has no secrets and OAuth callback fails.
+        run: |
+          cat > apps/web/.env.production <<'ENVEOF'
+          ATLASSIAN_OAUTH_CLIENT_SECRET=${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
+          TEMPO_OAUTH_CLIENT_SECRET=${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          ENVEOF
+
       - name: Build application
         run: pnpm build
         env:
@@ -86,11 +96,18 @@ jobs:
           JIRA_BASE_URL: ""
           JIRA_SERVICE_EMAIL: ""
           JIRA_API_KEY: ""
-          # Atlassian OAuth client_secret — embedded in the build via
-          # next.config.ts `env` field. Available to server-only code only.
           ATLASSIAN_OAUTH_CLIENT_SECRET: ${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
-          # Tempo OAuth client_secret — same pattern (server-only embed).
           TEMPO_OAUTH_CLIENT_SECRET: ${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+
+      - name: Ensure .env.production is in standalone bundle
+        # Next.js standalone copies .env.production for some setups but not all.
+        # Force-copy to guarantee server.js will read it at runtime.
+        run: |
+          if [ -f apps/web/.env.production ]; then
+            cp apps/web/.env.production apps/web/.next/standalone/apps/web/.env.production
+            echo "Copied .env.production into standalone bundle"
+            ls -la apps/web/.next/standalone/apps/web/.env.production
+          fi
 
       - name: Verify standalone output
         run: |
