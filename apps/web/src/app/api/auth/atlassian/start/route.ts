@@ -4,7 +4,7 @@ import {
   buildAuthorizationUrl,
   generateCodeChallenge,
   generateCodeVerifier,
-  isOAuthRegistered,
+  loadOAuthEnv,
 } from '@/lib/atlassianOAuth';
 
 const STATE_COOKIE = 'atlassian_oauth_state';
@@ -18,11 +18,19 @@ const STATE_TTL_SECONDS = 5 * 60;
  * derived code_challenge.
  */
 export async function GET() {
-  if (!isOAuthRegistered()) {
+  const env = loadOAuthEnv();
+  const missing: string[] = [];
+  if (!env.clientId) missing.push('ATLASSIAN_OAUTH_CLIENT_ID');
+  if (!env.clientSecret) missing.push('ATLASSIAN_OAUTH_CLIENT_SECRET');
+
+  if (missing.length > 0) {
+    const isSecretOnly = missing.length === 1 && missing[0] === 'ATLASSIAN_OAUTH_CLIENT_SECRET';
     return NextResponse.json(
       {
-        error:
-          'Atlassian OAuth client_id nie skonfigurowany. Zarejestruj OAuth app w developer.atlassian.com i wpisz Client ID w Settings → Atlassian OAuth.',
+        error: isSecretOnly
+          ? 'Brakuje ATLASSIAN_OAUTH_CLIENT_SECRET — dodaj go do apps/web/.env.local (lokalnie) lub do GitHub Actions Secrets jako ATLASSIAN_OAUTH_CLIENT_SECRET (dla build EXE/DMG). Skopiuj wartość z developer.atlassian.com → swoja app → Settings → Authentication details → kliknij View przy Secret.'
+          : `Brakuje konfiguracji OAuth: ${missing.join(', ')}.`,
+        missing,
       },
       { status: 400 },
     );
