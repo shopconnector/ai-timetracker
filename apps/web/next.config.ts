@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BASE_PATH: "/timetracker",
     NEXT_PUBLIC_APP_VERSION: packageJson.version,
+    // Atlassian OAuth client_secret — injected at build time from GitHub Actions secret.
+    // Used ONLY by lib/atlassianOAuth.ts which is imported only by server routes,
+    // so this string does not leak into the client bundle.
+    ATLASSIAN_OAUTH_CLIENT_SECRET: process.env.ATLASSIAN_OAUTH_CLIENT_SECRET || "",
   },
 
   // Standalone output for production deployment without node_modules

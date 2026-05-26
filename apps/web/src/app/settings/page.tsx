@@ -438,45 +438,12 @@ export default function SettingsPage() {
    * which will redirect to Atlassian consent screen. After the user accepts,
    * Atlassian redirects to /callback which persists tokens and bounces back here.
    */
-  const handleAtlassianConnect = async () => {
-    if (!apiConfig.atlassianClientId) {
-      setOauthBanner({
-        type: 'error',
-        msg: 'Brak Client ID. Zarejestruj jednorazowo OAuth app w developer.atlassian.com i wpisz Client ID poniżej.',
-      });
-      return;
-    }
+  const handleAtlassianConnect = () => {
+    // Client ID and secret are embedded in the build (loadOAuthEnv reads defaults
+    // from constants). No UI input needed — just jump straight into the OAuth flow.
     setConnectingOauth(true);
     setOauthBanner(null);
-    try {
-      // Persist client_id/site_url BEFORE redirect (callback handler reads from env).
-      // PKCE flow doesn't use client_secret.
-      const saveRes = await fetch(apiUrl('/api/settings'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          atlassianClientId: apiConfig.atlassianClientId,
-          atlassianSiteUrl: apiConfig.atlassianSiteUrl || 'https://beecommerce.atlassian.net',
-          atlassianRedirectUri:
-            apiConfig.atlassianRedirectUri ||
-            `${window.location.origin}/timetracker/api/auth/atlassian/callback`,
-        }),
-      });
-      if (!saveRes.ok) {
-        const data = await saveRes.json().catch(() => ({}));
-        setOauthBanner({ type: 'error', msg: `Nie udało się zapisać konfiguracji: ${data.error || saveRes.status}` });
-        setConnectingOauth(false);
-        return;
-      }
-      // Now jump into the OAuth flow — browser will land back on /settings via callback.
-      window.location.href = apiUrl('/api/auth/atlassian/start');
-    } catch (err) {
-      setOauthBanner({
-        type: 'error',
-        msg: `Błąd: ${err instanceof Error ? err.message : 'unknown'}`,
-      });
-      setConnectingOauth(false);
-    }
+    window.location.href = apiUrl('/api/auth/atlassian/start');
   };
 
   const handleAtlassianDisconnect = async () => {
@@ -1902,46 +1869,21 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Client ID</label>
-                      <Input
-                        placeholder="z developer.atlassian.com"
-                        value={apiConfig.atlassianClientId}
-                        onChange={(e) =>
-                          setApiConfig({ ...apiConfig, atlassianClientId: e.target.value })
-                        }
-                      />
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                        Wpisz <strong>raz</strong> — Client Secret nie jest potrzebny (PKCE).
-                      </p>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Site URL</label>
-                      <Input
-                        placeholder="https://your-company.atlassian.net"
-                        value={apiConfig.atlassianSiteUrl}
-                        onChange={(e) =>
-                          setApiConfig({ ...apiConfig, atlassianSiteUrl: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Połącz konto Atlassian (Jira + Confluence) jednym kliknięciem.
+                    Client ID i Secret są wbudowane w aplikację — wystarczy zalogować się przez Atlassian.
+                  </p>
                   <Button size="sm" onClick={handleAtlassianConnect} disabled={connectingOauth}>
                     {connectingOauth ? 'Łączenie...' : 'Connect with Atlassian'}
                   </Button>
                 </>
               )}
 
-              <HelpGuide title="Jak skonfigurować OAuth 2.0 (PKCE)?">
-                <p>Jednorazowo (Bartosz) — rejestracja OAuth app w developer.atlassian.com:</p>
-                <p>1. Otwórz <strong>https://developer.atlassian.com/console/myapps/</strong> → <strong>Create app</strong> → <strong>OAuth 2.0 integration</strong></p>
-                <p>2. <strong>Permissions</strong> → dodaj <strong>Jira API</strong>, <strong>Confluence API</strong>, <strong>User identity API</strong> → Configure → zaznacz scope&apos;y:</p>
-                <p className="pl-3 font-mono text-xs break-all">read:me, read:jira-work, write:jira-work, read:confluence-space.summary, read:confluence-content.summary, read:confluence-content.all, write:confluence-content, read:confluence-user</p>
-                <p>3. <strong>Authorization</strong> → Callback URL: <code className="text-xs">http://localhost:5666/timetracker/api/auth/atlassian/callback</code></p>
-                <p>4. Skopiuj <strong>Client ID</strong>, wpisz wyżej + Site URL i kliknij <strong>Connect with Atlassian</strong></p>
-                <p>5. Atlassian poprosi o logowanie (jeśli niezalogowany) + zgodę na uprawnienia → <strong>Accept</strong> → wrócisz tutaj jako &quot;Połączono&quot;</p>
-                <p className="text-xs text-gray-500">Token żyje 1h, automatycznie odświeżany przez offline_access (PKCE flow).</p>
+              <HelpGuide title="Co się stanie po kliknięciu Connect?">
+                <p>1. Browser przekieruje na <strong>auth.atlassian.com</strong> — Atlassian poprosi o logowanie (jeśli niezalogowany).</p>
+                <p>2. Atlassian pokaże consent screen z listą uprawnień (Jira + Confluence) — kliknij <strong>Accept</strong>.</p>
+                <p>3. Wracasz tutaj automatycznie — pojawi się &quot;Połączono jako: X&quot; + szczegóły.</p>
+                <p className="text-xs text-gray-500">OAuth app jest pre-skonfigurowana (Client ID + Secret wbudowane w bundle). Token żyje 1h, jest automatycznie odświeżany.</p>
               </HelpGuide>
             </div>
 

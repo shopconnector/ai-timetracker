@@ -72,6 +72,8 @@ jobs:
           JIRA_BASE_URL: ""
           JIRA_SERVICE_EMAIL: ""
           JIRA_API_KEY: ""
+          # Atlassian OAuth client_secret — embedded in build via next.config.ts.
+          ATLASSIAN_OAUTH_CLIENT_SECRET: ${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
 
       - name: Verify standalone output
         shell: pwsh

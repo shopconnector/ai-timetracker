@@ -1,15 +1,18 @@
 /**
- * Atlassian OAuth 2.0 (3LO) client for Jira + Confluence Cloud — PKCE flow.
+ * Atlassian OAuth 2.0 (3LO) client for Jira + Confluence Cloud — PKCE + client_secret.
  *
- * PKCE (RFC 7636) replaces the client_secret with a per-session
- * code_verifier/code_challenge pair, so the app can ship as a public client
- * (no secret embedded in the binary). The Atlassian OAuth app must be
- * registered as a public client (no secret required at exchange time).
+ * Atlassian classifies all OAuth 2.0 (3LO) apps as confidential clients, so
+ * client_secret is required at token exchange even when PKCE is used. PKCE
+ * (RFC 7636) is layered on top as defense-in-depth against code interception.
  *
- * Token storage: .env.local (single-tenant, plain-text — same model as other
- * integrations in this app). Refresh tokens rotate on every use, so refreshing
- * is guarded by an in-process mutex (a second concurrent refresh would invalidate
- * the first one's response and lock the user out).
+ * Both client_id and client_secret are baked into the build:
+ *  - client_id:     DEFAULT_CLIENT_ID constant below (or ATLASSIAN_OAUTH_CLIENT_ID env)
+ *  - client_secret: process.env.ATLASSIAN_OAUTH_CLIENT_SECRET, injected at build
+ *                   time via next.config.ts (sourced from GitHub Actions Secret).
+ *
+ * Token storage: .env.local (single-tenant, plain-text). Refresh tokens rotate
+ * on every use, so refreshing is guarded by an in-process mutex (a second
+ * concurrent refresh would invalidate the first one's response).
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -49,6 +52,11 @@ const RESOURCES_URL = 'https://api.atlassian.com/oauth/token/accessible-resource
 const DEFAULT_REDIRECT_URI = 'http://localhost:5666/timetracker/api/auth/atlassian/callback';
 const DEFAULT_SITE_URL = 'https://beecommerce.atlassian.net';
 
+// Public OAuth 2.0 (PKCE) client_id — registered in developer.atlassian.com
+// by the TimeTracker maintainer. PKCE flow makes this safe to embed (no secret).
+// Override via ATLASSIAN_OAUTH_CLIENT_ID env if running against another tenant.
+const DEFAULT_CLIENT_ID = '1zuJd04NRQsFJJkwVoWDmIvmDW2Mrakz';
+
 // ---------- Types ----------
 
 export interface OAuthTokenResponse {
@@ -69,6 +77,7 @@ export interface AccessibleResource {
 
 export interface OAuthEnv {
   clientId?: string;
+  clientSecret?: string;
   siteUrl: string;
   redirectUri: string;
   accessToken?: string;
@@ -170,7 +179,8 @@ function writeAtlassianEnv(updates: Record<string, string | null>): void {
 
 export function loadOAuthEnv(): OAuthEnv {
   return {
-    clientId: process.env.ATLASSIAN_OAUTH_CLIENT_ID || undefined,
+    clientId: process.env.ATLASSIAN_OAUTH_CLIENT_ID || DEFAULT_CLIENT_ID,
+    clientSecret: process.env.ATLASSIAN_OAUTH_CLIENT_SECRET || undefined,
     siteUrl: process.env.ATLASSIAN_OAUTH_SITE_URL || DEFAULT_SITE_URL,
     redirectUri: process.env.ATLASSIAN_OAUTH_REDIRECT_URI || DEFAULT_REDIRECT_URI,
     accessToken: process.env.ATLASSIAN_OAUTH_ACCESS_TOKEN || undefined,
@@ -224,7 +234,7 @@ export function isOAuthConfigured(): boolean {
 
 export function isOAuthRegistered(): boolean {
   const e = loadOAuthEnv();
-  return !!e.clientId;
+  return !!(e.clientId && e.clientSecret);
 }
 
 // ---------- OAuth flow ----------
@@ -250,8 +260,8 @@ export function buildAuthorizationUrl(state: string, codeChallenge: string): str
 
 export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<OAuthTokenResponse> {
   const env = loadOAuthEnv();
-  if (!env.clientId) {
-    throw new Error('Atlassian OAuth client_id not configured');
+  if (!env.clientId || !env.clientSecret) {
+    throw new Error('Atlassian OAuth client_id/secret not configured (set ATLASSIAN_OAUTH_CLIENT_SECRET in env)');
   }
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -259,6 +269,7 @@ export async function exchangeCodeForTokens(code: string, codeVerifier: string):
     body: JSON.stringify({
       grant_type: 'authorization_code',
       client_id: env.clientId,
+      client_secret: env.clientSecret,
       code,
       redirect_uri: env.redirectUri,
       code_verifier: codeVerifier,
@@ -274,8 +285,8 @@ export async function exchangeCodeForTokens(code: string, codeVerifier: string):
 
 async function refreshAccessTokenRaw(refreshToken: string): Promise<OAuthTokenResponse> {
   const env = loadOAuthEnv();
-  if (!env.clientId) {
-    throw new Error('Atlassian OAuth client_id not configured');
+  if (!env.clientId || !env.clientSecret) {
+    throw new Error('Atlassian OAuth client_id/secret not configured');
   }
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -283,6 +294,7 @@ async function refreshAccessTokenRaw(refreshToken: string): Promise<OAuthTokenRe
     body: JSON.stringify({
       grant_type: 'refresh_token',
       client_id: env.clientId,
+      client_secret: env.clientSecret,
       refresh_token: refreshToken,
     }),
     signal: AbortSignal.timeout(10000),
@@ -311,12 +323,13 @@ export async function getAccessibleResources(accessToken: string): Promise<Acces
 
 export async function revokeRefreshToken(refreshToken: string): Promise<void> {
   const env = loadOAuthEnv();
-  if (!env.clientId) return; // best-effort
+  if (!env.clientId || !env.clientSecret) return; // best-effort
   await fetch(REVOKE_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       client_id: env.clientId,
+      client_secret: env.clientSecret,
       token: refreshToken,
     }),
     signal: AbortSignal.timeout(5000),
