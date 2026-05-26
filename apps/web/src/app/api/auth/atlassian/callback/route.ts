@@ -7,14 +7,16 @@ import {
 } from '@/lib/atlassianOAuth';
 
 const STATE_COOKIE = 'atlassian_oauth_state';
+const VERIFIER_COOKIE = 'atlassian_oauth_verifier';
 const BASE_PATH = '/timetracker';
 
 function redirectToSettings(request: NextRequest, params: Record<string, string>): NextResponse {
   const qs = new URLSearchParams(params).toString();
   const path = `${BASE_PATH}/settings${qs ? `?${qs}` : ''}`;
   const response = NextResponse.redirect(new URL(path, request.url));
-  // Always clear the state cookie after the flow (success or error).
+  // Always clear flow cookies after the flow (success or error).
   response.cookies.set(STATE_COOKIE, '', { path: '/', maxAge: 0 });
+  response.cookies.set(VERIFIER_COOKIE, '', { path: '/', maxAge: 0 });
   return response;
 }
 
@@ -55,10 +57,19 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // 3. Exchange code for tokens
+  // 3. Read PKCE verifier from cookie (set by /start)
+  const codeVerifier = request.cookies.get(VERIFIER_COOKIE)?.value;
+  if (!codeVerifier) {
+    return redirectToSettings(request, {
+      atlassian: 'error',
+      msg: 'Brakuje PKCE code_verifier (cookie wygasł). Spróbuj ponownie.',
+    });
+  }
+
+  // 4. Exchange code for tokens (PKCE — no client_secret, code_verifier instead)
   let tokens;
   try {
-    tokens = await exchangeCodeForTokens(code);
+    tokens = await exchangeCodeForTokens(code, codeVerifier);
   } catch (err) {
     return redirectToSettings(request, {
       atlassian: 'error',

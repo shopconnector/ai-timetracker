@@ -9,11 +9,6 @@ import {
   isOAuthConfigured,
   loadOAuthEnv,
 } from '@/lib/atlassianOAuth';
-import {
-  getValidTempoAccessToken,
-  isTempoOAuthConfigured,
-  loadTempoOAuthEnv,
-} from '@/lib/tempoOAuth';
 
 /**
  * Detect the correct .env.local path.
@@ -173,7 +168,6 @@ export async function GET() {
     const gitAuthorFilter = process.env.GIT_AUTHOR_FILTER;
     const githubToken = process.env.GITHUB_TOKEN;
     const oauth = loadOAuthEnv();
-    const tempoOauth = loadTempoOAuthEnv();
 
     return NextResponse.json({
       // API Config (masked)
@@ -201,9 +195,8 @@ export async function GET() {
       hasGitConfig: !!projectsRoot,
       hasGithubApiConfig: !!githubToken,
 
-      // Atlassian OAuth 2.0 (3LO) — alternative to JIRA_API_KEY Basic Auth
+      // Atlassian OAuth 2.0 (3LO + PKCE) — alternative to JIRA_API_KEY Basic Auth
       atlassianClientId: oauth.clientId || null,
-      atlassianClientSecret: oauth.clientSecret ? '••••••••' : null,
       atlassianSiteUrl: oauth.siteUrl,
       atlassianRedirectUri: oauth.redirectUri,
       oauthConnected: isOAuthConfigured(),
@@ -212,15 +205,6 @@ export async function GET() {
       oauthExpiresAt: oauth.expiresAt || null,
       oauthCloudId: oauth.cloudId || null,
       oauthScopes: oauth.scopes || null,
-
-      // Tempo OAuth 2.0 (separate from Atlassian — Tempo has its own auth system)
-      tempoOauthClientId: tempoOauth.clientId || null,
-      tempoOauthClientSecret: tempoOauth.clientSecret ? '••••••••' : null,
-      tempoOauthSiteUrl: tempoOauth.siteUrl || null,
-      tempoOauthRedirectUri: tempoOauth.redirectUri,
-      tempoOauthConnected: isTempoOAuthConfigured(),
-      tempoOauthExpiresAt: tempoOauth.expiresAt || null,
-      tempoOauthScopes: tempoOauth.scopes || null,
 
       // Diagnostics — helps users see WHERE we're reading/writing
       envFilePath: getEnvFilePath(),
@@ -245,58 +229,34 @@ export async function POST(request: Request) {
 
     const results: Record<string, { success: boolean; message: string }> = {};
 
-    // Test Tempo API — OAuth 2.0 first if configured, else personal token (Bearer)
+    // Test Tempo API
     if (testType === 'tempo' || testType === 'all') {
-      if (isTempoOAuthConfigured()) {
+      const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
+      const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
+
+      if (tempoApiToken && tempoAccountId) {
         try {
-          const accessToken = await getValidTempoAccessToken();
           const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
             headers: {
-              Authorization: `Bearer ${accessToken}`,
+              'Authorization': `Bearer ${tempoApiToken}`,
               'Content-Type': 'application/json',
             },
             signal: AbortSignal.timeout(5000),
           });
           if (res.ok) {
-            results.tempo = { success: true, message: 'Połączono z Tempo API [OAuth]' };
+            results.tempo = { success: true, message: 'Połączono z Tempo API' };
           } else {
             const bodyText = await res.text().catch(() => '');
             results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
           }
         } catch (e) {
-          results.tempo = {
-            success: false,
-            message: `Błąd Tempo OAuth: ${e instanceof Error ? e.message : String(e)}`,
-          };
+          results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
         }
       } else {
-        const tempoApiToken = pickCred(credentials.tempoApiToken, process.env.TEMPO_API_TOKEN);
-        const tempoAccountId = pickCred(credentials.tempoAccountId, process.env.TEMPO_ACCOUNT_ID);
-
-        if (tempoApiToken && tempoAccountId) {
-          try {
-            const res = await fetch('https://api.tempo.io/4/worklogs?limit=1', {
-              headers: {
-                'Authorization': `Bearer ${tempoApiToken}`,
-                'Content-Type': 'application/json',
-              },
-              signal: AbortSignal.timeout(5000),
-            });
-            if (res.ok) {
-              results.tempo = { success: true, message: 'Połączono z Tempo API [Personal Token]' };
-            } else {
-              const bodyText = await res.text().catch(() => '');
-              results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
-            }
-          } catch (e) {
-            results.tempo = { success: false, message: `Błąd sieci: ${e instanceof Error ? e.message : String(e)}` };
-          }
-        } else {
-          results.tempo = {
-            success: false,
-            message: 'Brak konfiguracji Tempo (OAuth lub TEMPO_API_TOKEN+TEMPO_ACCOUNT_ID)',
-          };
-        }
+        results.tempo = {
+          success: false,
+          message: 'Brak konfiguracji Tempo (wymagane: TEMPO_API_TOKEN i TEMPO_ACCOUNT_ID)',
+        };
       }
     }
 
@@ -517,13 +477,8 @@ const FIELD_TO_ENV: Record<string, string> = {
   gitAuthorFilter: 'GIT_AUTHOR_FILTER',
   githubToken: 'GITHUB_TOKEN',
   atlassianClientId: 'ATLASSIAN_OAUTH_CLIENT_ID',
-  atlassianClientSecret: 'ATLASSIAN_OAUTH_CLIENT_SECRET',
   atlassianSiteUrl: 'ATLASSIAN_OAUTH_SITE_URL',
   atlassianRedirectUri: 'ATLASSIAN_OAUTH_REDIRECT_URI',
-  tempoOauthClientId: 'TEMPO_OAUTH_CLIENT_ID',
-  tempoOauthClientSecret: 'TEMPO_OAUTH_CLIENT_SECRET',
-  tempoOauthSiteUrl: 'TEMPO_OAUTH_SITE_URL',
-  tempoOauthRedirectUri: 'TEMPO_OAUTH_REDIRECT_URI',
 };
 
 // Section comments for env file organization
@@ -542,13 +497,8 @@ const ENV_SECTIONS: Record<string, string> = {
   GIT_AUTHOR_FILTER: '# Git / Activity',
   GITHUB_TOKEN: '# GitHub API (Personal Access Token, scope: repo or public_repo)',
   ATLASSIAN_OAUTH_CLIENT_ID: '# Atlassian OAuth 2.0',
-  ATLASSIAN_OAUTH_CLIENT_SECRET: '# Atlassian OAuth 2.0',
   ATLASSIAN_OAUTH_SITE_URL: '# Atlassian OAuth 2.0',
   ATLASSIAN_OAUTH_REDIRECT_URI: '# Atlassian OAuth 2.0',
-  TEMPO_OAUTH_CLIENT_ID: '# Tempo OAuth 2.0',
-  TEMPO_OAUTH_CLIENT_SECRET: '# Tempo OAuth 2.0',
-  TEMPO_OAUTH_SITE_URL: '# Tempo OAuth 2.0',
-  TEMPO_OAUTH_REDIRECT_URI: '# Tempo OAuth 2.0',
 };
 
 // PUT /api/settings - Save settings to .env.local
@@ -585,14 +535,14 @@ export async function PUT(request: Request) {
       // Skip masked values — don't overwrite real keys with placeholders
       if (typeof value === 'string' && value.includes('••')) continue;
       // Skip empty strings for token/key fields (don't clear existing keys)
-      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken', 'githubToken', 'atlassianClientSecret', 'tempoOauthClientSecret'].includes(field);
+      const isSecretField = ['tempoApiToken', 'jiraApiToken', 'openRouterApiKey', 'geminiApiKey', 'slackUserToken', 'githubToken'].includes(field);
       if (isSecretField && value === '') continue;
       // Skip aiProvider — it's derived, not stored
       if (field === 'aiProvider') continue;
 
       // Normalize URLs — strip trailing slash so fetch builds clean paths
       if (
-        (field === 'jiraBaseUrl' || field === 'atlassianSiteUrl' || field === 'tempoOauthSiteUrl') &&
+        (field === 'jiraBaseUrl' || field === 'atlassianSiteUrl') &&
         typeof value === 'string'
       ) {
         value = normalizeBaseUrl(value) ?? value;
