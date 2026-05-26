@@ -177,6 +177,27 @@ async function handleSelfUpdate() {
   }
 
   const projectDir = resolve(process.cwd());
+
+  // Detect bundled install (.app on macOS, standalone exe on Win) vs dev clone.
+  // Bundled apps don't have .git/, can't `git pull`. Tell the user to download
+  // the DMG/EXE installer instead.
+  const isBundledInstall =
+    !existsSync(join(projectDir, '.git')) &&
+    !existsSync(join(projectDir, '..', '.git')) &&
+    !existsSync(join(projectDir, '..', '..', '.git'));
+
+  if (isBundledInstall) {
+    return NextResponse.json(
+      {
+        status: 'error',
+        error:
+          'Self-update niedostępny w zainstalowanej wersji. Pobierz najnowszy DMG/EXE z release: https://github.com/shopconnector/ai-timetracker/releases/latest — przeciągnij do Applications (macOS) lub uruchom installer (Windows).',
+        bundled: true,
+      },
+      { status: 400 },
+    );
+  }
+
   const extendedEnv = { ...process.env, PATH: getExtendedPath() };
 
   const steps = [

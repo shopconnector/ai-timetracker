@@ -381,7 +381,22 @@ export default function SettingsPage() {
     setSelfUpdateError(null);
 
     try {
-      await fetch(apiUrl('/api/update?action=selfupdate'), { method: 'POST' });
+      const res = await fetch(apiUrl('/api/update?action=selfupdate'), { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+
+      // Backend rejected (bundled install — no .git/). Open DMG/EXE download in browser.
+      if (!res.ok && data?.bundled) {
+        const dlUrl =
+          versionInfo?.downloadUrl ??
+          versionInfo?.releaseUrl ??
+          'https://github.com/shopconnector/ai-timetracker/releases/latest';
+        window.open(dlUrl, '_blank');
+        setSelfUpdateStatus('done');
+        setSelfUpdateStep(
+          'Pobrano w przeglądarce. Przeciągnij DMG do Applications (macOS) lub uruchom installer (Windows), żeby zastąpić starą wersję.',
+        );
+        return;
+      }
 
       const poll = async () => {
         try {
