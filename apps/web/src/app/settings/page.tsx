@@ -125,6 +125,35 @@ function HelpGuide({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
+// Collapsible wrapper for legacy/advanced settings — collapsed by default.
+// Used to hide Personal Token / API Key fields under each OAuth box.
+function AdvancedSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2 border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+          <span>{title}</span>
+        </span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          {open ? 'Ukryj' : 'Pokaż'}
+        </span>
+      </button>
+      {open && (
+        <div className="p-4 bg-gray-50 dark:bg-slate-900/30 border-t border-gray-200 dark:border-slate-700 space-y-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const t = useTranslations('settings');
   const [apiStatus, setApiStatus] = useState<APIStatus[]>([]);
@@ -238,12 +267,30 @@ export default function SettingsPage() {
     expiresAt: string | null;
     scopes: string | null;
   }>({ connected: false, expiresAt: null, scopes: null });
+  const [slackOauthStatus, setSlackOauthStatus] = useState<{
+    connected: boolean;
+    userId: string | null;
+    teamId: string | null;
+    teamName: string | null;
+    expiresAt: string | null;
+    scopes: string | null;
+  }>({
+    connected: false,
+    userId: null,
+    teamId: null,
+    teamName: null,
+    expiresAt: null,
+    scopes: null,
+  });
   const [oauthBanner, setOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [tempoOauthBanner, setTempoOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [slackOauthBanner, setSlackOauthBanner] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [connectingOauth, setConnectingOauth] = useState(false);
   const [disconnectingOauth, setDisconnectingOauth] = useState(false);
   const [connectingTempoOauth, setConnectingTempoOauth] = useState(false);
   const [disconnectingTempoOauth, setDisconnectingTempoOauth] = useState(false);
+  const [connectingSlackOauth, setConnectingSlackOauth] = useState(false);
+  const [disconnectingSlackOauth, setDisconnectingSlackOauth] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
@@ -254,12 +301,13 @@ export default function SettingsPage() {
     checkForUpdates();
   }, []);
 
-  // Pick up Atlassian + Tempo OAuth callback feedback from URL
+  // Pick up Atlassian / Tempo / Slack OAuth callback feedback from URL
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const atlassianStatus = params.get('atlassian');
     const tempoStatus = params.get('tempo');
+    const slackStatus = params.get('slack');
 
     if (atlassianStatus === 'connected') {
       setOauthBanner({ type: 'success', msg: 'Połączono z Atlassian Cloud przez OAuth 2.0.' });
@@ -275,7 +323,14 @@ export default function SettingsPage() {
       setTempoOauthBanner({ type: 'error', msg: `Tempo OAuth nie powiodło się: ${msg}` });
     }
 
-    if (atlassianStatus || tempoStatus) {
+    if (slackStatus === 'connected') {
+      setSlackOauthBanner({ type: 'success', msg: 'Połączono z Slack przez OAuth 2.0.' });
+    } else if (slackStatus === 'error') {
+      const msg = params.get('msg') || 'Nieznany błąd autoryzacji.';
+      setSlackOauthBanner({ type: 'error', msg: `Slack OAuth nie powiodło się: ${msg}` });
+    }
+
+    if (atlassianStatus || tempoStatus || slackStatus) {
       const url = new URL(window.location.href);
       url.search = '';
       window.history.replaceState({}, '', url.toString());
@@ -349,6 +404,14 @@ export default function SettingsPage() {
           connected: !!settings.tempoOauthConnected,
           expiresAt: settings.tempoOauthExpiresAt || null,
           scopes: settings.tempoOauthScopes || null,
+        });
+        setSlackOauthStatus({
+          connected: !!settings.slackOauthConnected,
+          userId: settings.slackOauthUserId || null,
+          teamId: settings.slackOauthTeamId || null,
+          teamName: settings.slackOauthTeamName || null,
+          expiresAt: settings.slackOauthExpiresAt || null,
+          scopes: settings.slackOauthScopes || null,
         });
       }
     } catch (error) {
@@ -489,6 +552,45 @@ export default function SettingsPage() {
     setConnectingTempoOauth(true);
     setTempoOauthBanner(null);
     window.location.href = apiUrl('/api/auth/tempo/start');
+  };
+
+  const handleSlackConnect = () => {
+    setConnectingSlackOauth(true);
+    setSlackOauthBanner(null);
+    window.location.href = apiUrl('/api/auth/slack/start');
+  };
+
+  const handleSlackDisconnect = async () => {
+    if (!confirm('Rozłączyć Slack OAuth? Tokeny zostaną usunięte.')) return;
+    setDisconnectingSlackOauth(true);
+    setSlackOauthBanner(null);
+    try {
+      const res = await fetch(apiUrl('/api/auth/slack/disconnect'), { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setSlackOauthBanner({
+          type: 'error',
+          msg: `Disconnect nie powiódł się: ${data.error || res.status}`,
+        });
+      } else {
+        setSlackOauthStatus({
+          connected: false,
+          userId: null,
+          teamId: null,
+          teamName: null,
+          expiresAt: null,
+          scopes: null,
+        });
+        setSlackOauthBanner({ type: 'success', msg: 'Rozłączono Slack OAuth.' });
+      }
+    } catch (err) {
+      setSlackOauthBanner({
+        type: 'error',
+        msg: `Błąd: ${err instanceof Error ? err.message : 'unknown'}`,
+      });
+    } finally {
+      setDisconnectingSlackOauth(false);
+    }
   };
 
   const handleTempoDisconnect = async () => {
@@ -1896,12 +1998,8 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </HelpGuide>
             </div>
 
-            {/* Tempo Configuration — legacy Personal Token */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                Tempo API <span className="text-xs text-gray-500 dark:text-gray-400">(legacy — Personal Token)</span>
-              </h3>
+            {/* Tempo Configuration — legacy Personal Token (collapsed by default) */}
+            <AdvancedSection title="Zaawansowane — Tempo API (legacy Personal Token)">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">API Token</label>
@@ -1934,7 +2032,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 <p>4. Kliknij <strong>&quot;New Token&quot;</strong>, nadaj nazwe (np. &quot;TimeTracker&quot;) i skopiuj token</p>
                 <p>5. <strong>Account ID</strong> znajdziesz: wejdz w Jira → kliknij swoj avatar → &quot;Profile&quot; → w URL zobaczysz swoje Account ID (format: 712020:xxxxxxxx-...)</p>
               </HelpGuide>
-            </div>
+            </AdvancedSection>
 
             {/* Atlassian OAuth 2.0 — alternatywa dla Basic Auth + Confluence R/W */}
             <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -2018,12 +2116,8 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </HelpGuide>
             </div>
 
-            {/* Jira Configuration */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                Jira API <span className="text-xs text-gray-500 dark:text-gray-400">(legacy — Basic Auth z API tokenem)</span>
-              </h3>
+            {/* Jira Configuration — legacy Basic Auth (collapsed by default) */}
+            <AdvancedSection title="Zaawansowane — Jira API (legacy Basic Auth z API tokenem)">
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Base URL</label>
@@ -2065,7 +2159,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 <p className="pl-3">d) Nadaj nazwe (np. &quot;TimeTracker&quot;) i kliknij &quot;Create&quot;</p>
                 <p className="pl-3">e) Skopiuj token (pokaze sie tylko raz!)</p>
               </HelpGuide>
-            </div>
+            </AdvancedSection>
 
             {/* ActivityWatch Configuration */}
             <div className="space-y-3">
@@ -2092,12 +2186,97 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               </HelpGuide>
             </div>
 
-            {/* Slack Configuration */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                <span className="w-2 h-2 bg-fuchsia-500 rounded-full"></span>
-                Slack (opcjonalne)
-              </h3>
+            {/* Slack OAuth 2.0 (PKCE) — zalecane */}
+            <div className="space-y-3 p-4 bg-fuchsia-50 dark:bg-fuchsia-950/20 rounded-lg border border-fuchsia-200 dark:border-fuchsia-800">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-fuchsia-500 rounded-full"></span>
+                  Slack OAuth 2.0 <span className="text-xs text-fuchsia-600 dark:text-fuchsia-400">(zalecane — PKCE, bez Client Secret)</span>
+                </h3>
+                {slackOauthStatus.connected && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                    Połączono
+                  </span>
+                )}
+              </div>
+
+              {slackOauthBanner && (
+                <div
+                  className={`text-sm p-2 rounded ${
+                    slackOauthBanner.type === 'success'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {slackOauthBanner.msg}
+                </div>
+              )}
+
+              {slackOauthStatus.connected ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="text-gray-500 dark:text-gray-400">User ID:</div>
+                    <div className="font-mono text-xs">{slackOauthStatus.userId || '—'}</div>
+                    <div className="text-gray-500 dark:text-gray-400">Workspace:</div>
+                    <div className="text-xs">
+                      {slackOauthStatus.teamName || '—'}
+                      {slackOauthStatus.teamId && (
+                        <span className="text-gray-500 dark:text-gray-400 ml-2 font-mono">
+                          ({slackOauthStatus.teamId})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Access expires:</div>
+                    <div className="text-xs">
+                      {slackOauthStatus.expiresAt
+                        ? new Date(slackOauthStatus.expiresAt).toLocaleString('pl')
+                        : '—'}
+                    </div>
+                    <div className="text-gray-500 dark:text-gray-400">Scopes:</div>
+                    <div className="text-xs font-mono break-all">
+                      {slackOauthStatus.scopes || '—'}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSlackConnect}
+                      disabled={connectingSlackOauth}
+                    >
+                      {connectingSlackOauth ? 'Łączenie...' : 'Reconnect'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleSlackDisconnect}
+                      disabled={disconnectingSlackOauth}
+                    >
+                      {disconnectingSlackOauth ? 'Rozłączanie...' : 'Disconnect'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Połącz Slack jednym kliknięciem. Client ID wbudowany w aplikację (PKCE — Client Secret nie jest potrzebny).
+                  </p>
+                  <Button size="sm" onClick={handleSlackConnect} disabled={connectingSlackOauth}>
+                    {connectingSlackOauth ? 'Łączenie...' : 'Connect with Slack'}
+                  </Button>
+                </>
+              )}
+
+              <HelpGuide title="Co się stanie po kliknięciu Connect with Slack?">
+                <p>1. Browser przekieruje na <strong>slack.com/oauth/v2/authorize</strong> — Slack poprosi o zalogowanie się i wybór workspace (jeśli niezalogowany).</p>
+                <p>2. Slack pokaże consent screen z listą 9 uprawnień (channels/groups/im/mpim history+read, users:read).</p>
+                <p>3. Kliknij <strong>Allow</strong> → wracasz tutaj jako &quot;Połączono jako: U... [team_name]&quot;.</p>
+                <p className="text-xs text-gray-500">PKCE flow — brak Client Secret w bundlu (bezpieczniejsze niż Atlassian/Tempo OAuth). Token żyje 12h, automatyczny refresh.</p>
+              </HelpGuide>
+            </div>
+
+            {/* Slack legacy User/Bot Token — collapsed by default */}
+            <AdvancedSection title="Zaawansowane — Slack legacy (User Token + Bot Token)">
               <div>
                 <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">User Token (xoxp-) — odczyt aktywnosci</label>
                 <Input
@@ -2107,7 +2286,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                   onChange={(e) => setApiConfig({ ...apiConfig, slackUserToken: e.target.value })}
                 />
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                  Utwórz w: api.slack.com/apps &rarr; OAuth &amp; Permissions. Wymagane scopes: channels:history, channels:read, groups:history, groups:read, im:history, im:read, mpim:history, mpim:read, users:read
+                  Alternatywa dla OAuth — ręcznie wpisany xoxp- token. OAuth wyżej ma priorytet jeśli skonfigurowany.
                 </p>
               </div>
               <div>
@@ -2135,7 +2314,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                   Znajdziesz w: Slack Profile &rarr; More &rarr; Copy member ID
                 </p>
               </div>
-              <HelpGuide title="Jak skonfigurowac Slacka? (opcjonalne — dla powiadomien)">
+              <HelpGuide title="Jak skonfigurowac Slacka? (legacy ręczne tokeny)">
                 <p>1. Wejdz na <strong>api.slack.com/apps</strong> i kliknij &quot;Create New App&quot;</p>
                 <p>2. Wybierz &quot;From scratch&quot;, podaj nazwe (np. &quot;TimeTracker&quot;) i wybierz workspace</p>
                 <p>3. W menu bocznym kliknij <strong>&quot;OAuth &amp; Permissions&quot;</strong></p>
@@ -2145,7 +2324,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 <p>7. Skopiuj &quot;User OAuth Token&quot; (xoxp-...) i &quot;Bot User OAuth Token&quot; (xoxb-...)</p>
                 <p>8. <strong>Slack User ID</strong>: otworz Slack → kliknij swoj avatar → &quot;Profile&quot; → &quot;&#8943;&quot; (More) → &quot;Copy member ID&quot;</p>
               </HelpGuide>
-            </div>
+            </AdvancedSection>
 
             {/* Git / Activity Configuration */}
             <div className="space-y-3">

@@ -5,6 +5,7 @@ import { awFetch } from '@/lib/activitywatch';
 import { getGithubUser } from '@/lib/github';
 import { getJiraOAuthBase, getValidAccessToken, isOAuthConfigured } from '@/lib/atlassianOAuth';
 import { getValidTempoAccessToken, isTempoOAuthConfigured } from '@/lib/tempoOAuth';
+import { getValidSlackAccessToken, isSlackOAuthConfigured } from '@/lib/slackOAuth';
 
 interface ApiStatus {
   name: string;
@@ -129,6 +130,30 @@ async function checkJira(): Promise<ApiStatus> {
 }
 
 async function checkSlack(): Promise<ApiStatus> {
+  // OAuth 2.0 path takes precedence
+  if (isSlackOAuthConfigured()) {
+    try {
+      const token = await getValidSlackAccessToken();
+      const response = await fetch('https://slack.com/api/auth.test', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await response.json();
+      if (data.ok) {
+        return { name: 'Slack', configured: true, status: 'ok', message: `${data.user} [OAuth]` };
+      }
+      return { name: 'Slack', configured: true, status: 'error', message: `OAuth: ${data.error}` };
+    } catch (err) {
+      return {
+        name: 'Slack',
+        configured: true,
+        status: 'error',
+        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+      };
+    }
+  }
+
   const token = process.env.SLACK_USER_TOKEN;
   if (!token) {
     return { name: 'Slack', configured: false, status: 'unconfigured' };
@@ -145,7 +170,7 @@ async function checkSlack(): Promise<ApiStatus> {
     });
     const data = await response.json();
     if (data.ok) {
-      return { name: 'Slack', configured: true, status: 'ok', message: `Connected as ${data.user}` };
+      return { name: 'Slack', configured: true, status: 'ok', message: `${data.user} [User Token]` };
     }
     return { name: 'Slack', configured: true, status: 'error', message: data.error || 'Auth failed' };
   } catch {

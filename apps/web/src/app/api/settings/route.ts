@@ -14,6 +14,11 @@ import {
   isTempoOAuthConfigured,
   loadTempoOAuthEnv,
 } from '@/lib/tempoOAuth';
+import {
+  getValidSlackAccessToken,
+  isSlackOAuthConfigured,
+  loadSlackOAuthEnv,
+} from '@/lib/slackOAuth';
 
 /**
  * Detect the correct .env.local path.
@@ -174,6 +179,7 @@ export async function GET() {
     const githubToken = process.env.GITHUB_TOKEN;
     const oauth = loadOAuthEnv();
     const tempoOauth = loadTempoOAuthEnv();
+    const slackOauth = loadSlackOAuthEnv();
 
     return NextResponse.json({
       // API Config (masked)
@@ -216,6 +222,14 @@ export async function GET() {
       tempoOauthConnected: isTempoOAuthConfigured(),
       tempoOauthExpiresAt: tempoOauth.expiresAt || null,
       tempoOauthScopes: tempoOauth.scopes || null,
+
+      // Slack OAuth 2.0 (PKCE, user-scope)
+      slackOauthConnected: isSlackOAuthConfigured(),
+      slackOauthUserId: slackOauth.userId || null,
+      slackOauthTeamId: slackOauth.teamId || null,
+      slackOauthTeamName: slackOauth.teamName || null,
+      slackOauthExpiresAt: slackOauth.expiresAt || null,
+      slackOauthScopes: slackOauth.scopes || null,
 
       // Diagnostics — helps users see WHERE we're reading/writing
       envFilePath: getEnvFilePath(),
@@ -380,34 +394,61 @@ export async function POST(request: Request) {
       }
     }
 
-    // Test Slack API
+    // Test Slack API — OAuth 2.0 first if configured, else legacy User Token
     if (testType === 'slack' || testType === 'all') {
-      const slackToken = pickCred(credentials.slackUserToken, process.env.SLACK_USER_TOKEN);
-
-      if (slackToken) {
+      if (isSlackOAuthConfigured()) {
         try {
+          const token = await getValidSlackAccessToken();
           const res = await fetch('https://slack.com/api/auth.test', {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${slackToken}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             signal: AbortSignal.timeout(5000),
           });
           const data = await res.json();
           if (data.ok) {
-            results.slack = {
-              success: true,
-              message: `Połączono jako: ${data.user}`,
-            };
+            results.slack = { success: true, message: `Połączono jako: ${data.user} [OAuth]` };
           } else {
-            results.slack = { success: false, message: `Błąd Slack: ${data.error}` };
+            results.slack = { success: false, message: `OAuth: ${data.error}` };
           }
         } catch (e) {
-          results.slack = { success: false, message: `Błąd połączenia: ${e instanceof Error ? e.message : String(e)}` };
+          results.slack = {
+            success: false,
+            message: `Błąd Slack OAuth: ${e instanceof Error ? e.message : String(e)}`,
+          };
         }
       } else {
-        results.slack = { success: false, message: 'Brak konfiguracji Slack (SLACK_USER_TOKEN)' };
+        const slackToken = pickCred(credentials.slackUserToken, process.env.SLACK_USER_TOKEN);
+        if (slackToken) {
+          try {
+            const res = await fetch('https://slack.com/api/auth.test', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${slackToken}`,
+                'Content-Type': 'application/json',
+              },
+              signal: AbortSignal.timeout(5000),
+            });
+            const data = await res.json();
+            if (data.ok) {
+              results.slack = {
+                success: true,
+                message: `Połączono jako: ${data.user} [User Token]`,
+              };
+            } else {
+              results.slack = { success: false, message: `Błąd Slack: ${data.error}` };
+            }
+          } catch (e) {
+            results.slack = {
+              success: false,
+              message: `Błąd połączenia: ${e instanceof Error ? e.message : String(e)}`,
+            };
+          }
+        } else {
+          results.slack = {
+            success: false,
+            message: 'Brak konfiguracji Slack (OAuth lub SLACK_USER_TOKEN)',
+          };
+        }
       }
     }
 

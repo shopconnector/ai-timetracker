@@ -1,7 +1,10 @@
 // Slack API Client
-// User Token (xoxp-) based — sees DMs, channels, huddles
+// Auth modes (preferred order):
+//   1) OAuth 2.0 (PKCE) — Bearer xoxp- via Slack OAuth v2 flow with refresh
+//   2) Legacy SLACK_USER_TOKEN env (xoxp- token pasted manually)
 
 import type { GroupedActivity, ActivityCategory } from './activitywatch';
+import { getValidSlackAccessToken, isSlackOAuthConfigured } from './slackOAuth';
 
 const SLACK_API_BASE = 'https://slack.com/api';
 
@@ -9,10 +12,17 @@ const SLACK_API_BASE = 'https://slack.com/api';
 // AUTH
 // ========================================
 
-function getSlackHeaders(): HeadersInit {
+async function getSlackHeaders(): Promise<HeadersInit> {
+  if (isSlackOAuthConfigured()) {
+    const token = await getValidSlackAccessToken();
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  }
   const token = process.env.SLACK_USER_TOKEN;
   if (!token) {
-    throw new Error('SLACK_USER_TOKEN not set');
+    throw new Error('SLACK_USER_TOKEN not set and Slack OAuth not connected');
   }
   return {
     'Authorization': `Bearer ${token}`,
@@ -21,7 +31,7 @@ function getSlackHeaders(): HeadersInit {
 }
 
 export function isSlackConfigured(): boolean {
-  return !!process.env.SLACK_USER_TOKEN;
+  return isSlackOAuthConfigured() || !!process.env.SLACK_USER_TOKEN;
 }
 
 // ========================================
@@ -132,7 +142,7 @@ async function slackFetch(url: string, retries = 2): Promise<Response> {
     await rateLimiter.acquire();
     // Create timeout AFTER rate limiter — otherwise the wait counts against it
     const res = await fetch(url, {
-      headers: getSlackHeaders(),
+      headers: await getSlackHeaders(),
       signal: AbortSignal.timeout(15000),
     });
 
@@ -203,7 +213,7 @@ export async function testSlackConnection(): Promise<{ ok: boolean; user?: strin
   try {
     const res = await fetch(`${SLACK_API_BASE}/auth.test`, {
       method: 'POST',
-      headers: getSlackHeaders(),
+      headers: await getSlackHeaders(),
       signal: AbortSignal.timeout(5000),
     });
 
