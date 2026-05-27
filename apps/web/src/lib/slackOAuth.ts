@@ -47,7 +47,7 @@ const DEFAULT_REDIRECT_URI = 'http://localhost:5666/timetracker/api/auth/slack/c
 // Public OAuth 2.0 (PKCE) client_id — registered in api.slack.com/apps as
 // "TimeTracker" by the maintainer. PKCE flow makes this safe to embed.
 // Override via SLACK_OAUTH_CLIENT_ID env if running with a different Slack app.
-const DEFAULT_CLIENT_ID = '439317152757.10494294355877';
+const DEFAULT_CLIENT_ID = '439317152757.10550598173174';
 
 // ---------- PKCE helpers (RFC 7636) ----------
 
