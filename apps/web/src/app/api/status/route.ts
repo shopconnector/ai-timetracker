@@ -139,23 +139,30 @@ async function checkConfluence(): Promise<ApiStatus> {
     if (!cloudId) {
       return { name: 'Confluence', configured: false, status: 'unconfigured' };
     }
-    // v1 /wiki/rest/api/space — działa z classic scope read:confluence-space.summary.
-    // v2 /wiki/api/v2/spaces wymagałoby granular scope read:space:confluence (przyszła iteracja).
-    const response = await fetch(
-      `https://api.atlassian.com/ex/confluence/${cloudId}/wiki/rest/api/space?limit=1`,
-      {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      },
-    );
+    // accessible-resources endpoint jest stabilny, nie deprecated.
+    // Zwraca scopes per resource — wnioskujemy czy Confluence aktywne.
+    // Unika problemów z v1/v2 endpoint variants (410 Gone / 401 Unauthorized).
+    const response = await fetch('https://api.atlassian.com/oauth/token/accessible-resources', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
     if (response.ok) {
-      const data = await response.json();
-      const count = data?.results?.length ?? 0;
+      const resources = (await response.json()) as Array<{ id: string; scopes?: string[] }>;
+      const ours = resources.find((r) => r.id === cloudId);
+      const hasConfluenceScope = (ours?.scopes ?? []).some((s) => s.includes('confluence'));
+      if (hasConfluenceScope) {
+        return {
+          name: 'Confluence',
+          configured: true,
+          status: 'ok',
+          message: 'Authorized [Atlassian OAuth]',
+        };
+      }
       return {
         name: 'Confluence',
         configured: true,
-        status: 'ok',
-        message: `${count > 0 ? 'Connected' : 'No spaces visible'} [Atlassian OAuth]`,
+        status: 'error',
+        message: 'Brakuje Confluence scope — Reconnect Atlassian',
       };
     }
     return {
