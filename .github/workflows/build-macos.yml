@@ -86,6 +86,7 @@ jobs:
           cat > apps/web/.env.production <<'ENVEOF'
           ATLASSIAN_OAUTH_CLIENT_SECRET=${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
           TEMPO_OAUTH_CLIENT_SECRET=${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          SLACK_OAUTH_CLIENT_SECRET=${{ secrets.SLACK_OAUTH_CLIENT_SECRET }}
           ENVEOF
 
       - name: Build application
@@ -98,6 +99,7 @@ jobs:
           JIRA_API_KEY: ""
           ATLASSIAN_OAUTH_CLIENT_SECRET: ${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
           TEMPO_OAUTH_CLIENT_SECRET: ${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          SLACK_OAUTH_CLIENT_SECRET: ${{ secrets.SLACK_OAUTH_CLIENT_SECRET }}
 
       - name: Ensure .env.production is in standalone bundle
         # Next.js standalone copies .env.production for some setups but not all.

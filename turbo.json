@@ -8,7 +8,8 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
         "ATLASSIAN_OAUTH_CLIENT_SECRET",
-        "TEMPO_OAUTH_CLIENT_SECRET"
+        "TEMPO_OAUTH_CLIENT_SECRET",
+        "SLACK_OAUTH_CLIENT_SECRET"
       ]
     },
     "dev": {

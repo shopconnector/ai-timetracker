@@ -106,6 +106,7 @@ export interface SlackTokenResponse {
 
 export interface SlackOAuthEnv {
   clientId?: string;
+  clientSecret?: string;
   redirectUri: string;
   accessToken?: string; // user-level xoxp- token
   refreshToken?: string;
@@ -202,6 +203,7 @@ export function loadSlackOAuthEnv(): SlackOAuthEnv {
     clientId:
       realValue(process.env.SLACK_OAUTH_CLIENT_ID, 'your-', 'placeholder') ||
       (DEFAULT_CLIENT_ID ? DEFAULT_CLIENT_ID : undefined),
+    clientSecret: realValue(process.env.SLACK_OAUTH_CLIENT_SECRET, 'your-', 'placeholder'),
     redirectUri: process.env.SLACK_OAUTH_REDIRECT_URI || DEFAULT_REDIRECT_URI,
     accessToken: process.env.SLACK_OAUTH_ACCESS_TOKEN || undefined,
     refreshToken: process.env.SLACK_OAUTH_REFRESH_TOKEN || undefined,
@@ -300,11 +302,12 @@ export async function exchangeSlackCodeForTokens(
   codeVerifier: string,
 ): Promise<SlackTokenResponse> {
   const env = loadSlackOAuthEnv();
-  if (!env.clientId) {
-    throw new Error('Slack OAuth client_id nie skonfigurowany');
+  if (!env.clientId || !env.clientSecret) {
+    throw new Error('Slack OAuth client_id/secret nie skonfigurowany (set SLACK_OAUTH_CLIENT_SECRET in env)');
   }
   return postSlackTokenForm({
     client_id: env.clientId,
+    client_secret: env.clientSecret,
     code,
     redirect_uri: env.redirectUri,
     code_verifier: codeVerifier,
@@ -314,11 +317,12 @@ export async function exchangeSlackCodeForTokens(
 
 async function refreshSlackAccessTokenRaw(refreshToken: string): Promise<SlackTokenResponse> {
   const env = loadSlackOAuthEnv();
-  if (!env.clientId) {
-    throw new Error('Slack OAuth client_id nie skonfigurowany');
+  if (!env.clientId || !env.clientSecret) {
+    throw new Error('Slack OAuth client_id/secret nie skonfigurowany');
   }
   return postSlackTokenForm({
     client_id: env.clientId,
+    client_secret: env.clientSecret,
     refresh_token: refreshToken,
     grant_type: 'refresh_token',
   });

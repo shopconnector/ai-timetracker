@@ -69,6 +69,7 @@ jobs:
           @"
           ATLASSIAN_OAUTH_CLIENT_SECRET=${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
           TEMPO_OAUTH_CLIENT_SECRET=${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          SLACK_OAUTH_CLIENT_SECRET=${{ secrets.SLACK_OAUTH_CLIENT_SECRET }}
           "@ | Out-File -FilePath apps/web/.env.production -Encoding utf8
 
       - name: Build application
@@ -81,6 +82,7 @@ jobs:
           JIRA_API_KEY: ""
           ATLASSIAN_OAUTH_CLIENT_SECRET: ${{ secrets.ATLASSIAN_OAUTH_CLIENT_SECRET }}
           TEMPO_OAUTH_CLIENT_SECRET: ${{ secrets.TEMPO_OAUTH_CLIENT_SECRET }}
+          SLACK_OAUTH_CLIENT_SECRET: ${{ secrets.SLACK_OAUTH_CLIENT_SECRET }}
 
       - name: Ensure .env.production is in standalone bundle
         shell: pwsh

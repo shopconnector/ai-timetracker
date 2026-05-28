@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
     // Same pattern for Tempo OAuth client_secret. Tempo OAuth doesn't support PKCE,
     // so secret is required.
     TEMPO_OAUTH_CLIENT_SECRET: process.env.TEMPO_OAUTH_CLIENT_SECRET || "",
+    // Same pattern for Slack OAuth client_secret. Slack Distributed apps require
+    // client_secret in token exchange even with PKCE (returns bad_client_secret otherwise).
+    SLACK_OAUTH_CLIENT_SECRET: process.env.SLACK_OAUTH_CLIENT_SECRET || "",
   },
 
   // Standalone output for production deployment without node_modules
