@@ -264,7 +264,7 @@ export async function POST(request: Request) {
             signal: AbortSignal.timeout(5000),
           });
           if (res.ok) {
-            results.tempo = { success: true, message: 'Połączono z Tempo API [OAuth]' };
+            results.tempo = { success: true, message: 'Połączono z Tempo API [Tempo OAuth]' };
           } else {
             const bodyText = await res.text().catch(() => '');
             results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
@@ -289,7 +289,7 @@ export async function POST(request: Request) {
             signal: AbortSignal.timeout(5000),
           });
           if (res.ok) {
-            results.tempo = { success: true, message: 'Połączono z Tempo API' };
+            results.tempo = { success: true, message: 'Połączono z Tempo API [Personal Token]' };
           } else {
             const bodyText = await res.text().catch(() => '');
             results.tempo = { success: false, message: tempoErrorMessage(res.status, bodyText) };
@@ -322,7 +322,7 @@ export async function POST(request: Request) {
             const data = await res.json();
             results.jira = {
               success: true,
-              message: `Połączono jako: ${data.displayName} (${data.emailAddress}) [OAuth]`,
+              message: `Połączono jako: ${data.displayName} (${data.emailAddress}) [Atlassian OAuth]`,
             };
           } else {
             const bodyText = await res.text().catch(() => '');
@@ -406,9 +406,9 @@ export async function POST(request: Request) {
           });
           const data = await res.json();
           if (data.ok) {
-            results.slack = { success: true, message: `Połączono jako: ${data.user} [OAuth]` };
+            results.slack = { success: true, message: `Połączono jako: ${data.user} [Slack OAuth]` };
           } else {
-            results.slack = { success: false, message: `OAuth: ${data.error}` };
+            results.slack = { success: false, message: `Slack OAuth: ${data.error}` };
           }
         } catch (e) {
           results.slack = {

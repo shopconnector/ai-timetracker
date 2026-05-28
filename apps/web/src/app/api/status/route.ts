@@ -41,9 +41,9 @@ async function checkTempo(): Promise<ApiStatus> {
         signal: AbortSignal.timeout(5000),
       });
       if (response.ok) {
-        return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected [OAuth]' };
+        return { name: 'Tempo', configured: true, status: 'ok', message: 'Connected [Tempo OAuth]' };
       }
-      return { name: 'Tempo', configured: true, status: 'error', message: `OAuth HTTP ${response.status}` };
+      return { name: 'Tempo', configured: true, status: 'error', message: `Tempo OAuth HTTP ${response.status}` };
     } catch (err) {
       return {
         name: 'Tempo',
@@ -88,16 +88,16 @@ async function checkJira(): Promise<ApiStatus> {
           name: 'Jira',
           configured: true,
           status: 'ok',
-          message: `${data.displayName || 'Connected'} [OAuth]`,
+          message: `${data.displayName || 'Connected'} [Atlassian OAuth]`,
         };
       }
-      return { name: 'Jira', configured: true, status: 'error', message: `OAuth HTTP ${response.status}` };
+      return { name: 'Jira', configured: true, status: 'error', message: `Atlassian OAuth HTTP ${response.status}` };
     } catch (err) {
       return {
         name: 'Jira',
         configured: true,
         status: 'error',
-        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+        message: `Atlassian OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
       };
     }
   }
@@ -129,6 +129,49 @@ async function checkJira(): Promise<ApiStatus> {
   }
 }
 
+async function checkConfluence(): Promise<ApiStatus> {
+  if (!isOAuthConfigured()) {
+    return { name: 'Confluence', configured: false, status: 'unconfigured' };
+  }
+  try {
+    const token = await getValidAccessToken();
+    const cloudId = process.env.ATLASSIAN_OAUTH_CLOUD_ID;
+    if (!cloudId) {
+      return { name: 'Confluence', configured: false, status: 'unconfigured' };
+    }
+    const response = await fetch(
+      `https://api.atlassian.com/ex/confluence/${cloudId}/wiki/api/v2/spaces?limit=1`,
+      {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (response.ok) {
+      const data = await response.json();
+      const count = data?.results?.length ?? 0;
+      return {
+        name: 'Confluence',
+        configured: true,
+        status: 'ok',
+        message: `${count > 0 ? 'Connected' : 'No spaces visible'} [Atlassian OAuth]`,
+      };
+    }
+    return {
+      name: 'Confluence',
+      configured: true,
+      status: 'error',
+      message: `Atlassian OAuth HTTP ${response.status}`,
+    };
+  } catch (err) {
+    return {
+      name: 'Confluence',
+      configured: true,
+      status: 'error',
+      message: `Atlassian OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+    };
+  }
+}
+
 async function checkSlack(): Promise<ApiStatus> {
   // OAuth 2.0 path takes precedence
   if (isSlackOAuthConfigured()) {
@@ -141,15 +184,15 @@ async function checkSlack(): Promise<ApiStatus> {
       });
       const data = await response.json();
       if (data.ok) {
-        return { name: 'Slack', configured: true, status: 'ok', message: `${data.user} [OAuth]` };
+        return { name: 'Slack', configured: true, status: 'ok', message: `${data.user} [Slack OAuth]` };
       }
-      return { name: 'Slack', configured: true, status: 'error', message: `OAuth: ${data.error}` };
+      return { name: 'Slack', configured: true, status: 'error', message: `Slack OAuth: ${data.error}` };
     } catch (err) {
       return {
         name: 'Slack',
         configured: true,
         status: 'error',
-        message: `OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
+        message: `Slack OAuth: ${err instanceof Error ? err.message : 'connection failed'}`,
       };
     }
   }
@@ -282,17 +325,18 @@ async function checkOpenRouter(): Promise<ApiStatus> {
 }
 
 export async function GET() {
-  const [activityWatch, tempo, jira, slack, openRouter, github] = await Promise.all([
+  const [activityWatch, tempo, jira, confluence, slack, openRouter, github] = await Promise.all([
     checkActivityWatch(),
     checkTempo(),
     checkJira(),
+    checkConfluence(),
     checkSlack(),
     checkOpenRouter(),
     checkGithub(),
   ]);
 
   return NextResponse.json({
-    apis: [activityWatch, tempo, jira, slack, github, openRouter],
+    apis: [activityWatch, tempo, jira, confluence, slack, github, openRouter],
     allOk: [activityWatch, tempo, jira].every(a => a.status === 'ok')
   });
 }

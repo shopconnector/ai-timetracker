@@ -1896,7 +1896,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 <Key className="h-5 w-5 text-gray-600" />
                 <div>
                   <CardTitle className="text-lg">Konfiguracja API</CardTitle>
-                  <CardDescription>Klucze API do Tempo, Jira, ActivityWatch i OpenRouter</CardDescription>
+                  <CardDescription>Integracje OAuth (Atlassian Jira+Confluence, Tempo, Slack) oraz klucze API (ActivityWatch, GitHub, OpenRouter)</CardDescription>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -1937,7 +1937,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                  Tempo OAuth 2.0 <span className="text-xs text-purple-600 dark:text-purple-400">(zalecane)</span>
+                  Tempo OAuth 2.0 <span className="text-xs text-purple-600 dark:text-purple-400">(zalecane — Cloud)</span>
                 </h3>
                 {tempoOauthStatus.connected && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
@@ -1999,7 +1999,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
             </div>
 
             {/* Tempo Configuration — legacy Personal Token (collapsed by default) */}
-            <AdvancedSection title="Zaawansowane — Tempo API (legacy Personal Token)">
+            <AdvancedSection title="Zaawansowane — Tempo Personal Token (legacy)">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">API Token</label>
@@ -2117,7 +2117,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
             </div>
 
             {/* Jira Configuration — legacy Basic Auth (collapsed by default) */}
-            <AdvancedSection title="Zaawansowane — Jira API (legacy Basic Auth z API tokenem)">
+            <AdvancedSection title="Zaawansowane — Atlassian API Token (legacy Basic Auth, tylko Jira)">
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">Base URL</label>
@@ -2191,7 +2191,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               <div className="flex items-center justify-between">
                 <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                   <span className="w-2 h-2 bg-fuchsia-500 rounded-full"></span>
-                  Slack OAuth 2.0 <span className="text-xs text-fuchsia-600 dark:text-fuchsia-400">(zalecane — PKCE, bez Client Secret)</span>
+                  Slack OAuth 2.0 <span className="text-xs text-fuchsia-600 dark:text-fuchsia-400">(zalecane — bezpieczny one-click connect)</span>
                 </h3>
                 {slackOauthStatus.connected && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
@@ -2259,7 +2259,7 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
               ) : (
                 <>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Połącz Slack jednym kliknięciem. Client ID wbudowany w aplikację (PKCE — Client Secret nie jest potrzebny).
+                    Połącz Slack jednym kliknięciem. Client ID + Secret wbudowane w aplikację (PKCE jako dodatkowa warstwa zabezpieczeń).
                   </p>
                   <Button size="sm" onClick={handleSlackConnect} disabled={connectingSlackOauth}>
                     {connectingSlackOauth ? 'Łączenie...' : 'Connect with Slack'}
@@ -2271,12 +2271,12 @@ ${versionInfo.error ? `lastError:               ${versionInfo.error}` : ''}`}
                 <p>1. Browser przekieruje na <strong>slack.com/oauth/v2/authorize</strong> — Slack poprosi o zalogowanie się i wybór workspace (jeśli niezalogowany).</p>
                 <p>2. Slack pokaże consent screen z listą 9 uprawnień (channels/groups/im/mpim history+read, users:read).</p>
                 <p>3. Kliknij <strong>Allow</strong> → wracasz tutaj jako &quot;Połączono jako: U... [team_name]&quot;.</p>
-                <p className="text-xs text-gray-500">PKCE flow — brak Client Secret w bundlu (bezpieczniejsze niż Atlassian/Tempo OAuth). Token żyje 12h, automatyczny refresh.</p>
+                <p className="text-xs text-gray-500">OAuth 2.0 z PKCE jako dodatkową warstwą zabezpieczeń. Token żyje 12h, automatyczny refresh.</p>
               </HelpGuide>
             </div>
 
             {/* Slack legacy User/Bot Token — collapsed by default */}
-            <AdvancedSection title="Zaawansowane — Slack legacy (User Token + Bot Token)">
+            <AdvancedSection title="Zaawansowane — Slack User/Bot Token (legacy)">
               <div>
                 <label className="text-sm text-gray-500 dark:text-gray-400 mb-1 block">User Token (xoxp-) — odczyt aktywnosci</label>
                 <Input
