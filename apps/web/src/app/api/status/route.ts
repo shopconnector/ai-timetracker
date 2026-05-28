@@ -139,8 +139,10 @@ async function checkConfluence(): Promise<ApiStatus> {
     if (!cloudId) {
       return { name: 'Confluence', configured: false, status: 'unconfigured' };
     }
+    // v1 /wiki/rest/api/space — działa z classic scope read:confluence-space.summary.
+    // v2 /wiki/api/v2/spaces wymagałoby granular scope read:space:confluence (przyszła iteracja).
     const response = await fetch(
-      `https://api.atlassian.com/ex/confluence/${cloudId}/wiki/api/v2/spaces?limit=1`,
+      `https://api.atlassian.com/ex/confluence/${cloudId}/wiki/rest/api/space?limit=1`,
       {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
         signal: AbortSignal.timeout(5000),
